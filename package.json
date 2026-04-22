@@ -6,22 +6,49 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest --run",
+    "api:dev": "bun --watch lib/cms/api/server.ts",
+    "api:start": "bun lib/cms/api/server.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "bun lib/cms/run-seed.ts"
   },
   "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@puckeditor/core": "^0.21.2",
+    "@tanstack/react-query": "^5.99.2",
+    "better-auth": "^1.6.5",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "elysia": "^1.4.28",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.8.0",
     "next": "16.2.4",
+    "pg": "^8.20.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "slugify": "^1.6.9",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "fast-check": "^4.7.0",
+    "jsdom": "^29.0.2",
+    "pg-mem": "^3.0.14",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.4"
   },
   "ignoreScripts": [
     "sharp",

@@ -1,0 +1,346 @@
+ # Implementation Plan: ORA CMS Platform
+
+## Overview
+
+Bottom-up implementation of the ORA CMS Platform: database schema first, then core utilities, API layer, admin panel, public frontend, and finally integration wiring. The Elysia.js API runs as a standalone Bun process alongside Next.js. All admin panel state management uses TanStack Query with optimistic updates. The existing Puck page builder at `lib/page-builder/` is consumed as-is.
+
+## Tasks
+
+- [x] 1. Install dependencies and project structure
+  - [x] 1.1 Install runtime dependencies: `elysia`, `better-auth`, `drizzle-orm`, `drizzle-kit`, `pg`, `@tanstack/react-query`, `slugify`, `@elysiajs/cors`
+    - Add to package.json and install via bun
+    - _Requirements: 14.1, 15.1_
+  - [x] 1.2 Install dev dependencies: `@types/pg`, `pg-mem` (for test DB)
+    - _Requirements: 15.1_
+  - [x] 1.3 Create CMS directory structure
+    - Create `lib/cms/` with subdirectories: `schema/`, `api/`, `api/routes/`, `utils/`, `hooks/`, `storage/`, `components/`
+    - Create `app/ora-panel/` directory tree per design (layout, login, pages, media, submissions, settings, audit)
+    - Create `app/[locale]/` directory tree for public frontend
+    - _Requirements: 1.1, 14.1_
+
+- [x] 2. Database schema (Drizzle ORM)
+  - [x] 2.1 Define Drizzle table schemas in `lib/cms/schema.ts`
+    - Implement all tables: `users`, `sessions`, `pages`, `revisions`, `media_items`, `media_references`, `form_definitions`, `form_submissions`, `site_settings`, `audit_log`
+    - Include all indexes: `pages_slug_locale_idx`, `pages_namespace_idx`, `pages_status_idx`, `revisions_page_id_idx`, `media_refs_media_id_idx`, `media_refs_page_id_idx`, `audit_log_entity_type_idx`, `audit_log_created_at_idx`, `audit_log_user_id_idx`
+    - Enforce referential integrity with foreign keys and cascade deletes on revisions and media_references when page is deleted
+    - _Requirements: 15.1, 15.2, 15.3, 15.4_
+  - [x] 2.2 Create database connection module `lib/cms/db.ts`
+    - Export typed `db` instance using `drizzle(process.env.DATABASE_URL!, { schema })`
+    - _Requirements: 15.1_
+  - [x] 2.3 Create TypeScript types in `lib/cms/types.ts`
+    - Define `Locale`, `PageStatus`, `FormFieldType`, `FormFieldConfig`, `AuditAction`, `AuditEntityType`, `ApiResponse<T>`, `ApiError`, `PageNamespaceGroup`
+    - _Requirements: 14.1_
+  - [x] 2.4 Configure Drizzle Kit for migrations in `drizzle.config.ts`
+    - Set up migration generation and push commands
+    - _Requirements: 15.1_
+
+- [x] 3. Core utilities
+  - [x] 3.1 Implement slug generation in `lib/cms/utils/slug.ts`
+    - `generateSlug(title)` using slugify package — lowercase, strict mode
+    - `ensureUniqueSlug(baseSlug, existingSlugs)` — append numeric suffix on collision
+    - _Requirements: 2.1, 2.2_
+  - [x] 3.2 Write property tests for slug generation
+    - **Property 1: Slug generation produces URL-safe deterministic output**
+    - **Validates: Requirements 2.1**
+  - [x] 3.3 Write property test for slug deduplication
+    - **Property 2: Slug deduplication ensures uniqueness**
+    - **Validates: Requirements 2.2**
+  - [x] 3.4 Implement audit logger in `lib/cms/audit.ts`
+    - `logAudit(db, entry)` function that inserts into `audit_log` table
+    - Types: `AuditLogEntry` with userId, action, entityType, entityId, summary, timestamp
+    - _Requirements: 6.1, 6.4_
+  - [x] 3.5 Implement storage backend in `lib/cms/storage.ts`
+    - `StorageBackend` interface with `upload(file, filename, mimeType)` and `delete(url)` methods
+    - `LocalStorageBackend` — writes to `public/uploads/`
+    - `S3StorageBackend` and `R2StorageBackend` — stub implementations using AWS SDK / Cloudflare SDK
+    - `createStorageBackend()` factory based on `STORAGE_BACKEND` env var
+    - _Requirements: 9.2_
+
+- [x] 4. Checkpoint — Verify schema and utilities
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Elysia.js API server setup
+  - [x] 5.1 Create Elysia app entry point in `lib/cms/api/index.ts`
+    - Set up Elysia instance with `/api` prefix
+    - Register CORS plugin for cross-origin requests from Next.js
+    - Mount all route groups (pages, revisions, media, forms, settings, audit)
+    - _Requirements: 14.1, 14.2_
+  - [x] 5.2 Implement Better Auth plugin in `lib/cms/api/auth.ts`
+    - Configure Better Auth with session cookie strategy
+    - Create auth guard middleware that validates session on mutating endpoints
+    - Allow unauthenticated access to public read endpoints
+    - Expose login/logout endpoints
+    - _Requirements: 1.2, 1.3, 1.7, 14.4, 14.5_
+  - [x] 5.3 Create Elysia server entry script `lib/cms/api/server.ts`
+    - Bun entry point that starts the Elysia server on a configurable port
+    - Run first-run seeder on startup
+    - Add `"api:dev"` and `"api:start"` scripts to package.json
+    - _Requirements: 14.1_
+
+- [x] 6. API routes — Pages and Revisions
+  - [x] 6.1 Implement pages routes in `lib/cms/api/routes/pages.ts`
+    - `GET /api/pages` — list pages with filters (locale, status, namespace), return `PageNamespaceGroup[]` for admin
+    - `GET /api/pages/:id` — get single page with PageData
+    - `POST /api/pages` — create page (auth required), auto-generate slug, set status=draft, assign namespace UUID
+    - `PUT /api/pages/:id` — update page + create revision + audit entry (auth required)
+    - `DELETE /api/pages/:id` — delete page with cascade (auth required), reject if `isSystem=true`
+    - `POST /api/pages/:id/publish` — set status=published, set publishedAt (auth required)
+    - `POST /api/pages/:id/unpublish` — set status=draft (auth required)
+    - `POST /api/pages/:id/clone-locale` — create AR version from EN page, same namespace/slug (auth required)
+    - `GET /api/pages/public/:locale/:slug` — public page fetch (no auth, published only)
+    - Validate all request bodies with Zod schemas derived from Drizzle types
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5, 7.2, 7.3, 7.6, 14.3, 14.4, 14.5_
+  - [x] 6.2 Write property tests for page CRUD
+    - **Property 4: Page CRUD round-trip**
+    - **Validates: Requirements 2.4**
+  - [x] 6.3 Write property tests for system page protection
+    - **Property 6: System page deletion protection**
+    - **Validates: Requirements 3.2, 3.3**
+  - [x] 6.4 Write property tests for draft/publish lifecycle
+    - **Property 7: Draft/publish/unpublish lifecycle**
+    - **Validates: Requirements 4.1, 4.2, 4.3**
+  - [x] 6.5 Write property test for public visibility
+    - **Property 8: Public visibility excludes draft pages**
+    - **Validates: Requirements 4.4, 4.5, 8.4, 13.5**
+  - [x] 6.6 Write property test for locale clone
+    - **Property 12: Locale clone produces correct AR page**
+    - **Validates: Requirements 7.3, 7.6**
+  - [x] 6.7 Implement revisions routes in `lib/cms/api/routes/revisions.ts`
+    - `GET /api/revisions/:pageId` — list revisions for a page (revision number, timestamp, user)
+    - `GET /api/revisions/:pageId/:revisionId` — get single revision with PageData snapshot
+    - `POST /api/revisions/:pageId/rollback/:revisionId` — rollback: replace page data with revision snapshot, create new revision with action="rollback" (auth required)
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+  - [x] 6.8 Write property test for rollback
+    - **Property 9: Rollback restores revision data and creates new revision**
+    - **Validates: Requirements 5.5**
+  - [x] 6.9 Write property test for cascade delete
+    - **Property 5: Cascade delete removes all associated records**
+    - **Validates: Requirements 2.7, 5.6, 15.4**
+
+- [x] 7. API routes — Media, Forms, Settings, Audit
+  - [x] 7.1 Implement media routes in `lib/cms/api/routes/media.ts`
+    - `GET /api/media` — list media items with search (filename, alt text) and MIME type filter
+    - `POST /api/media` — upload file to storage backend, create media_items record with metadata (auth required)
+    - `DELETE /api/media/:id` — check media_references, reject if referenced (list referencing pages), delete file + record if unreferenced (auth required)
+    - `PUT /api/media/:id` — update alt text (auth required)
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [x] 7.2 Write property tests for media
+    - **Property 15: Media upload creates complete record**
+    - **Property 16: Media search filters correctly**
+    - **Property 17: Media deletion respects references**
+    - **Validates: Requirements 9.2, 9.3, 9.5, 9.6**
+  - [x] 7.3 Implement forms routes in `lib/cms/api/routes/forms.ts`
+    - `GET /api/forms` — list form definitions
+    - `POST /api/forms` — create form definition (auth required)
+    - `PUT /api/forms/:id` — update form definition (auth required)
+    - `GET /api/submissions` — list submissions grouped by form
+    - `POST /api/submissions` — submit form data (public, no auth), validate against form definition fields, push to Salesforce/webhook if configured
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+  - [x] 7.4 Write property test for form validation
+    - **Property 18: Form submission validation and storage**
+    - **Validates: Requirements 10.3, 10.7**
+  - [x] 7.5 Implement settings routes in `lib/cms/api/routes/settings.ts`
+    - `GET /api/settings` — list all settings (public, no auth)
+    - `GET /api/settings/:key` — get single setting value, return empty string if key missing
+    - `PUT /api/settings` — bulk update settings (auth required)
+    - _Requirements: 11.1, 11.2, 11.3, 11.5, 14.5_
+  - [x] 7.6 Write property tests for settings
+    - **Property 19: Site settings key-value round-trip**
+    - **Property 20: Missing setting key renders empty string**
+    - **Validates: Requirements 11.1, 11.5**
+  - [x] 7.7 Implement audit routes in `lib/cms/api/routes/audit.ts`
+    - `GET /api/audit` — list audit entries in reverse chronological order with filters (entity type, action type, user, date range)
+    - _Requirements: 6.2, 6.3_
+  - [x] 7.8 Write property tests for audit
+    - **Property 10: Mutating actions create audit entries**
+    - **Property 11: Audit log filtering returns matching entries**
+    - **Validates: Requirements 6.1, 6.3**
+
+- [x] 8. Checkpoint — Verify API layer
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 9. Admin panel shell
+  - [x] 9.1 Create admin layout in `app/ora-panel/layout.tsx`
+    - Auth session check — redirect to `/ora-panel/login` if unauthenticated
+    - TanStack `QueryClientProvider` wrapper
+    - Sidebar navigation: Dashboard, Pages, Media Library, Form Submissions, Site Settings, Audit Log
+    - Apply ORA design system tokens (warm neutrals, gold accent, square corners, thin strokes)
+    - _Requirements: 1.1, 1.2, 1.6_
+  - [x] 9.2 Create login page at `app/ora-panel/login/page.tsx`
+    - Login form with email/password fields
+    - Submit to Better Auth login endpoint
+    - On success: redirect to `/ora-panel`
+    - On failure: display generic error message (not revealing which field is wrong)
+    - _Requirements: 1.3, 1.4_
+  - [x] 9.3 Implement TanStack Query hooks in `lib/cms/hooks/`
+    - `usePages()` — list with filters, optimistic create/delete
+    - `usePage(id)` — single page query
+    - `useUpdatePage()` — mutation with optimistic cache update
+    - `usePublishPage()` / `useUnpublishPage()` — status mutations
+    - `useDeletePage()` — delete mutation with optimistic removal
+    - `useRevisions(pageId)` — revision history list
+    - `useRollback()` — rollback mutation
+    - `useMedia()` — media list with search
+    - `useUploadMedia()` — upload mutation
+    - `useDeleteMedia()` — delete with reference check
+    - `useFormSubmissions()` — submissions list
+    - `useSiteSettings()` — settings query + mutation
+    - `useAuditLog()` — audit entries with filters
+    - All mutations use `onMutate` optimistic handlers and `onError` rollback
+    - _Requirements: 2.8, 14.1_
+
+- [x] 10. Admin panel pages
+  - [x] 10.1 Create dashboard page at `app/ora-panel/page.tsx`
+    - Display stats: total pages, published pages, draft pages, recent form submissions count, media items count
+    - Use TanStack Query to fetch aggregated data
+    - _Requirements: 1.5_
+  - [x] 10.2 Create page index at `app/ora-panel/pages/page.tsx`
+    - List pages grouped by namespace as `PageNamespaceGroup[]`
+    - Show locale completion indicators: green (all published), amber (one published), gray (none published)
+    - Show clickable action to create missing locale version
+    - Filter by status, search by title
+    - _Requirements: 7.4, 7.5_
+  - [x] 10.3 Write property test for locale completion indicator
+    - **Property 13: Locale completion indicator logic**
+    - **Validates: Requirements 7.4**
+  - [x] 10.4 Create new page form at `app/ora-panel/pages/new/page.tsx`
+    - Title input with auto-generated slug preview
+    - Allow manual slug override
+    - Locale selector (defaults to EN)
+    - Submit creates page via API, redirects to editor
+    - _Requirements: 2.1, 2.2, 2.3, 7.2_
+  - [x] 10.5 Create page editor at `app/ora-panel/pages/[id]/edit/page.tsx`
+    - Embed `PageEditor` component from `lib/page-builder/`
+    - Load current PageData into editor on mount
+    - On save: persist via API, create revision, record audit entry
+    - Pass Media_Picker and Site_Settings context to editor
+    - _Requirements: 12.1, 12.2, 12.3, 12.5_
+  - [x] 10.6 Create page detail / revisions view at `app/ora-panel/pages/[id]/page.tsx`
+    - Show page metadata (title, slug, status, locale, timestamps)
+    - Publish / unpublish actions
+    - Slug regeneration with warning for published pages
+    - Revision history list with timestamp, user, revision number
+    - Preview selected revision's PageData
+    - Rollback confirmation action
+    - _Requirements: 2.5, 4.2, 4.3, 4.6, 5.3, 5.4, 5.5_
+  - [x] 10.7 Create media library page at `app/ora-panel/media/page.tsx`
+    - Grid view of media items with thumbnails
+    - Upload button with file picker
+    - Search by filename and alt text, filter by MIME type
+    - Delete action with reference check (show referencing pages if blocked)
+    - Edit alt text inline
+    - _Requirements: 9.1, 9.2, 9.3, 9.5, 9.6, 9.7_
+  - [x] 10.8 Create form submissions page at `app/ora-panel/submissions/page.tsx`
+    - List submissions grouped by form definition
+    - Show timestamp and submission data for each entry
+    - _Requirements: 10.4_
+  - [x] 10.9 Create site settings page at `app/ora-panel/settings/page.tsx`
+    - Key-value editor for: company name, phone, email, address, social media links
+    - Save all settings via bulk update API
+    - _Requirements: 11.1, 11.2_
+  - [x] 10.10 Create audit log page at `app/ora-panel/audit/page.tsx`
+    - List audit entries in reverse chronological order
+    - Filters: entity type, action type, user, date range
+    - _Requirements: 6.2, 6.3_
+
+- [x] 11. Checkpoint — Verify admin panel
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 12. Public frontend
+  - [x] 12.1 Create EN layout at `app/(en)/layout.tsx`
+    - Route group `(en)` — no URL segment, serves at root
+    - Set `dir="ltr"`, EN settings context
+    - Fetch site settings and provide via React context
+    - Include `hreflang` tags: `<link rel="alternate" hreflang="en" href="/{slug}" />` and `<link rel="alternate" hreflang="ar" href="/ar/{slug}" />`
+    - _Requirements: 8.1, 8.4, 11.4_
+  - [x] 12.2 Create AR layout at `app/ar/layout.tsx`
+    - Actual `/ar/` route segment
+    - Set `dir="rtl"` on HTML element, load Arabic font
+    - Fetch site settings and provide via React context
+    - Include `hreflang` tags
+    - _Requirements: 7.7, 8.2, 11.4_
+  - [x] 12.3 Create EN home page at `app/(en)/page.tsx`
+    - Fetch published EN page with slug `/` via API
+    - Render using `PageRenderer` from `lib/page-builder/`
+    - Root URL `/` serves EN home directly (no redirect)
+    - Return 404 if no published home page
+    - _Requirements: 8.3, 8.8, 13.1, 13.2_
+  - [x] 12.4 Create AR home page at `app/ar/page.tsx`
+    - Fetch published AR page with slug `/` via API
+    - Render using `PageRenderer`
+    - Serves at `domain.com/ar/`
+    - _Requirements: 8.3, 13.1, 13.2_
+  - [x] 12.5 Create EN dynamic page route at `app/(en)/[...slug]/page.tsx`
+    - Fetch published EN page by slug via public API endpoint
+    - Render using `PageRenderer`, skip unknown components gracefully
+    - Generate SEO meta tags (title, description, Open Graph, hreflang) from page metadata
+    - Return 404 for non-existent or draft pages
+    - Show "Edit page" button for authenticated users linking to admin editor
+    - _Requirements: 8.1, 8.5, 12.4, 13.1, 13.2, 13.3, 13.4, 13.5_
+  - [x] 12.6 Create AR dynamic page route at `app/ar/[...slug]/page.tsx`
+    - Same as EN but fetches AR locale, applies RTL
+    - _Requirements: 8.2, 8.6, 13.1_
+  - [x] 12.7 Write property test for SEO meta tags
+    - **Property 21: SEO meta tags from page metadata**
+    - **Validates: Requirements 13.4**
+  - [x] 12.8 Write property test for URL resolution
+    - **Property 14: URL resolution with default language**
+    - **Validates: Requirements 8.1, 8.2, 8.3, 8.8**
+  - [x] 12.9 Create 404 page at `app/not-found.tsx`
+    - Styled 404 page consistent with ORA design system
+    - _Requirements: 8.5, 13.5_
+
+- [x] 13. First-run seeder
+  - [x] 13.1 Implement seeder in `lib/cms/seed.ts`
+    - Check if pages table is empty
+    - If empty: create Home page (slug: `/`) and Contact page (slug: `contact`) in both EN and AR locales
+    - Mark all seeded pages as `isSystem = true`
+    - Assign shared namespace UUIDs per logical page (Home EN + Home AR share namespace, Contact EN + Contact AR share namespace)
+    - _Requirements: 3.1, 3.2, 3.4_
+
+- [x] 14. Form builder component
+  - [x] 14.1 Create Form Puck component in `lib/cms/components/FormBuilder.tsx`
+    - Register as a Puck component for the page builder
+    - Support field types: text, email, phone, textarea, select, checkbox, radio
+    - Render form fields with validation on the public frontend
+    - On submit: POST to `/api/submissions` with form data
+    - Display field-level error messages on validation failure, preserve user input
+    - _Requirements: 10.1, 10.2, 10.3, 10.7_
+  - [x] 14.2 Create Media Picker component in `lib/cms/components/MediaPicker.tsx`
+    - UI component for browsing and selecting media items within the page builder editor
+    - Integrates with `useMedia()` hook to fetch media library
+    - Returns selected media item's storage URL to the editor field
+    - _Requirements: 9.7_
+
+- [x] 15. Integration wiring
+  - [x] 15.1 Create CMS DataStore adapter in `lib/cms/data-store-adapter.ts`
+    - Implement `DataStore` interface from `lib/page-builder/`
+    - Delegate `save`, `load`, `delete` to Elysia API endpoints
+    - Include credentials for auth cookie forwarding
+    - _Requirements: 12.1, 12.2, 12.3_
+  - [x] 15.2 Wire API validation schemas
+    - Ensure all Elysia route request/response schemas use Zod validators derived from Drizzle table definitions
+    - Verify descriptive error responses for invalid input (400 with field-level details)
+    - _Requirements: 14.1, 14.3_
+  - [x] 15.3 Write property test for API validation
+    - **Property 23: API rejects invalid input with descriptive errors**
+    - **Validates: Requirements 14.3**
+  - [x] 15.4 Write property test for auth guard
+    - **Property 22: Auth required for mutating endpoints**
+    - **Validates: Requirements 14.4**
+  - [x] 15.5 Write property test for PageData round-trip
+    - **Property 3: PageData JSON round-trip integrity**
+    - **Validates: Requirements 2.6, 14.6**
+
+- [x] 16. Final checkpoint — Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for faster MVP
+- Each task references specific requirements for traceability
+- Checkpoints at tasks 4, 8, 11, and 16 ensure incremental validation
+- Property tests validate the 23 correctness properties defined in the design document using `fast-check`
+- Unit tests validate specific examples and edge cases
+- The Elysia API runs as a separate Bun process — `bun run api:dev` alongside `next dev`
+- All admin panel components follow the ORA design system (warm neutrals, gold accent, square corners, thin strokes)
