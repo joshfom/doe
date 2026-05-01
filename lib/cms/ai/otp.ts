@@ -135,9 +135,43 @@ const PERSONAL_KEYWORDS = [
   "my unit",
   "my account",
   "my status",
+  "my reservation",
+  "my booking",
+  "my purchase",
+  "my move",
+  "my home",
+  "my apartment",
+  "my villa",
+  "my property",
+  "my contract",
+  "my profile",
+  "my details",
+  "my information",
+  "my data",
+  "my dates",
+  "my handover",
+  "about my",
+  "about me",
+  "tell me about my",
+  "want to know about my",
+  "details about my",
+  "status of my",
+  "status of reservation",
+  "status of booking",
+  "reservation status",
+  "booking status",
+  "unit status",
   "construction progress",
   "lease",
   "handover",
+  "وحدتي",
+  "حسابي",
+  "حجزي",
+  "حالة حجز",
+  "حالة حجزي",
+  "عقدي",
+  "تسليم",
+  "بياناتي",
 ];
 
 /**
@@ -613,8 +647,8 @@ export async function handleOtpGate(
           action: "respond",
           response:
             language === "ar"
-              ? "تم التحقق بنجاح! كيف يمكنني مساعدتك في حسابك؟"
-              : "You're verified! How can I help you with your account?",
+              ? "ممتاز، تم التحقق! ✓ والآن، كيف يمكنني خدمتك في حسابك؟"
+              : "You're verified! ✓ Now — how can I help you with your account?",
           queryCategory,
         };
 
@@ -705,8 +739,8 @@ export async function handleOtpGate(
       action: "respond",
       response:
         language === "ar"
-          ? "للوصول إلى بيانات حسابك الشخصية، يرجى تزويدنا برقم هاتفك أو بريدك الإلكتروني المسجل حتى نتمكن من التحقق من هويتك."
-          : "To access your personal account data, please provide your registered phone number or email address so we can verify your identity.",
+          ? "بكل سرور أساعدك في حسابك — لكن قبل أي شيء أحتاج أتأكد أنك صاحب الحساب فعلاً. شاركني بريدك الإلكتروني أو رقم هاتفك المسجل وسأتولى الباقي. 🙂"
+          : "Happy to help with your account — but first I need to make sure you're the right person. Share the email or mobile number you registered with us and I'll take it from there. 🙂",
       queryCategory,
     };
   }
@@ -754,8 +788,8 @@ export async function handleOtpGate(
     action: "respond",
     response:
       language === "ar"
-        ? `${name ? name + "، " : ""}للوصول إلى بيانات حسابك الشخصية، نحتاج إلى التحقق من هويتك. هل تريد أن نرسل رمز تحقق إلى ${masked}؟ يمكنك الاستمرار في طرح الأسئلة العامة بدون تحقق.`
-        : `${name ? name + ", " : ""}to access your personal account data, I need to verify your identity. Would you like me to send a verification code to ${masked}? You can still ask general questions without verification.`,
+        ? `${name ? name + "، " : ""}سعيد بعودتك! 🙂 لحماية بياناتك، أحتاج التأكد أنك أنت قبل أن أشاركك تفاصيل حسابك. هل أرسل رمز تحقق سريع إلى ${masked}؟ يمكنك الاستمرار بالأسئلة العامة بدون تحقق.`
+        : `${name ? name + ", " : ""}great to have you here! Before I open up your account details, I just want to make sure it's really you — privacy first. Want me to send a quick 6-digit code to ${masked}? You can still ask general questions in the meantime.`,
     queryCategory,
   };
 }

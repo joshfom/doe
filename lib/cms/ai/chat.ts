@@ -271,6 +271,20 @@ export async function handleChatMessage(
     identity = await resolveIdentityByEmail(db, input.email);
   }
 
+  // Fallback: if no request-level identity, use whatever email/phone was
+  // captured on this conversation in a previous turn (the agent persists
+  // these as soon as the user types them). Without this fallback every
+  // follow-up turn looks like a fresh visitor and the OTP gate stops
+  // protecting personal data.
+  if (identity.type === "visitor") {
+    const storedContact = await loadConversationContact(db, conversationId);
+    if (storedContact.email) {
+      identity = await resolveIdentityByEmail(db, storedContact.email);
+    } else if (storedContact.phone) {
+      identity = await resolveIdentityByPhone(db, storedContact.phone);
+    }
+  }
+
   // ── Step 3: Detect language ──────────────────────────────────────────────
   const language = detectLanguage(input.message);
 
@@ -332,48 +346,14 @@ export async function handleChatMessage(
     };
   }
 
-  // ── Step 5.5: OTP verification gate ───────────────────────────────────────
-  const otpGateResult = await handleOtpGate(
-    db,
-    conversationId,
-    input.message,
-    identity,
-    language,
-    otpVerificationState
-  );
-
-  if (otpGateResult.action === "respond") {
-    // OTP gate intercepted — persist user message and gate response, return early
-    await db.insert(aiMessages).values([
-      {
-        conversationId,
-        role: "user",
-        content: input.message,
-      },
-      {
-        conversationId,
-        role: "assistant",
-        content: otpGateResult.response!,
-        metadata: { otpGate: true, queryCategory: otpGateResult.queryCategory },
-      },
-    ]);
-
-    return {
-      message: otpGateResult.response!,
-      conversationId,
-      language,
-      identityType: identity.type,
-      metadata: {
-        retrievedDocIds: [],
-      },
-    };
-  }
-
-  // ── Step 5.75: Agent tool dispatch ────────────────────────────────────────
-  // Lightweight agent that captures identity (name/email/phone) from the
-  // user's message and executes deterministic tools (create ticket, send
-  // OTP) before falling through to RAG. This is what makes the assistant
-  // actually agentic — no LLM tool-calling JSON needed.
+  // ── Step 5.5: Agent tool dispatch (must run BEFORE the OTP gate) ──────────
+  // The agent extracts name/email/phone from the user's message, persists
+  // them on the conversation, upgrades the identity from visitor → client/
+  // tenant on the fly, and executes deterministic tools (create ticket,
+  // send OTP, navigate). Running this BEFORE the OTP gate is critical:
+  // otherwise a freshly-typed email looks like a "general" message to the
+  // gate, identity stays "visitor", and personal data leaks through RAG.
+  const previousIdentityType = identity.type;
   const conversationContact = await loadConversationContact(db, conversationId);
   const agentResult = await runAgent(db, {
     conversationId,
@@ -411,6 +391,78 @@ export async function handleChatMessage(
       metadata: {
         retrievedDocIds: [],
         actionPerformed: (agentResult.metadata?.intent as string) ?? "agent_tool",
+      },
+    };
+  }
+
+  // If the agent just upgraded a visitor to a recognized client/tenant
+  // (because they typed their email or phone), greet them by name and offer
+  // OTP before answering anything personal. This stops the worst leak: bot
+  // confirming "you have unit B-101 at Marina Heights" purely because the
+  // user said "jfomubod@example.com".
+  if (
+    previousIdentityType === "visitor" &&
+    identity.type !== "visitor" &&
+    otpVerificationState !== "verified"
+  ) {
+    const firstName = identity.firstName ?? "there";
+    const greeting =
+      language === "ar"
+        ? `${firstName}، سعيد بعودتك! \u{1F642} \u062f\u0639\u0646\u064a \u0623\u062a\u062d\u0642\u0642 \u0623\u0646\u0647 \u0623\u0646\u062a \u0641\u0639\u0644\u0627\u064b \u0642\u0628\u0644 \u0623\u0646 \u0623\u0641\u062a\u062d \u062a\u0641\u0627\u0635\u064a\u0644 \u062d\u0633\u0627\u0628\u0643 \u2014 \u0627\u0644\u062e\u0635\u0648\u0635\u064a\u0629 \u0623\u0648\u0644\u0627\u064b. \u0647\u0644 \u0623\u0631\u0633\u0644 \u0644\u0643 \u0631\u0645\u0632 \u062a\u062d\u0642\u0642 \u0639\u0644\u0649 \u0628\u0631\u064a\u062f\u0643 \u0627\u0644\u0645\u0633\u062c\u0644\u061f \u0628\u0625\u0645\u0643\u0627\u0646\u0643 \u0627\u0644\u0627\u0633\u062a\u0645\u0631\u0627\u0631 \u0628\u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0639\u0627\u0645\u0629 \u062f\u0648\u0646 \u062a\u062d\u0642\u0642.`
+        : `${firstName}, great to see you again! Before I open up account details, I just need to make sure it's really you — privacy first. Want me to send a quick verification code to your registered email? Happy to keep answering general questions in the meantime.`;
+
+    await db.insert(aiMessages).values([
+      { conversationId, role: "user", content: input.message },
+      {
+        conversationId,
+        role: "assistant",
+        content: greeting,
+        metadata: { agent: true, identityUpgrade: true, awaitingOtp: true },
+      },
+    ]);
+
+    return {
+      message: greeting,
+      conversationId,
+      language,
+      identityType: identity.type,
+      metadata: { retrievedDocIds: [], actionPerformed: "identity_upgrade" },
+    };
+  }
+
+  // ── Step 5.6: OTP verification gate ───────────────────────────────────────
+  const otpGateResult = await handleOtpGate(
+    db,
+    conversationId,
+    input.message,
+    identity,
+    language,
+    otpVerificationState
+  );
+
+  if (otpGateResult.action === "respond") {
+    // OTP gate intercepted — persist user message and gate response, return early
+    await db.insert(aiMessages).values([
+      {
+        conversationId,
+        role: "user",
+        content: input.message,
+      },
+      {
+        conversationId,
+        role: "assistant",
+        content: otpGateResult.response!,
+        metadata: { otpGate: true, queryCategory: otpGateResult.queryCategory },
+      },
+    ]);
+
+    return {
+      message: otpGateResult.response!,
+      conversationId,
+      language,
+      identityType: identity.type,
+      metadata: {
+        retrievedDocIds: [],
       },
     };
   }
