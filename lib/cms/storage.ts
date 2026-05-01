@@ -1,5 +1,6 @@
 import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 /**
  * Abstract storage backend interface for media uploads.
@@ -32,28 +33,102 @@ export class LocalStorageBackend implements StorageBackend {
 }
 
 /**
- * AWS S3 storage backend — stub implementation.
+ * AWS S3 storage backend.
+ * Requires: S3_BUCKET, S3_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+ * Optional: S3_PUBLIC_URL (for custom CDN domain)
  */
 export class S3StorageBackend implements StorageBackend {
-  async upload(_file: Buffer, _filename: string, _mimeType: string): Promise<string> {
-    throw new Error("S3 storage not yet configured");
+  private client: S3Client;
+  private bucket: string;
+  private publicUrl: string;
+
+  constructor() {
+    this.bucket = process.env.S3_BUCKET ?? "";
+    const region = process.env.S3_REGION ?? "us-east-1";
+    this.publicUrl = process.env.S3_PUBLIC_URL ?? `https://${this.bucket}.s3.${region}.amazonaws.com`;
+
+    this.client = new S3Client({ region });
   }
 
-  async delete(_url: string): Promise<void> {
-    throw new Error("S3 storage not yet configured");
+  async upload(file: Buffer, filename: string, mimeType: string): Promise<string> {
+    const key = `media/${filename}`;
+
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: file,
+        ContentType: mimeType,
+      })
+    );
+
+    return `${this.publicUrl}/${key}`;
+  }
+
+  async delete(url: string): Promise<void> {
+    // Extract key from URL
+    const key = url.replace(`${this.publicUrl}/`, "");
+
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      })
+    );
   }
 }
 
 /**
- * Cloudflare R2 storage backend — stub implementation.
+ * Cloudflare R2 storage backend.
+ * R2 is S3-compatible, so we use the S3 SDK with a custom endpoint.
+ * Requires: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+ * Optional: R2_PUBLIC_URL (for public bucket or custom domain)
  */
 export class R2StorageBackend implements StorageBackend {
-  async upload(_file: Buffer, _filename: string, _mimeType: string): Promise<string> {
-    throw new Error("R2 storage not yet configured");
+  private client: S3Client;
+  private bucket: string;
+  private publicUrl: string;
+
+  constructor() {
+    const accountId = process.env.R2_ACCOUNT_ID ?? "";
+    this.bucket = process.env.R2_BUCKET ?? "";
+    this.publicUrl = process.env.R2_PUBLIC_URL ?? `https://${this.bucket}.${accountId}.r2.cloudflarestorage.com`;
+
+    this.client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+      },
+    });
   }
 
-  async delete(_url: string): Promise<void> {
-    throw new Error("R2 storage not yet configured");
+  async upload(file: Buffer, filename: string, mimeType: string): Promise<string> {
+    const key = `media/${filename}`;
+
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: file,
+        ContentType: mimeType,
+      })
+    );
+
+    return `${this.publicUrl}/${key}`;
+  }
+
+  async delete(url: string): Promise<void> {
+    // Extract key from URL
+    const key = url.replace(`${this.publicUrl}/`, "");
+
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      })
+    );
   }
 }
 

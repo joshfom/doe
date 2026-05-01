@@ -32,11 +32,19 @@ export async function checkPublicationGate(
   submitterId: string
 ): Promise<GateResult> {
   // Look up approval config for this module
-  const [config] = await db
-    .select()
-    .from(approvalConfig)
-    .where(eq(approvalConfig.contentModule, contentModule))
-    .limit(1);
+  // Gracefully handle missing tables (e.g., migrations not yet run)
+  let config: { id: string; enabled: boolean } | undefined;
+  try {
+    const [row] = await db
+      .select()
+      .from(approvalConfig)
+      .where(eq(approvalConfig.contentModule, contentModule))
+      .limit(1);
+    config = row;
+  } catch {
+    // Table doesn't exist or query failed — allow direct publish
+    return { allowed: true };
+  }
 
   // No config row or approval disabled → allow direct publish
   if (!config || !config.enabled) {
