@@ -11,7 +11,9 @@ import {
   useRollback,
   useSetHomePage,
   useSiteSettings,
+  useContentApprovalStatus,
 } from '@/lib/cms/hooks';
+import { ApprovalActions } from '@/lib/cms/components/ApprovalActions';
 import {
   PenLine,
   Globe,
@@ -41,6 +43,7 @@ export default function PageDetailPage({
   const { data: settingsEntries } = useSiteSettings();
   const [rollbackTarget, setRollbackTarget] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'seo' | 'revisions'>('details');
+  const { data: approvalStatus } = useContentApprovalStatus('pages', id);
 
   // Editable fields
   const [title, setTitle] = useState('');
@@ -56,7 +59,7 @@ export default function PageDetailPage({
   const homePageId = settingsEntries?.find((e) => e.key === 'home_page_id')?.value;
 
   // Helper to read page fields (handles both camelCase and snake_case from API)
-  const pf = (page as Record<string, unknown>) ?? {};
+  const pf = (page as unknown as Record<string, unknown>) ?? {};
 
   // Sync page data into local state
   useEffect(() => {
@@ -89,6 +92,7 @@ export default function PageDetailPage({
   }
 
   const isPublished = page.status === 'published';
+  const isPendingReview = page.status === 'pending_review';
   const isHomePage = homePageId === id;
 
   const handleSaveDetails = async () => {
@@ -151,6 +155,9 @@ export default function PageDetailPage({
             }`}>
               {page.status}
             </span>
+            {isPendingReview && (
+              <span className="inline-block rounded-full bg-ora-warning/10 px-2 py-0.5 text-[10px] font-medium text-ora-warning">Pending Review</span>
+            )}
           </div>
           <p className="mt-1 font-mono text-sm text-ora-muted">/{slug}</p>
         </div>
@@ -193,6 +200,13 @@ export default function PageDetailPage({
           )}
         </div>
       </div>
+
+      {/* Approval Actions */}
+      {approvalStatus?.request && (
+        <div className="mb-6">
+          <ApprovalActions contentId={id} contentModule="pages" />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border border-ora-sand bg-ora-white p-1 w-fit">
