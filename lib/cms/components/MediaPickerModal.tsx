@@ -6,7 +6,7 @@ import { Search, X, Upload, Image as ImageIcon } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface MediaItem {
+export interface MediaItem {
   id: string;
   filename: string;
   altText: string | null;
@@ -22,7 +22,10 @@ interface MediaItem {
 interface MediaPickerModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (storageUrl: string) => void;
+  /** Called with the selected media's storage URL. Either this or onSelectItem must be provided. */
+  onSelect?: (storageUrl: string) => void;
+  /** Called with the full selected MediaItem (use when you need the id). */
+  onSelectItem?: (item: MediaItem) => void;
   mimeTypeFilter?: string;
 }
 
@@ -32,6 +35,7 @@ export function MediaPickerModal({
   open,
   onClose,
   onSelect,
+  onSelectItem,
   mimeTypeFilter,
 }: MediaPickerModalProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -110,11 +114,12 @@ export function MediaPickerModal({
   );
 
   const handleSelect = useCallback(
-    (url: string) => {
-      onSelect(url);
+    (item: MediaItem) => {
+      onSelectItem?.(item);
+      onSelect?.(item.storageUrl);
       onClose();
     },
-    [onSelect, onClose]
+    [onSelect, onSelectItem, onClose]
   );
 
   if (!open) return null;
@@ -146,7 +151,7 @@ export function MediaPickerModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept={mimeTypeFilter ? `${mimeTypeFilter}*` : undefined}
               onChange={handleFileChange}
               className="hidden"
             />
@@ -216,7 +221,7 @@ export function MediaPickerModal({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => handleSelect(item.storageUrl)}
+                  onClick={() => handleSelect(item)}
                   className="group relative aspect-square overflow-hidden border border-ora-sand bg-ora-cream-light transition-colors hover:border-ora-gold focus-visible:ring-2 focus-visible:ring-ora-gold focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
                   {item.mimeType.startsWith('image/') ? (

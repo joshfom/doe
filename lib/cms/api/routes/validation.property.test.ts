@@ -263,6 +263,44 @@ vi.mock("../auth", async () => {
   };
 });
 
+// Mock RBAC middleware — identityGuard allows access, requirePermission is a no-op
+vi.mock("../../rbac/middleware", async () => {
+  const { Elysia } = await import("elysia");
+
+  const identityGuard = new Elysia({ name: "identityGuard" }).derive(
+    { as: "scoped" },
+    () => ({
+      userId: "test-user-id",
+      userType: "employee" as const,
+      isActive: true,
+      emailVerified: true,
+      brokerContext: null,
+      resolvedRoles: ["super_admin"],
+      resolvedPermissions: ["*:*"],
+    })
+  );
+
+  function requirePermission(_permission?: string) {
+    return new Elysia({ name: `requirePermission:${_permission ?? "auth-only"}` });
+  }
+
+  function portalGuard(_portal: string) {
+    return new Elysia({ name: `portalGuard:${_portal}` });
+  }
+
+  return {
+    identityGuard,
+    requirePermission,
+    portalGuard,
+    PORTAL_TYPE_MAP: {
+      "/ora-panel": "employee",
+      "/broker-portal": "broker",
+      "/client-portal": "client",
+      "/vendor-portal": "vendor",
+    },
+  };
+});
+
 vi.mock("../../audit", () => ({
   logAudit: vi.fn(async () => {}),
 }));

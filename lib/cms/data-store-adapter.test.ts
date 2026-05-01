@@ -4,7 +4,7 @@ import type { PageData } from "@/lib/page-builder";
 
 const sampleData: PageData = {
   root: { props: { title: "Test" } },
-  content: [{ type: "HeroBanner", props: { id: "hero-1", heading: "Hello" } }],
+  content: [{ type: "Heading", props: { id: "h-1", text: "Hello" } }],
 };
 
 describe("ApiDataStore", () => {

@@ -21,6 +21,22 @@ vi.mock("better-auth/crypto", () => ({
   generateRandomString: vi.fn(() => "test_session_token_abc123"),
 }));
 
+// Mock RBAC engine
+vi.mock("../rbac/engine", () => ({
+  loadUserRoles: vi.fn(async () => []),
+  resolvePermissions: vi.fn(async () => []),
+}));
+
+// Mock RBAC cache
+vi.mock("../rbac/cache", () => {
+  class MockPermissionCache {
+    get() { return null; }
+    set() {}
+    invalidate() {}
+  }
+  return { PermissionCache: MockPermissionCache };
+});
+
 import { db } from "../db";
 import { authPlugin, authGuard, validateSession, SESSION_COOKIE_NAME } from "./auth";
 
@@ -103,6 +119,9 @@ describe("authPlugin", () => {
             email: "admin@example.com",
             name: "Admin",
             passwordHash: "hashed_correct_password",
+            userType: "employee",
+            isActive: true,
+            emailVerified: true,
           },
         ])
       );
@@ -133,6 +152,9 @@ describe("authPlugin", () => {
             email: "admin@example.com",
             name: "Admin",
             passwordHash: "hashed_secret123",
+            userType: "employee",
+            isActive: true,
+            emailVerified: false,
           },
         ])
       );

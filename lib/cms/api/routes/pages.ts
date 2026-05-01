@@ -7,6 +7,7 @@ import { db } from "../../db";
 import type { Locale, PageNamespaceGroup, PageStatus } from "../../types";
 import { generateSlug, ensureUniqueSlug } from "../../utils/slug";
 import { logAudit } from "../../audit";
+import { checkPublicationGate } from "../../approval/gate";
 
 // ── Public routes (no auth) ──────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ const protectedPages = new Elysia({ name: "pages-protected" })
     return { data: { success: true } };
   })
 
-  // POST /pages/:id/publish — Publish page
+  // POST /pages/:id/publish — Publish page (with publication gate)
   .post("/pages/:id/publish", async ({ params, userId, set }) => {
     const { id } = params;
 
@@ -226,6 +227,14 @@ const protectedPages = new Elysia({ name: "pages-protected" })
     if (!page) {
       set.status = 404;
       return { error: "Page not found" };
+    }
+
+    // Check publication gate
+    const gateResult = await checkPublicationGate(db, id, "pages", userId);
+
+    if (!gateResult.allowed) {
+      set.status = 202;
+      return { data: { approvalRequestId: gateResult.approvalRequestId, message: gateResult.reason } };
     }
 
     const [updated] = await db

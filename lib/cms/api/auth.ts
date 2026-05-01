@@ -6,7 +6,9 @@ import {
 } from "better-auth/crypto";
 import { generateRandomString } from "better-auth/crypto";
 import { db } from "../db";
-import { users, sessions } from "../schema";
+import { users, sessions, brokerProfiles, brokerCompanies, roles, userRoles } from "../schema";
+import { loadUserRoles, resolvePermissions } from "../rbac/engine";
+import { permissionCache } from "../rbac/permission-cache";
 
 export const SESSION_COOKIE_NAME = "ora_session";
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -36,6 +38,69 @@ export async function validateSession(
 export { hashPassword };
 
 /**
+ * Resolve identity context (roles, permissions, broker info) for a user.
+ * Uses the permission cache to avoid repeated DB lookups.
+ */
+async function resolveIdentityContext(userId: string, userType: string) {
+  // Check cache first
+  const cached = permissionCache.get(userId);
+  let roleNames: string[];
+  let permissionStrings: string[];
+
+  if (cached) {
+    roleNames = cached.roles;
+    permissionStrings = cached.permissions;
+  } else {
+    const userRolesResult = await loadUserRoles(db, userId);
+    roleNames = userRolesResult.map((r) => r.name);
+    permissionStrings = await resolvePermissions(db, userRolesResult);
+    permissionCache.set(userId, {
+      roles: roleNames,
+      permissions: permissionStrings,
+    });
+  }
+
+  // Load broker-specific context if applicable
+  let broker: {
+    companyId: string;
+    companyName: string;
+    companyStatus: string;
+    isCompanyAdmin: boolean;
+    profileStatus: string;
+  } | undefined;
+
+  if (userType === "broker") {
+    const [profile] = await db
+      .select({
+        companyId: brokerProfiles.companyId,
+        companyName: brokerCompanies.companyName,
+        companyStatus: brokerCompanies.status,
+        isCompanyAdmin: brokerProfiles.isCompanyAdmin,
+        profileStatus: brokerProfiles.status,
+      })
+      .from(brokerProfiles)
+      .innerJoin(
+        brokerCompanies,
+        eq(brokerProfiles.companyId, brokerCompanies.id)
+      )
+      .where(eq(brokerProfiles.userId, userId))
+      .limit(1);
+
+    if (profile) {
+      broker = {
+        companyId: profile.companyId,
+        companyName: profile.companyName,
+        companyStatus: profile.companyStatus,
+        isCompanyAdmin: profile.isCompanyAdmin,
+        profileStatus: profile.profileStatus,
+      };
+    }
+  }
+
+  return { roleNames, permissionStrings, broker };
+}
+
+/**
  * Elysia plugin that provides auth endpoints:
  * - POST /auth/login
  * - POST /auth/logout
@@ -61,7 +126,22 @@ export const authPlugin = new Elysia({ name: "auth" })
       return { error: "Invalid credentials" };
     }
 
-    const valid = await verifyPassword(user.passwordHash, password);
+    // Reject login for users with null password_hash (e.g. broker pre-credential users)
+    if (!user.passwordHash) {
+      set.status = 401;
+      return { error: "Invalid credentials" };
+    }
+
+    // Check if account is deactivated
+    if (!user.isActive) {
+      set.status = 401;
+      return { error: "Account is deactivated" };
+    }
+
+    const valid = await verifyPassword({
+      hash: user.passwordHash,
+      password,
+    });
 
     if (!valid) {
       set.status = 401;
@@ -85,11 +165,24 @@ export const authPlugin = new Elysia({ name: "auth" })
       maxAge: SESSION_MAX_AGE_MS / 1000,
     });
 
+    // Bust any stale cached permissions for this user so freshly granted
+    // roles take effect on the next request.
+    permissionCache.invalidate(user.id);
+
+    // Resolve identity context for login response
+    const { roleNames, permissionStrings, broker } = await resolveIdentityContext(user.id, user.userType);
+
     return {
       data: {
         userId: user.id,
         email: user.email,
         name: user.name,
+        userType: user.userType,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        roles: roleNames,
+        permissions: permissionStrings,
+        ...(broker ? { broker } : {}),
       },
     };
   })
@@ -97,6 +190,10 @@ export const authPlugin = new Elysia({ name: "auth" })
     const token = cookie[SESSION_COOKIE_NAME]?.value as string | undefined;
 
     if (token) {
+      // Best-effort: invalidate the cached permissions for the owner of
+      // this session before deleting it.
+      const userId = await validateSession(token);
+      if (userId) permissionCache.invalidate(userId);
       await db.delete(sessions).where(eq(sessions.token, token));
     }
 
@@ -143,8 +240,24 @@ export const authPlugin = new Elysia({ name: "auth" })
 
     const [user] = await db
       .insert(users)
-      .values({ name, email, passwordHash })
+      .values({ name, email, passwordHash, userType: "employee", emailVerified: true })
       .returning();
+
+    // Auto-grant super_admin role to new employee registrations.
+    // (The panel is internal — register flow is gated by deployment, not by
+    // public access. Without this, fresh users have zero permissions and the
+    // sidebar appears empty.)
+    const [superAdminRole] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.name, "super_admin"), eq(roles.userType, "employee")))
+      .limit(1);
+    if (superAdminRole) {
+      await db
+        .insert(userRoles)
+        .values({ userId: user.id, roleId: superAdminRole.id })
+        .onConflictDoNothing();
+    }
 
     // Auto-login after registration
     const token = generateRandomString(48, "a-z", "A-Z", "0-9");
@@ -183,7 +296,14 @@ export const authPlugin = new Elysia({ name: "auth" })
     }
 
     const [user] = await db
-      .select({ id: users.id, email: users.email, name: users.name })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        userType: users.userType,
+        isActive: users.isActive,
+        emailVerified: users.emailVerified,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -193,11 +313,20 @@ export const authPlugin = new Elysia({ name: "auth" })
       return { error: "Not authenticated" };
     }
 
+    // Resolve identity context (roles, permissions, broker info)
+    const { roleNames, permissionStrings, broker } = await resolveIdentityContext(user.id, user.userType);
+
     return {
       data: {
         userId: user.id,
         email: user.email,
         name: user.name,
+        userType: user.userType,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        roles: roleNames,
+        permissions: permissionStrings,
+        ...(broker ? { broker } : {}),
       },
     };
   });

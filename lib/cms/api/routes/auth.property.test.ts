@@ -226,6 +226,51 @@ vi.mock("../auth", async () => {
   };
 });
 
+// Mock RBAC middleware — identityGuard rejects (no valid session), requirePermission is a no-op
+vi.mock("../../rbac/middleware", async () => {
+  const { Elysia } = await import("elysia");
+
+  const identityGuard = new Elysia({ name: "identityGuard" })
+    .derive({ as: "scoped" }, async ({ set }) => {
+      set.status = 401;
+      return {
+        userId: null as unknown as string,
+        userType: null as any,
+        isActive: false,
+        emailVerified: false,
+        brokerContext: null,
+        resolvedRoles: [] as string[],
+        resolvedPermissions: [] as string[],
+      };
+    })
+    .onBeforeHandle({ as: "scoped" }, (ctx: any) => {
+      if (!ctx.userId) {
+        ctx.set.status = 401;
+        return { error: "Unauthorized" };
+      }
+    });
+
+  function requirePermission(_permission?: string) {
+    return new Elysia({ name: `requirePermission:${_permission ?? "auth-only"}` });
+  }
+
+  function portalGuard(_portal: string) {
+    return new Elysia({ name: `portalGuard:${_portal}` });
+  }
+
+  return {
+    identityGuard,
+    requirePermission,
+    portalGuard,
+    PORTAL_TYPE_MAP: {
+      "/ora-panel": "employee",
+      "/broker-portal": "broker",
+      "/client-portal": "client",
+      "/vendor-portal": "vendor",
+    },
+  };
+});
+
 vi.mock("../../audit", () => ({
   logAudit: vi.fn(async () => {}),
 }));
