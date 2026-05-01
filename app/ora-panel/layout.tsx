@@ -11,14 +11,28 @@ import {
 import {
   LayoutDashboard,
   FileText,
+  Newspaper,
   Image as ImageIcon,
   Inbox,
+  Menu,
+  PanelBottom,
+  CheckSquare,
+  Ticket,
   Settings,
   Shield,
   LogOut,
   PanelLeftOpen,
   PanelLeftClose,
+  MapPin,
+  Building2,
+  BrainCircuit,
+  MessageSquare,
+  Users,
+  CalendarDays,
+  BarChart3,
+  Cog,
 } from 'lucide-react';
+import type { SessionData } from '@/lib/types/session';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -33,13 +47,42 @@ const queryClient = new QueryClient({
 });
 
 const navItems = [
-  { href: '/ora-panel', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/ora-panel/pages', label: 'Pages', icon: FileText },
-  { href: '/ora-panel/media', label: 'Media', icon: ImageIcon },
-  { href: '/ora-panel/submissions', label: 'Submissions', icon: Inbox },
-  { href: '/ora-panel/settings', label: 'Settings', icon: Settings },
-  { href: '/ora-panel/audit', label: 'Audit', icon: Shield },
+  { href: '/ora-panel', label: 'Dashboard', icon: LayoutDashboard, permission: null },
+  { href: '/ora-panel/pages', label: 'Pages', icon: FileText, permission: 'pages:read' },
+  { href: '/ora-panel/blog', label: 'Blog', icon: Newspaper, permission: 'posts:read' },
+  { href: '/ora-panel/communities', label: 'Communities', icon: MapPin, permission: 'communities:read' },
+  { href: '/ora-panel/projects', label: 'Projects', icon: Building2, permission: 'projects:read' },
+  { href: '/ora-panel/media', label: 'Media', icon: ImageIcon, permission: 'media:read' },
+  { href: '/ora-panel/menus', label: 'Menus', icon: Menu, permission: 'settings:read' },
+  { href: '/ora-panel/footer-settings', label: 'Footer', icon: PanelBottom, permission: 'settings:read' },
+  { href: '/ora-panel/submissions', label: 'Submissions', icon: Inbox, permission: 'leads:read' },
+  { href: '/ora-panel/reviews', label: 'Reviews', icon: CheckSquare, permission: 'bookings:read' },
+  { href: '/ora-panel/tickets', label: 'Tickets', icon: Ticket, permission: 'tickets:read' },
+  { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
+  { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
+  { href: '/ora-panel/audit', label: 'Audit', icon: Shield, permission: 'audit:read' },
+  { href: '/ora-panel/ai/knowledge-base', label: 'AI Knowledge', icon: BrainCircuit, permission: 'ai:knowledge-base:manage' },
+  { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
+  { href: '/ora-panel/ai/clients', label: 'AI Clients', icon: Users, permission: 'ai:clients:manage' },
+  { href: '/ora-panel/ai/appointments', label: 'AI Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
+  { href: '/ora-panel/ai/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'ai:analytics:read' },
+  { href: '/ora-panel/ai/settings', label: 'AI Settings', icon: Cog, permission: 'ai:config:manage' },
 ];
+
+/**
+ * Check if a user's permission set satisfies a required permission.
+ * Supports exact match, resource-level wildcard (resource:*), and global wildcard (*:*).
+ */
+function hasPermission(permissions: string[], required: string): boolean {
+  if (permissions.includes('*:*')) return true;
+  if (permissions.includes(required)) return true;
+
+  const colonIdx = required.indexOf(':');
+  if (colonIdx === -1) return false;
+
+  const resource = required.slice(0, colonIdx);
+  return permissions.includes(`${resource}:*`);
+}
 
 export default function OraPanelLayout({
   children,
@@ -48,29 +91,43 @@ export default function OraPanelLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(true);
 
   const isLoginPage = pathname === '/ora-panel/login' || pathname === '/ora-panel/register';
 
   useEffect(() => {
     if (isLoginPage) {
-      setAuthed(true);
+      setLoading(false);
       return;
     }
 
+    let cancelled = false;
     fetch(`${API_BASE_URL}/api/auth/session`, { credentials: 'include' })
-      .then((res) => {
-        if (res.ok) {
-          setAuthed(true);
-        } else {
-          router.replace('/ora-panel/login');
-        }
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Not authenticated');
+        const json = await res.json();
+        if (!json?.data?.userId) throw new Error('Not authenticated');
+        return json;
+      })
+      .then((json) => {
+        if (cancelled) return;
+        setSession(json.data as SessionData);
+        setLoading(false);
       })
       .catch(() => {
-        router.replace('/ora-panel/login');
+        if (cancelled) return;
+        // Stop rendering "Loading…" forever — clear loading and redirect.
+        setSession(null);
+        setLoading(false);
+        const next = encodeURIComponent(pathname || '/ora-panel');
+        router.replace(`/ora-panel/login?next=${next}`);
       });
-  }, [isLoginPage, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoginPage, pathname, router]);
 
   const handleLogout = async () => {
     try {
@@ -83,7 +140,7 @@ export default function OraPanelLayout({
     }
   };
 
-  if (authed === null) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ora-cream-light">
         <p className="text-sm text-ora-muted">Loading…</p>
@@ -99,8 +156,19 @@ export default function OraPanelLayout({
     );
   }
 
+  // Hard-stop: if we exited loading without a session, the redirect is
+  // already in flight — render nothing rather than leaking the panel shell.
+  if (!session) {
+    return null;
+  }
+
   const sidebarWidth = collapsed ? 'w-16' : 'w-56';
   const mainMargin = collapsed ? 'ml-16' : 'ml-56';
+
+  const userPermissions = session?.permissions ?? [];
+  const visibleNavItems = navItems.filter(
+    (item) => item.permission === null || hasPermission(userPermissions, item.permission)
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -134,7 +202,7 @@ export default function OraPanelLayout({
 
             {/* Navigation */}
             <nav className="flex-1 space-y-1 px-2 py-3">
-              {navItems.map(({ href, label, icon: Icon }) => {
+              {visibleNavItems.map(({ href, label, icon: Icon }) => {
                 const isActive =
                   href === '/ora-panel'
                     ? pathname === '/ora-panel'

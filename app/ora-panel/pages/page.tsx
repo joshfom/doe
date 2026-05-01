@@ -130,6 +130,9 @@ export default function PageIndexPage() {
                         System
                       </span>
                     )}
+                    {(group.locales.en?.status === 'pending_review' || group.locales.ar?.status === 'pending_review') && (
+                      <span className="inline-block rounded-full bg-ora-warning/10 px-2 py-0.5 text-[10px] font-medium text-ora-warning">Pending Review</span>
+                    )}
                   </div>
                   <p className="text-xs text-ora-muted font-mono">/{group.slug}</p>
                 </div>
