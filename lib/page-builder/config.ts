@@ -392,30 +392,55 @@ const imageUploadField = {
     };
 
     if (currentSrc) {
-      return React.createElement("div", {
-        style: { position: "relative", cursor: readOnly ? "default" : "pointer" },
-        onClick: () => { if (mode === "upload") triggerUpload(); },
-        onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
-        onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
-      },
-        React.createElement("img", { src: currentSrc, alt: "Preview", style: { width: "100%", height: 140, objectFit: "cover", border: "1px solid #E8E4DF", display: "block" } }),
-        !readOnly && React.createElement("div", {
-          style: {
-            position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            opacity: 0, transition: "opacity 0.2s",
-          },
-          onMouseEnter: (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.opacity = "1"; },
-          onMouseLeave: (e: React.MouseEvent) => { (e.currentTarget as HTMLElement).style.opacity = "0"; },
+      return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+        React.createElement("div", {
+          style: { position: "relative" },
         },
-          React.createElement("span", { style: { color: "#fff", fontSize: 13, fontWeight: 500, background: "rgba(0,0,0,0.6)", padding: "6px 14px" } }, "Replace image...")
+          React.createElement("img", { src: currentSrc, alt: "Preview", style: { width: "100%", height: 140, objectFit: "cover", border: "1px solid #E8E4DF", display: "block" } }),
+          !readOnly && React.createElement("button", {
+            type: "button",
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); onChange(""); },
+            style: { position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", width: 20, height: 20, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" },
+            "aria-label": "Remove image",
+          }, "✕"),
         ),
-        !readOnly && React.createElement("button", {
-          type: "button",
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onChange(""); },
-          style: { position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", width: 20, height: 20, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" },
-          "aria-label": "Remove image",
-        }, "✕"),
+        // Replace controls: Upload vs URL toggle
+        !readOnly && React.createElement("div", { style: { display: "flex", gap: 0 } },
+          React.createElement("button", {
+            type: "button",
+            onClick: triggerUpload,
+            style: {
+              flex: 1, height: 28, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
+              background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400,
+            },
+          }, "Replace (Upload)"),
+          React.createElement("button", {
+            type: "button",
+            onClick: () => setMode("url"),
+            style: {
+              flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
+              background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
+              color: mode === "url" ? "#FFF" : "#6B6B6B",
+              fontWeight: mode === "url" ? 600 : 400,
+            },
+          }, "Replace (URL)"),
+        ),
+        // URL input row (shown when mode is "url")
+        !readOnly && mode === "url" && React.createElement("div", { style: { display: "flex", gap: 4 } },
+          React.createElement("input", {
+            type: "text",
+            value: urlInput,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setUrlInput(e.target.value),
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter") handleUrlApply(); },
+            placeholder: "https://example.com/image.jpg",
+            style: { flex: 1, height: 34, border: "1px solid #E8E4DF", padding: "0 8px", fontSize: 12, color: "#2C2C2C" },
+          }),
+          React.createElement("button", {
+            type: "button",
+            onClick: handleUrlApply,
+            style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
+          }, "Apply"),
+        ),
       );
     }
 
