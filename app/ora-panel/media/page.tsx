@@ -7,7 +7,7 @@ import {
   useDeleteMedia,
   useUpdateMediaAlt,
 } from '@/lib/cms/hooks';
-import { Upload, Trash2, Search } from 'lucide-react';
+import { Upload, Trash2, Search, Pencil, Link, Check, X } from 'lucide-react';
 
 export default function MediaLibraryPage() {
   const [search, setSearch] = useState('');
@@ -21,6 +21,8 @@ export default function MediaLibraryPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editingAlt, setEditingAlt] = useState<{ id: string; value: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copyErrorId, setCopyErrorId] = useState<string | null>(null);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,6 +42,18 @@ export default function MediaLibraryPage() {
         { id: editingAlt.id, altText: editingAlt.value },
         { onSettled: () => setEditingAlt(null) }
       );
+    }
+  };
+
+  const handleCopyLink = async (item: { id: string; storageUrl: string }) => {
+    try {
+      await navigator.clipboard.writeText(item.storageUrl);
+      setCopiedId(item.id);
+      setCopyErrorId(null);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setCopyErrorId(item.id);
+      setTimeout(() => setCopyErrorId(null), 2000);
     }
   };
 
@@ -94,7 +108,7 @@ export default function MediaLibraryPage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="aspect-square animate-pulse bg-ora-sand/60" />
           ))}
@@ -104,11 +118,11 @@ export default function MediaLibraryPage() {
           <p className="text-sm text-ora-muted">No media items found</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {items.map((item) => (
-            <div key={item.id} className="border border-ora-sand/60 bg-ora-white">
+            <div key={item.id} className="group relative">
               {/* Thumbnail */}
-              <div className="relative aspect-video bg-ora-cream-light">
+              <div className="aspect-square bg-ora-cream-light border border-ora-sand/60 overflow-hidden">
                 <img
                   src={item.storageUrl}
                   alt={item.altText ?? item.filename}
@@ -116,74 +130,83 @@ export default function MediaLibraryPage() {
                 />
               </div>
 
-              {/* Info */}
-              <div className="p-4">
-                <p className="truncate text-sm font-medium text-ora-charcoal">{item.filename}</p>
-                <p className="text-xs text-ora-muted">
-                  {item.mimeType} · {(item.fileSize / 1024).toFixed(0)} KB
-                  {item.width && item.height ? ` · ${item.width}×${item.height}` : ''}
-                </p>
-
-                {/* Alt text editing */}
-                {editingAlt?.id === item.id ? (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="text"
-                      value={editingAlt.value}
-                      onChange={(e) => setEditingAlt({ ...editingAlt, value: e.target.value })}
-                      className="h-8 flex-1 border border-ora-stone bg-ora-white px-2 text-xs text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
-                    />
-                    <button
-                      onClick={handleAltSave}
-                      className="h-8 bg-ora-charcoal px-3 text-xs text-ora-white hover:bg-ora-graphite transition-colors"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingAlt(null)}
-                      className="h-8 border border-ora-sand px-3 text-xs text-ora-charcoal hover:bg-ora-cream transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
+              {/* Hover Overlay */}
+              <div className="absolute inset-0 bg-ora-charcoal/70 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex flex-col justify-between p-2">
+                <div className="flex justify-end gap-1">
+                  <button
+                    onClick={() => handleCopyLink(item)}
+                    title="Copy public link"
+                    aria-label={`Copy public link for ${item.filename}`}
+                    className="p-1 text-ora-white hover:text-ora-gold transition-colors"
+                  >
+                    {copiedId === item.id ? (
+                      <Check className="h-4 w-4 stroke-1 text-ora-gold" />
+                    ) : copyErrorId === item.id ? (
+                      <X className="h-4 w-4 stroke-1 text-ora-error" />
+                    ) : (
+                      <Link className="h-4 w-4 stroke-1" />
+                    )}
+                  </button>
                   <button
                     onClick={() => setEditingAlt({ id: item.id, value: item.altText ?? '' })}
-                    className="mt-2 text-xs text-ora-gold hover:text-ora-gold-dark transition-colors"
+                    aria-label={`Edit alt text for ${item.filename}`}
+                    className="p-1 text-ora-white hover:text-ora-gold transition-colors"
                   >
-                    {item.altText ? `Alt: ${item.altText}` : 'Add alt text'}
+                    <Pencil className="h-4 w-4 stroke-1" />
                   </button>
-                )}
-
-                {/* Delete */}
-                <div className="mt-3 flex justify-end">
-                  {deleteTarget === item.id ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deleteMedia.isPending}
-                        className="h-8 bg-ora-error px-3 text-xs text-ora-white hover:opacity-90 transition-colors"
-                      >
-                        Confirm Delete
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(null)}
-                        className="h-8 border border-ora-sand px-3 text-xs text-ora-charcoal hover:bg-ora-cream transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeleteTarget(item.id)}
-                      className="inline-flex h-8 items-center gap-1 text-xs text-ora-muted hover:text-ora-error transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 stroke-1" />
-                      Delete
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setDeleteTarget(item.id)}
+                    aria-label={`Delete ${item.filename}`}
+                    className="p-1 text-ora-white hover:text-ora-error transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4 stroke-1" />
+                  </button>
                 </div>
+                <p className="truncate text-xs text-ora-white">{item.filename}</p>
               </div>
+
+              {/* Alt text editing */}
+              {editingAlt?.id === item.id && (
+                <div className="mt-1 flex gap-1">
+                  <input
+                    type="text"
+                    value={editingAlt.value}
+                    onChange={(e) => setEditingAlt({ ...editingAlt, value: e.target.value })}
+                    className="h-8 flex-1 border border-ora-stone bg-ora-white px-2 text-xs text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+                  />
+                  <button
+                    onClick={handleAltSave}
+                    className="h-8 bg-ora-charcoal px-3 text-xs text-ora-white hover:bg-ora-graphite transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingAlt(null)}
+                    className="h-8 border border-ora-sand px-3 text-xs text-ora-charcoal hover:bg-ora-cream transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Delete confirmation */}
+              {deleteTarget === item.id && (
+                <div className="mt-1 flex gap-1">
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={deleteMedia.isPending}
+                    className="h-8 bg-ora-error px-3 text-xs text-ora-white hover:opacity-90 transition-colors"
+                  >
+                    Confirm Delete
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(null)}
+                    className="h-8 border border-ora-sand px-3 text-xs text-ora-charcoal hover:bg-ora-cream transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
