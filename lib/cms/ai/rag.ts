@@ -23,6 +23,7 @@ export interface RAGContext {
   identityContext: IdentityResult | null;
   language: "en" | "ar";
   currentQuery: string;
+  otpVerified?: boolean;
 }
 
 export interface QueryInput {
@@ -32,6 +33,7 @@ export interface QueryInput {
   identityContext?: IdentityResult | null;
   topK?: number;
   threshold?: number;
+  otpVerified?: boolean;
 }
 
 export interface QueryResult {
@@ -80,18 +82,18 @@ export async function retrieveContext(
     LIMIT ${topK}
   `);
 
-  const documents: RetrievedDocument[] = (results.rows as any[]).map(
-    (row: any) => ({
-      id: row.id,
-      documentId: row.documentId,
-      title: row.title,
-      chunkText: row.chunkText,
-      chunkIndex: row.chunkIndex,
-      locale: row.locale,
-      category: row.category,
-      similarity: Number(row.similarity),
-    })
-  );
+  const documents: RetrievedDocument[] = (
+    results.rows as Array<Record<string, unknown>>
+  ).map((row) => ({
+    id: row.id as string,
+    documentId: row.documentId as string,
+    title: row.title as string,
+    chunkText: row.chunkText as string,
+    chunkIndex: row.chunkIndex as number,
+    locale: row.locale as "en" | "ar",
+    category: row.category as string,
+    similarity: Number(row.similarity),
+  }));
 
   // Log retrieved document IDs and similarity scores
   console.log(
@@ -161,6 +163,31 @@ export function buildPrompt(context: RAGContext): string {
       "and truck plate numbers. Confirm the unit is handed over before promising approval."
   );
   parts.push(
+    "BOOKING / APPOINTMENT FLOW (CRITICAL — read carefully):\n" +
+      "- You MUST NOT confirm, schedule, book, reserve, or 'arrange' any meeting, tour, site visit, " +
+      "consultation, viewing, call, or appointment. You CANNOT execute bookings yourself.\n" +
+      "- NEVER say things like 'I've booked', 'I've scheduled', 'tour is scheduled for', " +
+      "'I'll arrange', 'looking forward to seeing you', 'see you tomorrow at X PM'. These are forbidden.\n" +
+      "- If the user asks to book/schedule/visit, your ONLY job is to acknowledge the request and " +
+      "ask: (1) confirm full name, email, mobile, AND (2) what date and time works for them. " +
+      "Then stop. The booking tool will execute only after they provide an explicit date and time. " +
+      "A separate system component creates the appointment, opens a tracking ticket, and emails " +
+      "the user — you do not do this yourself.\n" +
+      "- If the user has not yet provided an explicit date AND time, you MUST ask for them. Do not " +
+      "invent times. Do not assume tomorrow, do not assume 5 PM, do not assume any default.\n" +
+      "- Once a booking has actually been executed, you will see a system message confirming it. " +
+      "Until then, treat the booking as not yet placed."
+  );
+  parts.push(
+    "ANTI-HALLUCINATION RULES:\n" +
+      "- Never fabricate ticket numbers, appointment reference numbers, dates, times, addresses, " +
+      "phone numbers, prices, or names of staff. If you do not have a real value, say so.\n" +
+      "- Never claim you 'sent', 'emailed', 'forwarded', 'notified', 'created', or 'opened' anything " +
+      "unless a tool result above explicitly says so. You are not allowed to imply background actions.\n" +
+      "- Never promise specific human follow-up timelines (e.g. 'someone will call you in 10 minutes'). " +
+      "Use vague but honest language ('a teammate will reach out shortly')."
+  );
+  parts.push(
     "CAPABILITIES YOU CAN OFFER:\n" +
       "- Answer questions about ORA communities, projects, units, amenities, and policies.\n" +
       "- Look up the user's own account, units, construction progress, and handover info (after OTP).\n" +
@@ -189,6 +216,14 @@ export function buildPrompt(context: RAGContext): string {
     parts.push("");
     parts.push("--- User Identity ---");
     parts.push(`Type: ${identity.type}`);
+    if (context.otpVerified) {
+      parts.push(
+        "OTP Status: VERIFIED — the user has already passed identity verification " +
+          "for this session. Do NOT ask them to verify again, do NOT say you need to " +
+          "verify their OTP, do NOT mention re-verification. Answer their account " +
+          "questions directly using the data below."
+      );
+    }
     if (identity.firstName) {
       parts.push(`Name: ${identity.firstName}`);
     }
@@ -271,6 +306,7 @@ export async function processQuery(
     identityContext: input.identityContext ?? null,
     language: input.language,
     currentQuery: input.query,
+    otpVerified: input.otpVerified ?? false,
   };
 
   const prompt = buildPrompt(ragContext);

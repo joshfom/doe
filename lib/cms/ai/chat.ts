@@ -1,6 +1,6 @@
 import { eq, desc } from "drizzle-orm";
 import type { Database } from "../db";
-import { aiConversations, aiMessages } from "../schema";
+import { aiConversations, aiMessages, otpRecords } from "../schema";
 import {
   resolveIdentityByPhone,
   resolveIdentityByEmail,
@@ -157,6 +157,29 @@ export async function handleChatMessage(
   db: Database,
   input: ChatInput
 ): Promise<ChatResponse> {
+  const result = await handleChatMessageInner(db, input);
+  // Best-effort: keep an at-a-glance summary of where the conversation is
+  // for the admin panel and human handover.
+  try {
+    const { writeConversationSummary } = await import("./conversation-summary");
+    await writeConversationSummary(db, {
+      conversationId: result.conversationId,
+      identityType:
+        (result.identityType as "client" | "tenant" | "visitor") ?? "visitor",
+      lastUserMessage: input.message,
+      lastAssistantMessage: result.message,
+      actionPerformed: result.metadata?.actionPerformed ?? undefined,
+    });
+  } catch (err) {
+    console.error("[chat] summary write failed", err);
+  }
+  return result;
+}
+
+async function handleChatMessageInner(
+  db: Database,
+  input: ChatInput
+): Promise<ChatResponse> {
   // ── Step 1: Load or create conversation ──────────────────────────────────
   let conversationId = input.conversationId;
   let conversationHistory: ChatMessage[] = [];
@@ -177,6 +200,34 @@ export async function handleChatMessage(
       // Capture OTP verification state from the loaded conversation
       otpVerificationState =
         (existing.otpVerificationState as OtpVerificationState) ?? "not_required";
+
+      // ── OTP session timeout ─────────────────────────────────────────────
+      // Verification is sticky for OTP_SESSION_TTL_MINUTES (20). After that
+      // the user must re-verify. Without this, a stale tab from yesterday
+      // would still bypass the gate. Implementation: pull the most recent
+      // `verifiedAt` from otpRecords for this conversation and downgrade
+      // the state to "expired" if it's older than the TTL.
+      if (otpVerificationState === "verified") {
+        const OTP_SESSION_TTL_MINUTES = 20;
+        const [latestVerified] = await db
+          .select({ verifiedAt: otpRecords.verifiedAt })
+          .from(otpRecords)
+          .where(eq(otpRecords.conversationId, conversationId!))
+          .orderBy(desc(otpRecords.verifiedAt))
+          .limit(1);
+
+        const verifiedAt = latestVerified?.verifiedAt;
+        if (verifiedAt) {
+          const ageMs = Date.now() - new Date(verifiedAt).getTime();
+          if (ageMs > OTP_SESSION_TTL_MINUTES * 60 * 1000) {
+            otpVerificationState = "expired";
+            await db
+              .update(aiConversations)
+              .set({ otpVerificationState: "expired", updatedAt: new Date() })
+              .where(eq(aiConversations.id, conversationId!));
+          }
+        }
+      }
 
       // Load recent messages (up to 30) for context. We then trim by an
       // approximate character budget so we don't blow past model context
@@ -441,6 +492,61 @@ export async function handleChatMessage(
   );
 
   if (otpGateResult.action === "respond") {
+    // If the gate just succeeded verification AND there's a buffered personal
+    // question waiting to be answered, run RAG against the buffered question
+    // and append the answer to the "You're verified! ✓" preface so the user
+    // doesn't have to retype.
+    if (otpGateResult.pendingQuery) {
+      // Refresh OTP state — gate just flipped it to "verified"
+      otpVerificationState = "verified";
+
+      // Refresh identity (post-verify we want full unit lookup)
+      const verifiedAccount = await lookupClientAccount(db, identity);
+      const verifiedIdentity: IdentityResult = verifiedAccount
+        ? { ...identity, units: verifiedAccount.units }
+        : identity;
+
+      try {
+        const rag = await processQuery(db, {
+          query: otpGateResult.pendingQuery,
+          language,
+          conversationHistory,
+          identityContext: verifiedIdentity,
+          otpVerified: true,
+        });
+
+        const combined = `${otpGateResult.response!}\n\n${rag.response}`;
+
+        await db.insert(aiMessages).values([
+          { conversationId, role: "user", content: input.message },
+          {
+            conversationId,
+            role: "assistant",
+            content: combined,
+            metadata: {
+              otpGate: true,
+              queryCategory: otpGateResult.queryCategory,
+              replayedQuery: otpGateResult.pendingQuery,
+            },
+          },
+        ]);
+
+        return {
+          message: combined,
+          conversationId,
+          language,
+          identityType: verifiedIdentity.type,
+          metadata: {
+            retrievedDocIds: rag.retrievedDocuments.map((d) => d.documentId),
+            actionPerformed: "otp_verified_and_replay",
+          },
+        };
+      } catch (err) {
+        console.error("[chat] Replay after OTP verify failed", err);
+        // Fall through to plain verified response below
+      }
+    }
+
     // OTP gate intercepted — persist user message and gate response, return early
     await db.insert(aiMessages).values([
       {
@@ -525,6 +631,7 @@ export async function handleChatMessage(
     language,
     conversationHistory,
     identityContext,
+    otpVerified: otpVerificationState === "verified",
   });
 
   // Build response (no user-visible source attribution — internal metadata only)

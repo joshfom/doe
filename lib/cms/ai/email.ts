@@ -316,3 +316,206 @@ export async function sendOtpEmail(
     return { success: false, error: message };
   }
 }
+
+// ── Appointment confirmation email ────────────────────────────────────────────
+
+export interface SendAppointmentEmailInput {
+  recipientEmail: string;
+  recipientName: string;
+  referenceNumber: string;
+  ticketNumber?: string;
+  scheduledDate: string; // YYYY-MM-DD
+  scheduledTime: string; // HH:MM
+  appointmentType:
+    | "site_visit"
+    | "consultation"
+    | "payment_discussion"
+    | "maintenance_request";
+  language: "en" | "ar";
+}
+
+const APPOINTMENT_TYPE_LABELS: Record<
+  SendAppointmentEmailInput["appointmentType"],
+  { en: string; ar: string }
+> = {
+  site_visit: { en: "Site Visit", ar: "زيارة موقع" },
+  consultation: { en: "Consultation", ar: "استشارة" },
+  payment_discussion: { en: "Payment Discussion", ar: "مناقشة دفع" },
+  maintenance_request: { en: "Maintenance Visit", ar: "زيارة صيانة" },
+};
+
+export function buildAppointmentEmailHtml(
+  input: SendAppointmentEmailInput
+): string {
+  const {
+    recipientName,
+    referenceNumber,
+    ticketNumber,
+    scheduledDate,
+    scheduledTime,
+    appointmentType,
+    language,
+  } = input;
+  const typeLabel = APPOINTMENT_TYPE_LABELS[appointmentType][language];
+
+  if (language === "ar") {
+    return `<!DOCTYPE html><html dir="rtl" lang="ar"><body style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="background:#0a0a0a;color:#fff;padding:28px 32px;"><h1 style="margin:0;font-size:22px;font-weight:600;">تأكيد طلب الحجز</h1></div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">مرحباً ${recipientName}،</p>
+      <p style="margin:0 0 24px;line-height:1.6;">شكراً لتواصلك معنا. تم استلام طلب الحجز التالي:</p>
+      <div style="background:#fafafa;border:1px solid #ececec;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;"><strong>نوع الموعد:</strong> ${typeLabel}</p>
+        <p style="margin:0 0 8px;"><strong>التاريخ:</strong> ${scheduledDate}</p>
+        <p style="margin:0 0 8px;"><strong>الوقت:</strong> ${scheduledTime}</p>
+        <p style="margin:0 0 8px;"><strong>رقم الموعد:</strong> ${referenceNumber}</p>
+        ${ticketNumber ? `<p style="margin:0;"><strong>رقم التذكرة:</strong> ${ticketNumber}</p>` : ""}
+      </div>
+      <p style="margin:0 0 16px;line-height:1.6;">سيقوم أحد ممثلينا بمراجعة طلبك وتأكيد الموعد قريباً. إذا احتجت لتعديل أو إلغاء الموعد، فقط أخبرنا في الدردشة أو رد على هذا البريد.</p>
+      <p style="margin:24px 0 0;color:#666;font-size:13px;">مع تحيات فريق ORA</p>
+    </div>
+  </div></body></html>`;
+  }
+
+  return `<!DOCTYPE html><html lang="en"><body style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="background:#0a0a0a;color:#fff;padding:28px 32px;"><h1 style="margin:0;font-size:22px;font-weight:600;">Booking Request Received</h1></div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">Hello ${recipientName},</p>
+      <p style="margin:0 0 24px;line-height:1.6;">Thanks for reaching out. We've recorded your booking request:</p>
+      <div style="background:#fafafa;border:1px solid #ececec;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;"><strong>Appointment type:</strong> ${typeLabel}</p>
+        <p style="margin:0 0 8px;"><strong>Date:</strong> ${scheduledDate}</p>
+        <p style="margin:0 0 8px;"><strong>Time:</strong> ${scheduledTime}</p>
+        <p style="margin:0 0 8px;"><strong>Appointment ref:</strong> ${referenceNumber}</p>
+        ${ticketNumber ? `<p style="margin:0;"><strong>Tracking ticket:</strong> ${ticketNumber}</p>` : ""}
+      </div>
+      <p style="margin:0 0 16px;line-height:1.6;">A teammate will review your request and confirm shortly. If you need to reschedule or cancel, just let us know in the chat or reply to this email.</p>
+      <p style="margin:24px 0 0;color:#666;font-size:13px;">— The ORA team</p>
+    </div>
+  </div></body></html>`;
+}
+
+/**
+ * Build a minimal RFC 5545 VCALENDAR file for the appointment. Recipients can
+ * add it to Outlook / Apple Calendar / Google Calendar with one click.
+ * Times are interpreted as Asia/Dubai local (UTC+4). Duration: 60 min.
+ */
+export function buildAppointmentIcs(input: SendAppointmentEmailInput): string {
+  const { scheduledDate, scheduledTime, referenceNumber, recipientName, language } = input;
+  const [yyyy, mm, dd] = scheduledDate.split("-");
+  const [hh, min] = scheduledTime.split(":");
+  // Asia/Dubai = UTC+4. To get UTC, subtract 4 hours.
+  const startLocal = new Date(
+    Date.UTC(
+      parseInt(yyyy, 10),
+      parseInt(mm, 10) - 1,
+      parseInt(dd, 10),
+      parseInt(hh, 10) - 4,
+      parseInt(min, 10),
+      0
+    )
+  );
+  const endLocal = new Date(startLocal.getTime() + 60 * 60 * 1000);
+  const fmt = (d: Date) =>
+    d
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "Z");
+  const dtStart = fmt(startLocal);
+  const dtEnd = fmt(endLocal);
+  const dtStamp = fmt(new Date());
+
+  const typeLabel = APPOINTMENT_TYPE_LABELS[input.appointmentType][language];
+  const summary =
+    language === "ar"
+      ? `ORA — ${typeLabel}`
+      : `ORA — ${typeLabel}`;
+  const description =
+    language === "ar"
+      ? `موعدك مع فريق ORA. الرقم المرجعي: ${referenceNumber}.`
+      : `Your appointment with the ORA team. Reference: ${referenceNumber}.`;
+
+  // Escape ICS special chars per RFC 5545
+  const esc = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ORA UAE//AI Assistant//EN",
+    "METHOD:REQUEST",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${referenceNumber}@ora-uae`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${esc(summary)}`,
+    `DESCRIPTION:${esc(description)}`,
+    `ORGANIZER;CN=ORA Team:mailto:${process.env.AZURE_COMMUNICATION_SENDER ?? "no-reply@ora.local"}`,
+    `ATTENDEE;CN=${esc(recipientName)};RSVP=TRUE:mailto:${input.recipientEmail}`,
+    "STATUS:TENTATIVE",
+    "SEQUENCE:0",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return lines.join("\r\n");
+}
+
+export async function sendAppointmentEmail(
+  input: SendAppointmentEmailInput
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await acquireToken();
+    const senderEmail = getSenderEmail();
+
+    const subject =
+      input.language === "ar"
+        ? `ORA — تأكيد طلب الحجز ${input.referenceNumber}`
+        : `ORA — Booking Request ${input.referenceNumber}`;
+
+    const htmlContent = buildAppointmentEmailHtml(input);
+    const ics = buildAppointmentIcs(input);
+    const icsBase64 = Buffer.from(ics, "utf-8").toString("base64");
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "HTML", content: htmlContent },
+          toRecipients: [{ emailAddress: { address: input.recipientEmail } }],
+          attachments: [
+            {
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: "appointment.ics",
+              contentType: "text/calendar; method=REQUEST",
+              contentBytes: icsBase64,
+            },
+          ],
+        },
+        saveToSentItems: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "Unknown error");
+      return {
+        success: false,
+        error: `Graph API sendMail failed (${response.status}): ${errorBody}`,
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return { success: false, error: message };
+  }
+}

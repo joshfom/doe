@@ -23,8 +23,20 @@ import {
   createOtpRecord,
   maskEmail,
 } from "./otp";
-import { sendOtpEmail } from "./email";
+import { sendOtpEmail, sendAppointmentEmail } from "./email";
 import { createTicket } from "../tickets/service";
+import {
+  bookAppointment,
+  lookupClientAccount,
+  cancelAppointment,
+  rescheduleAppointment,
+} from "./actions";
+import {
+  loadHandoffState,
+  mergeHandoffState,
+  clearHandoffFields,
+  type HandoffState,
+} from "./handoff-state";
 import type { TicketRequestType } from "../types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -161,21 +173,214 @@ const NAVIGATE_KEYWORDS = [
   "رابط",
 ];
 
+const BOOKING_KEYWORDS = [
+  "book a meeting",
+  "book a tour",
+  "book a site visit",
+  "book a consultation",
+  "book an appointment",
+  "book appointment",
+  "book a viewing",
+  "schedule a meeting",
+  "schedule a tour",
+  "schedule a site visit",
+  "schedule an appointment",
+  "schedule a viewing",
+  "schedule a consultation",
+  "schedule a call",
+  "schedule a visit",
+  "site visit",
+  "site tour",
+  "tour the",
+  "visit the site",
+  "احجز",
+  "موعد",
+  "زيارة الموقع",
+  "زيارة موقع",
+  "جدولة",
+];
+
+const HANDOVER_KEYWORDS = [
+  "talk to a human",
+  "talk to human",
+  "speak to a human",
+  "speak to human",
+  "speak to agent",
+  "speak to a person",
+  "talk to someone",
+  "real person",
+  "live agent",
+  "live person",
+  "transfer me",
+  "connect me to",
+  "human please",
+  "i want a human",
+  "ممثل",
+  "بشري",
+  "تحدث مع شخص",
+  "محادثة مع موظف",
+  "موظف خدمة",
+];
+
+const CANCEL_KEYWORDS = [
+  "cancel my appointment",
+  "cancel my booking",
+  "cancel my meeting",
+  "cancel my visit",
+  "cancel the appointment",
+  "cancel appointment",
+  "cancel booking",
+  "cancel ora-apt",
+  "إلغاء الموعد",
+  "ألغي الموعد",
+  "إلغاء الحجز",
+];
+
+const RESCHEDULE_KEYWORDS = [
+  "reschedule",
+  "re-schedule",
+  "move my appointment",
+  "move my booking",
+  "change my appointment",
+  "change my booking",
+  "change the time",
+  "different time",
+  "another time",
+  "تغيير الموعد",
+  "إعادة جدولة",
+  "تأجيل الموعد",
+];
+
+const CONFIRM_KEYWORDS = [
+  "yes",
+  "yep",
+  "yeah",
+  "yes please",
+  "confirm",
+  "confirmed",
+  "go ahead",
+  "looks good",
+  "looks right",
+  "that's right",
+  "thats right",
+  "correct",
+  "ok",
+  "okay",
+  "sure",
+  "do it",
+  "proceed",
+  "نعم",
+  "أكد",
+  "أؤكد",
+  "موافق",
+  "تمام",
+];
+
+const DECLINE_KEYWORDS = [
+  "no",
+  "nope",
+  "cancel",
+  "don't",
+  "do not",
+  "wait",
+  "not now",
+  "stop",
+  "لا",
+  "ألغي",
+  "ليس الآن",
+];
+
 export type AgentIntent =
   | "create_ticket"
+  | "create_booking"
+  | "confirm_pending"
+  | "decline_pending"
+  | "cancel_appointment"
+  | "reschedule_appointment"
+  | "request_handover"
   | "request_otp"
   | "navigate"
   | "provide_contact"
   | "none";
 
 export function detectIntent(message: string): AgentIntent {
+  if (containsAny(message, HANDOVER_KEYWORDS)) return "request_handover";
   if (containsAny(message, OTP_REQUEST_KEYWORDS)) return "request_otp";
+  if (containsAny(message, CANCEL_KEYWORDS)) return "cancel_appointment";
+  if (containsAny(message, RESCHEDULE_KEYWORDS)) return "reschedule_appointment";
+  if (containsAny(message, BOOKING_KEYWORDS)) return "create_booking";
   if (containsAny(message, TICKET_KEYWORDS)) return "create_ticket";
   if (containsAny(message, NAVIGATE_KEYWORDS)) return "navigate";
   // If a message is mostly a contact handoff (name/email/phone with little else),
   // treat it as provide_contact so the agent can persist before falling through.
   if (extractEmail(message) || extractPhone(message)) return "provide_contact";
   return "none";
+}
+
+/**
+ * Detect a short, standalone "yes/no" reply to a pending question.
+ * Returns "confirm" / "decline" / null. Conservative — if the message is
+ * long or contains other content, returns null so we don't accidentally
+ * confirm a booking when the user wrote a paragraph that happened to start
+ * with "yes…".
+ */
+export function detectYesNo(message: string): "confirm" | "decline" | null {
+  const trimmed = message.trim().toLowerCase().replace(/[!.…،.]+$/g, "");
+  if (trimmed.length === 0 || trimmed.length > 40) return null;
+  // exact match against a known token
+  if (CONFIRM_KEYWORDS.includes(trimmed)) return "confirm";
+  if (DECLINE_KEYWORDS.includes(trimmed)) return "decline";
+  // starts-with for slightly longer affirmations
+  for (const kw of CONFIRM_KEYWORDS) {
+    if (kw.length >= 3 && trimmed.startsWith(kw + " ")) return "confirm";
+  }
+  for (const kw of DECLINE_KEYWORDS) {
+    if (kw.length >= 3 && trimmed.startsWith(kw + " ")) return "decline";
+  }
+  return null;
+}
+
+/** Extract an ORA appointment reference (ORA-APT-XXXXXX) from free text. */
+export function extractAppointmentReference(message: string): string | null {
+  const m = message.match(/\bORA-APT-[A-Z0-9]{6}\b/i);
+  return m ? m[0].toUpperCase() : null;
+}
+
+/**
+ * Detect "on behalf of" / "for my <relative>" patterns. Returns the
+ * relationship label or "third_party" if a name was mentioned without a clear
+ * relationship. Returns null when the booking is for the requester themselves.
+ */
+export function extractOnBehalfOf(message: string): {
+  relationship?: string;
+  name?: string;
+} | null {
+  const lower = message.toLowerCase();
+
+  // "on behalf of <Name>"
+  const obo = message.match(/on\s+behalf\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+  if (obo) return { relationship: "third_party", name: obo[1] };
+
+  // "for my wife/husband/sister/brother/colleague/friend/son/daughter/parent/mother/father <Name>?"
+  const rel = lower.match(
+    /\bfor\s+my\s+(wife|husband|sister|brother|colleague|friend|partner|son|daughter|mother|father|parent|client|tenant|boss|assistant)\b(?:\s+([A-Za-z]+(?:\s+[A-Za-z]+)?))?/
+  );
+  if (rel) {
+    return {
+      relationship: rel[1],
+      name: rel[2]
+        ? rel[2].replace(/\b\w/g, (c) => c.toUpperCase())
+        : undefined,
+    };
+  }
+
+  // "for <Name>" where Name is clearly a person (capitalised, not the requester)
+  const forName = message.match(
+    /\bfor\s+(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/
+  );
+  if (forName) return { relationship: "third_party", name: forName[1] };
+
+  return null;
 }
 
 // ── Ticket request type inference ────────────────────────────────────────────
@@ -466,6 +671,977 @@ async function executeRequestOtp(
   }
 }
 
+// ── Tool: create_booking (appointment) ───────────────────────────────────────
+
+/**
+ * Parse a date+time mentioned in the user message OR recent conversation.
+ * Returns { date: "YYYY-MM-DD", time: "HH:MM" } or null on ambiguity.
+ *
+ * Conservative — we'd rather return null and ask the user than book the
+ * wrong slot. Handles common forms:
+ *   "tomorrow at 5pm" / "tomorrow 5 pm" / "tomorrow at 17:00"
+ *   "next monday at 10am"
+ *   "May 15 at 3pm" / "15 May 3:30pm" / "2026-05-15 15:00"
+ *   "today at 4pm"
+ */
+export function parseDateTime(
+  message: string,
+  reference: Date = new Date()
+): { date: string; time: string } | null {
+  const lower = message.toLowerCase();
+
+  // ── Time extraction ───────────────────────────────────────────────────────
+  let hour: number | null = null;
+  let minute = 0;
+
+  // 12-hour: "5pm", "5:30 pm", "11 a.m."
+  const m12 = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const min = m12[2] ? parseInt(m12[2], 10) : 0;
+    const isPm = m12[3].startsWith("p");
+    if (h === 12) h = isPm ? 12 : 0;
+    else if (isPm) h += 12;
+    hour = h;
+    minute = min;
+  } else {
+    // 24-hour: "17:00", "at 14:30"
+    const m24 = lower.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (m24) {
+      hour = parseInt(m24[1], 10);
+      minute = parseInt(m24[2], 10);
+    }
+  }
+
+  if (hour === null) return null;
+
+  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+  // ── Date extraction ───────────────────────────────────────────────────────
+  const ref = new Date(reference);
+  ref.setHours(0, 0, 0, 0);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // ISO date: 2026-05-15
+  const mIso = lower.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (mIso) {
+    return { date: `${mIso[1]}-${mIso[2]}-${mIso[3]}`, time };
+  }
+
+  // "tomorrow"
+  if (/\btomorrow\b|غداً|غدا/.test(lower)) {
+    const d = new Date(ref);
+    d.setDate(d.getDate() + 1);
+    return { date: fmt(d), time };
+  }
+
+  // "today" / "tonight"
+  if (/\btoday\b|\btonight\b|اليوم/.test(lower)) {
+    return { date: fmt(ref), time };
+  }
+
+  // "next <weekday>" / "<weekday>"
+  const weekdays = [
+    "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+  ];
+  for (let i = 0; i < weekdays.length; i++) {
+    const re = new RegExp(`\\b(?:next\\s+)?${weekdays[i]}\\b`);
+    if (re.test(lower)) {
+      const target = i;
+      const cur = ref.getDay();
+      let delta = (target - cur + 7) % 7;
+      if (delta === 0 || /next\s+/.test(lower)) delta = delta === 0 ? 7 : delta;
+      const d = new Date(ref);
+      d.setDate(d.getDate() + delta);
+      return { date: fmt(d), time };
+    }
+  }
+
+  // "May 15", "15 May", "May 15 2026"
+  const months = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+  ];
+  const mNamed = lower.match(
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:[,\s]+(\d{4}))?/
+  );
+  if (mNamed) {
+    const monIdx = months.findIndex((m) => m.startsWith(mNamed[1]));
+    const day = parseInt(mNamed[2], 10);
+    const year = mNamed[3] ? parseInt(mNamed[3], 10) : ref.getFullYear();
+    const d = new Date(year, monIdx, day);
+    if (!isNaN(d.getTime())) return { date: fmt(d), time };
+  }
+
+  // No date hint — bail (don't assume today, avoids accidental booking)
+  return null;
+}
+
+function classifyAppointmentType(message: string, history: Array<{ content: string }>):
+  "site_visit" | "consultation" | "payment_discussion" | "maintenance_request" {
+  const all = [message, ...history.map((h) => h.content)].join(" ").toLowerCase();
+  if (/maint(en)?ance|repair|broken|fix /.test(all)) return "maintenance_request";
+  if (/payment|paid|installment|invoice|due/.test(all)) return "payment_discussion";
+  if (/site\s+visit|tour|view(ing)? the|see the|come to the/.test(all)) return "site_visit";
+  return "consultation";
+}
+
+// ── Working-hours guard ──────────────────────────────────────────────────────
+// UAE business hours: Mon–Sat 09:00–19:00. Friday is the cultural off-day.
+
+const WORK_OPEN_HOUR = 9;
+const WORK_CLOSE_HOUR = 19;
+
+function appointmentTypeLabel(
+  t: "site_visit" | "consultation" | "payment_discussion" | "maintenance_request",
+  language: "en" | "ar"
+): string {
+  const map = {
+    site_visit: { en: "site visit", ar: "زيارة موقع" },
+    consultation: { en: "consultation", ar: "استشارة" },
+    payment_discussion: { en: "payment discussion", ar: "مناقشة دفع" },
+    maintenance_request: { en: "maintenance visit", ar: "زيارة صيانة" },
+  };
+  return map[t][language];
+}
+
+/**
+ * Validate that a date/time falls within UAE business hours and is not in
+ * the past. Returns null when valid, or a localized error message otherwise.
+ */
+export function validateBookingWindow(
+  date: string,
+  time: string,
+  language: "en" | "ar",
+  now: Date = new Date()
+): string | null {
+  const [hh, mm] = time.split(":").map(Number);
+  // Treat the booked slot as Asia/Dubai local — the server may run in UTC,
+  // so build the date string in local form.
+  const slot = new Date(`${date}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`);
+  if (isNaN(slot.getTime())) {
+    return language === "ar"
+      ? "لم أفهم التاريخ والوقت. هل يمكنك إعادة المحاولة بصيغة مثل 'غداً 5 مساءً'؟"
+      : "I couldn't read that date or time. Could you try again, e.g. 'tomorrow at 5pm'?";
+  }
+  if (slot.getTime() < now.getTime()) {
+    return language === "ar"
+      ? "هذا الوقت في الماضي. ما هو موعد آخر يناسبك؟"
+      : "That time has already passed. Could you pick another slot?";
+  }
+  // Friday is day 5 (Sun=0)
+  if (slot.getDay() === 5) {
+    return language === "ar"
+      ? "نحن مغلقون أيام الجمعة. هل يمكنك اختيار يوم آخر بين السبت والخميس؟"
+      : "We're closed on Fridays. Could you pick another day (Saturday–Thursday)?";
+  }
+  if (hh < WORK_OPEN_HOUR || hh >= WORK_CLOSE_HOUR) {
+    return language === "ar"
+      ? `ساعات عملنا من ${WORK_OPEN_HOUR}:00 صباحاً حتى ${WORK_CLOSE_HOUR}:00 مساءً. هل يناسبك وقت ضمن هذه الساعات؟`
+      : `Our hours are ${WORK_OPEN_HOUR}:00–${WORK_CLOSE_HOUR}:00. Could you pick a time within that window?`;
+  }
+  return null;
+}
+
+// ── Tool: create_booking (with confirmation turn) ────────────────────────────
+
+/**
+ * First half of the booking flow. Gathers contact + date/time, optionally
+ * collects on-behalf-of details, validates the window, then BUFFERS the
+ * pending booking and asks the user to confirm. Actual DB writes happen in
+ * `executeConfirmPending` once the user replies "yes".
+ */
+async function executeCreateBooking(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+
+  // 1. Auto-fill from DB for known clients/tenants
+  let contact = { ...input.contact };
+  if (
+    input.identity.type !== "visitor" &&
+    (!contact.name || !contact.email || !contact.phone)
+  ) {
+    try {
+      const account = await lookupClientAccount(db, input.identity);
+      if (account.type !== "visitor") {
+        const dbName = [account.firstName, account.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        contact = {
+          name: contact.name ?? (dbName.length > 0 ? dbName : null),
+          email: contact.email ?? account.email ?? null,
+          phone: contact.phone ?? account.phone ?? null,
+        };
+      }
+    } catch (err) {
+      console.error("[agent] booking: account lookup failed", err);
+    }
+  }
+
+  // 2. Detect on-behalf-of from this message OR most recent user history
+  const handoff = await loadHandoffState(db, input.conversationId);
+  let onBehalfOf = handoff.pendingBooking?.onBehalfOf;
+  const oboDetected = extractOnBehalfOf(input.message);
+  if (oboDetected) {
+    onBehalfOf = {
+      ...(onBehalfOf ?? {}),
+      ...(oboDetected.relationship
+        ? { relationship: oboDetected.relationship }
+        : {}),
+      ...(oboDetected.name ? { name: oboDetected.name } : {}),
+    };
+  }
+  // If the user just provided an email/phone in this message AND we're in an
+  // on-behalf-of flow, attach to onBehalfOf rather than the requester contact.
+  if (onBehalfOf) {
+    const newEmail = extractEmail(input.message);
+    const newPhone = extractPhone(input.message);
+    if (newEmail && !onBehalfOf.email) onBehalfOf.email = newEmail;
+    if (newPhone && !onBehalfOf.phone) onBehalfOf.phone = newPhone;
+  }
+
+  // 3. Validate contact info — only ask for what's actually missing
+  if (!contact.name || !contact.email) {
+    const need: string[] = [];
+    if (!contact.name) need.push(language === "ar" ? "اسمك الكامل" : "your full name");
+    if (!contact.email)
+      need.push(language === "ar" ? "بريدك الإلكتروني" : "your email");
+    if (!contact.phone)
+      need.push(language === "ar" ? "رقم هاتفك" : "your mobile number");
+
+    const list =
+      language === "ar"
+        ? need.join("، و")
+        : need.length === 1
+          ? need[0]
+          : need.slice(0, -1).join(", ") + ", and " + need[need.length - 1];
+
+    const response =
+      language === "ar"
+        ? `بكل سرور أحجز لك موعداً. قبل أن أحجز، أحتاج ${list}. هل يمكنك مشاركتها؟`
+        : `Happy to book a meeting with our team. Before I do, I just need ${list}. Could you share?`;
+
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "create_booking", awaiting: "contact" },
+    };
+  }
+
+  // 3b. If booking is on behalf of someone else, make sure we have THAT
+  //     person's name + email. Phone optional.
+  if (onBehalfOf && (!onBehalfOf.name || !onBehalfOf.email)) {
+    // Persist what we have so far so the next turn picks it up
+    await mergeHandoffState(db, input.conversationId, {
+      pendingBooking: {
+        appointmentType: classifyAppointmentType(input.message, input.history),
+        scheduledDate: handoff.pendingBooking?.scheduledDate ?? "",
+        scheduledTime: handoff.pendingBooking?.scheduledTime ?? "",
+        contactName: contact.name,
+        contactEmail: contact.email,
+        contactPhone: contact.phone,
+        onBehalfOf,
+      },
+    });
+    const need: string[] = [];
+    if (!onBehalfOf.name)
+      need.push(language === "ar" ? "اسمهم الكامل" : "their full name");
+    if (!onBehalfOf.email)
+      need.push(language === "ar" ? "بريدهم الإلكتروني" : "their email");
+    if (!onBehalfOf.phone)
+      need.push(language === "ar" ? "رقم هاتفهم" : "their mobile number");
+    const list =
+      language === "ar"
+        ? need.join("، و")
+        : need.length === 1
+          ? need[0]
+          : need.slice(0, -1).join(", ") + ", and " + need[need.length - 1];
+    const relText = onBehalfOf.relationship
+      ? language === "ar"
+        ? ` (${onBehalfOf.relationship})`
+        : ` (${onBehalfOf.relationship})`
+      : "";
+    const response =
+      language === "ar"
+        ? `بكل سرور — لحجز الموعد لـ ${onBehalfOf.name ?? "الشخص"}${relText}، أحتاج ${list}.`
+        : `Of course — to book on behalf of ${onBehalfOf.name ?? "them"}${relText}, I just need ${list}.`;
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "create_booking", awaiting: "behalf_contact" },
+    };
+  }
+
+  // 4. Parse date + time from message + recent history
+  let parsed = parseDateTime(input.message);
+  if (!parsed) {
+    const recentUserMsgs = input.history
+      .filter((m) => m.role === "user")
+      .slice(-3)
+      .map((m) => m.content);
+    for (const msg of recentUserMsgs.reverse()) {
+      parsed = parseDateTime(msg);
+      if (parsed) break;
+    }
+  }
+
+  if (!parsed) {
+    const greetName = contact.name ? contact.name.split(" ")[0] : null;
+    const response =
+      language === "ar"
+        ? `بكل سرور${greetName ? ` يا ${greetName}` : ""} أحجز لك موعداً مع فريقنا. ما هو التاريخ والوقت اللذان يناسبانك؟ (مثال: "غداً الساعة 5 مساءً" أو "20 مايو الساعة 10 صباحاً")`
+        : `Happy to set up a meeting with our team${greetName ? `, ${greetName}` : ""}. What date and time work for you? (e.g. "tomorrow at 5pm" or "May 20 at 10am")`;
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "create_booking", awaiting: "datetime" },
+    };
+  }
+
+  // 5. Working-hours guard
+  const windowError = validateBookingWindow(parsed.date, parsed.time, language);
+  if (windowError) {
+    return {
+      handled: true,
+      response: windowError,
+      metadata: {
+        intent: "create_booking",
+        awaiting: "datetime",
+        rejectedDate: parsed.date,
+        rejectedTime: parsed.time,
+      },
+    };
+  }
+
+  const apptType = classifyAppointmentType(input.message, input.history);
+
+  // 6. Buffer the pending booking and ask for explicit confirmation
+  await mergeHandoffState(db, input.conversationId, {
+    pendingBooking: {
+      appointmentType: apptType,
+      scheduledDate: parsed.date,
+      scheduledTime: parsed.time,
+      contactName: contact.name,
+      contactEmail: contact.email,
+      contactPhone: contact.phone,
+      onBehalfOf: onBehalfOf ?? undefined,
+      notes: input.message,
+    },
+  });
+
+  const typeLabel = appointmentTypeLabel(apptType, language);
+  const targetName = onBehalfOf?.name ?? contact.name.split(" ")[0];
+  const targetEmail = onBehalfOf?.email ?? contact.email;
+
+  const summary =
+    language === "ar"
+      ? `لنتأكد قبل التثبيت — ${typeLabel} لـ ${targetName} يوم ${parsed.date} الساعة ${parsed.time}، وسأرسل التأكيد إلى ${targetEmail}. هل أؤكد الحجز؟ (نعم / لا)`
+      : `Just to confirm before I lock it in — ${typeLabel} for ${targetName} on ${parsed.date} at ${parsed.time}, confirmation email to ${targetEmail}. Should I confirm? (yes / no)`;
+
+  return {
+    handled: true,
+    response: summary,
+    metadata: {
+      intent: "create_booking",
+      awaiting: "confirmation",
+      scheduledDate: parsed.date,
+      scheduledTime: parsed.time,
+      appointmentType: apptType,
+      onBehalfOf: onBehalfOf ?? undefined,
+    },
+  };
+}
+
+/**
+ * Finalise a booking that's been buffered via `pendingBooking` after the
+ * user replies "yes / confirm". Performs DB write, ticket, email.
+ */
+async function executeConfirmPending(
+  db: Database,
+  input: AgentInput,
+  state: HandoffState
+): Promise<AgentResult> {
+  const language = input.language;
+  const pb = state.pendingBooking;
+  if (!pb) {
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لا يوجد طلب معلق لتأكيده. كيف يمكنني مساعدتك؟"
+          : "I don't have anything pending to confirm right now. How can I help?",
+      metadata: { intent: "confirm_pending", noop: true },
+    };
+  }
+
+  // Use the on-behalf-of contact if present, else the requester
+  const target = pb.onBehalfOf?.email
+    ? {
+        name: pb.onBehalfOf.name ?? pb.contactName,
+        email: pb.onBehalfOf.email,
+        phone: pb.onBehalfOf.phone ?? pb.contactPhone,
+      }
+    : {
+        name: pb.contactName,
+        email: pb.contactEmail,
+        phone: pb.contactPhone,
+      };
+
+  // Defensive: if either is missing we can't book. This shouldn't happen
+  // because executeCreateBooking refuses to buffer without name+email, but
+  // guard anyway so the type system is satisfied and we degrade gracefully.
+  if (!target.name || !target.email) {
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "أحتاج إلى الاسم الكامل والبريد الإلكتروني قبل الحجز."
+          : "I need a full name and email before I can book.",
+      metadata: { intent: "confirm_pending", missingContact: true },
+    };
+  }
+  const targetName: string = target.name;
+  const targetEmail: string = target.email;
+
+  try {
+    const appt = await bookAppointment(db, {
+      conversationId: input.conversationId,
+      clientId: input.identity.clientId,
+      tenantId: input.identity.tenantId,
+      contactName: targetName,
+      contactEmail: targetEmail,
+      contactPhone: target.phone ?? undefined,
+      appointmentType: pb.appointmentType,
+      scheduledDate: pb.scheduledDate,
+      scheduledTime: pb.scheduledTime,
+      notes:
+        `Booked via ORA AI chat.` +
+        (pb.onBehalfOf?.name
+          ? ` On behalf of ${pb.onBehalfOf.name}` +
+            (pb.onBehalfOf.relationship
+              ? ` (${pb.onBehalfOf.relationship}) — booked by ${pb.contactName} <${pb.contactEmail}>`
+              : ` — booked by ${pb.contactName} <${pb.contactEmail}>`)
+          : "") +
+        (pb.notes ? `\nLatest user message: ${pb.notes}` : ""),
+    });
+
+    let ticketNumber: string | undefined;
+    try {
+      const ticket = await createTicket(db, {
+        subject: `Appointment ${appt.referenceNumber} — ${targetName}`,
+        description:
+          `Type: ${pb.appointmentType}\n` +
+          `Scheduled: ${pb.scheduledDate} at ${pb.scheduledTime}\n` +
+          `For: ${targetName} <${targetEmail}>` +
+          (target.phone ? ` / ${target.phone}` : "") +
+          (pb.onBehalfOf?.name
+            ? `\nBooked by: ${pb.contactName} <${pb.contactEmail}>` +
+              (pb.onBehalfOf.relationship
+                ? ` (relationship: ${pb.onBehalfOf.relationship})`
+                : "")
+            : "") +
+          `\n\nRecent transcript:\n` +
+          input.history
+            .slice(-6)
+            .map(
+              (m) =>
+                `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
+            )
+            .join("\n"),
+        contactName: targetName,
+        contactEmail: targetEmail,
+        contactPhone: target.phone ?? undefined,
+        priority: "medium",
+        source: "api",
+        createdBy: null,
+        requestType: "general_inquiry",
+      });
+      ticketNumber = ticket.ticketNumber;
+    } catch (err) {
+      console.error("[agent] booking ticket creation failed", err);
+    }
+
+    let emailSent = false;
+    try {
+      const result = await sendAppointmentEmail({
+        recipientEmail: targetEmail,
+        recipientName: targetName,
+        referenceNumber: appt.referenceNumber,
+        ticketNumber,
+        scheduledDate: pb.scheduledDate,
+        scheduledTime: pb.scheduledTime,
+        appointmentType: pb.appointmentType,
+        language,
+      });
+      emailSent = result.success;
+    } catch (err) {
+      console.error("[agent] booking email send failed", err);
+    }
+
+    // Clear the pending booking buffer
+    await clearHandoffFields(db, input.conversationId, ["pendingBooking"]);
+
+    const greetName = input.contact.name
+      ? input.contact.name.split(" ")[0]
+      : null;
+    const response =
+      language === "ar"
+        ? `${greetName ? `${greetName}، ` : ""}تم! ` +
+          (ticketNumber
+            ? `أنشأت تذكرة رقم ${ticketNumber} لحجز موعدك (${appt.referenceNumber}) في ${pb.scheduledDate} الساعة ${pb.scheduledTime}. `
+            : `حجزت الموعد (${appt.referenceNumber}) في ${pb.scheduledDate} الساعة ${pb.scheduledTime}. `) +
+          (emailSent
+            ? `سيصل التأكيد بالتفاصيل إلى ${target.email} خلال دقائق.`
+            : `سيؤكد فريقنا الموعد ويرسل التفاصيل إلى ${target.email} قريباً.`)
+        : `${greetName ? `${greetName}, ` : ""}done! ` +
+          (ticketNumber
+            ? `I've raised ticket ${ticketNumber} for appointment ${appt.referenceNumber} on ${pb.scheduledDate} at ${pb.scheduledTime}. `
+            : `Appointment ${appt.referenceNumber} reserved for ${pb.scheduledDate} at ${pb.scheduledTime}. `) +
+          (emailSent
+            ? `The confirmation is on its way to ${target.email}.`
+            : `Our team will confirm and email the details to ${target.email}.`);
+
+    return {
+      handled: true,
+      response,
+      metadata: {
+        intent: "create_booking",
+        executed: true,
+        referenceNumber: appt.referenceNumber,
+        ticketNumber,
+        scheduledDate: pb.scheduledDate,
+        scheduledTime: pb.scheduledTime,
+        appointmentType: pb.appointmentType,
+        emailSent,
+      },
+    };
+  } catch (err) {
+    console.error("[agent] booking finalise failed", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isConflict = /already booked/i.test(errMsg);
+    if (isConflict) {
+      // Keep the pending booking so user can pick another time
+      const response =
+        language === "ar"
+          ? "هذا الوقت محجوز للأسف. هل يمكنك اقتراح وقت آخر؟"
+          : "That slot just got booked — could you suggest another time?";
+      return {
+        handled: true,
+        response,
+        metadata: { intent: "create_booking", executed: false, conflict: true },
+      };
+    }
+    await clearHandoffFields(db, input.conversationId, ["pendingBooking"]);
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لم أتمكن من تأكيد الحجز الآن. هل تريد أن أحوّلك إلى أحد ممثلينا؟"
+          : "I couldn't confirm the booking just now. Would you like me to connect you with a teammate?",
+      metadata: { intent: "create_booking", executed: false, error: errMsg },
+    };
+  }
+}
+
+async function executeDeclinePending(
+  db: Database,
+  input: AgentInput,
+  state: HandoffState
+): Promise<AgentResult> {
+  const language = input.language;
+  const hadBooking = !!state.pendingBooking;
+  const hadCancel = !!state.pendingCancel;
+  const hadReschedule = !!state.pendingReschedule;
+  await clearHandoffFields(db, input.conversationId, [
+    "pendingBooking",
+    "pendingCancel",
+    "pendingReschedule",
+  ]);
+  if (!hadBooking && !hadCancel && !hadReschedule) {
+    return { handled: false };
+  }
+  const response =
+    language === "ar"
+      ? "لا مشكلة، ألغيت الطلب. هل تحتاج شيئاً آخر؟"
+      : "No problem — cancelled that request. Anything else I can help with?";
+  return {
+    handled: true,
+    response,
+    metadata: { intent: "decline_pending", cleared: true },
+  };
+}
+
+// ── Tool: cancel_appointment ─────────────────────────────────────────────────
+
+async function findRecentAppointmentForConversation(
+  db: Database,
+  conversationId: string,
+  email?: string
+): Promise<{
+  referenceNumber: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  appointmentType: string;
+} | null> {
+  // Avoid extra imports — use a raw query through drizzle
+  try {
+    const { aiAppointments } = await import("../schema");
+    const { desc, or } = await import("drizzle-orm");
+    const where = email
+      ? or(
+          eq(aiAppointments.conversationId, conversationId),
+          eq(aiAppointments.contactEmail, email)
+        )
+      : eq(aiAppointments.conversationId, conversationId);
+    const rows = await db
+      .select({
+        referenceNumber: aiAppointments.referenceNumber,
+        scheduledDate: aiAppointments.scheduledDate,
+        scheduledTime: aiAppointments.scheduledTime,
+        appointmentType: aiAppointments.appointmentType,
+        status: aiAppointments.status,
+      })
+      .from(aiAppointments)
+      .where(where)
+      .orderBy(desc(aiAppointments.createdAt))
+      .limit(5);
+    const active = rows.find((r) => r.status !== "cancelled");
+    return active ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function executeCancelAppointment(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+  // Try to find target ref number from message, or fall back to most recent
+  let ref = extractAppointmentReference(input.message);
+  let appt: {
+    referenceNumber: string;
+    scheduledDate: string;
+    scheduledTime: string;
+    appointmentType: string;
+  } | null = null;
+
+  if (!ref) {
+    appt = await findRecentAppointmentForConversation(
+      db,
+      input.conversationId,
+      input.contact.email ?? undefined
+    );
+    ref = appt?.referenceNumber ?? null;
+  }
+
+  if (!ref) {
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لم أجد موعداً مرتبطاً بهذه المحادثة. هل تستطيع مشاركة الرقم المرجعي (مثل ORA-APT-XXXXXX)؟"
+          : "I couldn't find an appointment on this conversation. Could you share the reference number (e.g. ORA-APT-XXXXXX)?",
+      metadata: { intent: "cancel_appointment", awaiting: "reference" },
+    };
+  }
+
+  // Buffer pending cancel and ask for confirmation
+  await mergeHandoffState(db, input.conversationId, {
+    pendingCancel: {
+      referenceNumber: ref,
+      scheduledDate: appt?.scheduledDate ?? "",
+      scheduledTime: appt?.scheduledTime ?? "",
+      appointmentType: appt?.appointmentType ?? "",
+    },
+  });
+
+  const detail =
+    appt?.scheduledDate && appt?.scheduledTime
+      ? language === "ar"
+        ? ` (${appt.scheduledDate} الساعة ${appt.scheduledTime})`
+        : ` (${appt.scheduledDate} at ${appt.scheduledTime})`
+      : "";
+
+  return {
+    handled: true,
+    response:
+      language === "ar"
+        ? `سأقوم بإلغاء الموعد ${ref}${detail}. هل تؤكد الإلغاء؟ (نعم / لا)`
+        : `Just to confirm — I'll cancel ${ref}${detail}. Are you sure? (yes / no)`,
+    metadata: { intent: "cancel_appointment", awaiting: "confirmation", ref },
+  };
+}
+
+async function executeConfirmCancel(
+  db: Database,
+  input: AgentInput,
+  state: HandoffState
+): Promise<AgentResult> {
+  const language = input.language;
+  const pc = state.pendingCancel;
+  if (!pc) return { handled: false };
+  try {
+    await cancelAppointment(db, pc.referenceNumber, input.conversationId);
+    await clearHandoffFields(db, input.conversationId, ["pendingCancel"]);
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? `تم إلغاء الموعد ${pc.referenceNumber}. هل أساعدك في حجز موعد جديد؟`
+          : `Done — appointment ${pc.referenceNumber} has been cancelled. Want me to set up a new one?`,
+      metadata: {
+        intent: "cancel_appointment",
+        executed: true,
+        referenceNumber: pc.referenceNumber,
+      },
+    };
+  } catch (err) {
+    console.error("[agent] cancel failed", err);
+    await clearHandoffFields(db, input.conversationId, ["pendingCancel"]);
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لم أتمكن من إلغاء الموعد الآن. سأحوّلك إلى أحد ممثلينا."
+          : "I couldn't cancel that just now — I'll connect you with a teammate.",
+      metadata: { intent: "cancel_appointment", executed: false },
+    };
+  }
+}
+
+// ── Tool: reschedule_appointment ─────────────────────────────────────────────
+
+async function executeRescheduleAppointment(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+  let ref = extractAppointmentReference(input.message);
+  let appt: {
+    referenceNumber: string;
+    scheduledDate: string;
+    scheduledTime: string;
+    appointmentType: string;
+  } | null = null;
+
+  if (!ref) {
+    appt = await findRecentAppointmentForConversation(
+      db,
+      input.conversationId,
+      input.contact.email ?? undefined
+    );
+    ref = appt?.referenceNumber ?? null;
+  }
+
+  if (!ref) {
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لم أجد موعداً لإعادة جدولته. ما هو الرقم المرجعي (مثل ORA-APT-XXXXXX)؟"
+          : "I couldn't find an appointment to reschedule. What's the reference number (e.g. ORA-APT-XXXXXX)?",
+      metadata: { intent: "reschedule_appointment", awaiting: "reference" },
+    };
+  }
+
+  const newParsed = parseDateTime(input.message);
+
+  if (!newParsed) {
+    await mergeHandoffState(db, input.conversationId, {
+      pendingReschedule: {
+        referenceNumber: ref,
+        fromDate: appt?.scheduledDate ?? "",
+        fromTime: appt?.scheduledTime ?? "",
+      },
+    });
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? `بكل سرور — ما هو التاريخ والوقت الجديد للموعد ${ref}؟`
+          : `Sure — what's the new date and time for ${ref}?`,
+      metadata: { intent: "reschedule_appointment", awaiting: "datetime", ref },
+    };
+  }
+
+  const windowError = validateBookingWindow(
+    newParsed.date,
+    newParsed.time,
+    language
+  );
+  if (windowError) {
+    return {
+      handled: true,
+      response: windowError,
+      metadata: { intent: "reschedule_appointment", awaiting: "datetime", ref },
+    };
+  }
+
+  await mergeHandoffState(db, input.conversationId, {
+    pendingReschedule: {
+      referenceNumber: ref,
+      fromDate: appt?.scheduledDate ?? "",
+      fromTime: appt?.scheduledTime ?? "",
+      newDate: newParsed.date,
+      newTime: newParsed.time,
+    },
+  });
+
+  return {
+    handled: true,
+    response:
+      language === "ar"
+        ? `سأنقل الموعد ${ref} إلى ${newParsed.date} الساعة ${newParsed.time}. هل أؤكد؟ (نعم / لا)`
+        : `I'll move ${ref} to ${newParsed.date} at ${newParsed.time}. Confirm? (yes / no)`,
+    metadata: {
+      intent: "reschedule_appointment",
+      awaiting: "confirmation",
+      ref,
+      newDate: newParsed.date,
+      newTime: newParsed.time,
+    },
+  };
+}
+
+async function executeConfirmReschedule(
+  db: Database,
+  input: AgentInput,
+  state: HandoffState
+): Promise<AgentResult> {
+  const language = input.language;
+  const pr = state.pendingReschedule;
+  if (!pr || !pr.newDate || !pr.newTime) return { handled: false };
+  try {
+    const updated = await rescheduleAppointment(
+      db,
+      pr.referenceNumber,
+      pr.newDate,
+      pr.newTime
+    );
+    // Send updated email
+    try {
+      await sendAppointmentEmail({
+        recipientEmail: input.contact.email ?? "",
+        recipientName: input.contact.name ?? updated.contactName,
+        referenceNumber: updated.referenceNumber,
+        scheduledDate: updated.scheduledDate,
+        scheduledTime: updated.scheduledTime,
+        appointmentType: updated.appointmentType,
+        language,
+      });
+    } catch {
+      // best effort
+    }
+    await clearHandoffFields(db, input.conversationId, ["pendingReschedule"]);
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? `تم! الموعد ${updated.referenceNumber} الآن في ${pr.newDate} الساعة ${pr.newTime}. أرسلت التحديث بالبريد.`
+          : `Done — ${updated.referenceNumber} is now ${pr.newDate} at ${pr.newTime}. I've emailed the update.`,
+      metadata: {
+        intent: "reschedule_appointment",
+        executed: true,
+        referenceNumber: updated.referenceNumber,
+      },
+    };
+  } catch (err) {
+    console.error("[agent] reschedule failed", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isConflict = /already booked/i.test(errMsg);
+    if (isConflict) {
+      await clearHandoffFields(db, input.conversationId, ["pendingReschedule"]);
+      return {
+        handled: true,
+        response:
+          language === "ar"
+            ? "هذا الوقت محجوز. هل تختار وقتاً آخر؟"
+            : "That slot's already booked — could you pick another time?",
+        metadata: { intent: "reschedule_appointment", conflict: true },
+      };
+    }
+    await clearHandoffFields(db, input.conversationId, ["pendingReschedule"]);
+    return {
+      handled: true,
+      response:
+        language === "ar"
+          ? "لم أتمكن من إعادة الجدولة. سأحوّلك إلى أحد ممثلينا."
+          : "I couldn't reschedule that — I'll connect you with a teammate.",
+      metadata: { intent: "reschedule_appointment", executed: false },
+    };
+  }
+}
+
+// ── Tool: request_handover ───────────────────────────────────────────────────
+
+async function executeRequestHandover(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+  const contact = input.contact;
+
+  // Open a high-priority ticket with the full transcript
+  let ticketNumber: string | undefined;
+  try {
+    const ticket = await createTicket(db, {
+      subject: `Human handover requested${contact.name ? ` — ${contact.name}` : ""}`,
+      description:
+        `User explicitly asked to speak to a human.\n` +
+        `Identity: ${input.identity.type}` +
+        (input.identity.firstName ? ` (${input.identity.firstName})` : "") +
+        `\nContact: ${contact.name ?? "—"} <${contact.email ?? "—"}>` +
+        (contact.phone ? ` / ${contact.phone}` : "") +
+        `\nLatest message: ${input.message}\n\n` +
+        `Recent transcript:\n` +
+        input.history
+          .slice(-12)
+          .map(
+            (m) =>
+              `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
+          )
+          .join("\n"),
+      contactName: contact.name ?? "Anonymous visitor",
+      contactEmail: contact.email ?? "no-reply@ora.local",
+      contactPhone: contact.phone ?? undefined,
+      priority: "high",
+      source: "api",
+      createdBy: null,
+      requestType: "general_inquiry",
+    });
+    ticketNumber = ticket.ticketNumber;
+  } catch (err) {
+    console.error("[agent] handover ticket creation failed", err);
+  }
+
+  // Mark conversation as handed_off
+  try {
+    await db
+      .update(aiConversations)
+      .set({ status: "handed_off", updatedAt: new Date() })
+      .where(eq(aiConversations.id, input.conversationId));
+  } catch (err) {
+    console.error("[agent] handover status update failed", err);
+  }
+
+  const response =
+    language === "ar"
+      ? `بالطبع — أحوّلك الآن إلى أحد ممثلينا. ${ticketNumber ? `رقم المرجع: ${ticketNumber}. ` : ""}متوسط وقت الرد أقل من 10 دقائق.`
+      : `Of course — I'm connecting you with a teammate now. ${ticketNumber ? `Reference: ${ticketNumber}. ` : ""}Average response is under 10 minutes.`;
+
+  return {
+    handled: true,
+    response,
+    metadata: { intent: "request_handover", ticketNumber },
+  };
+}
+
 // ── Tool: navigate ───────────────────────────────────────────────────────────
 
 /**
@@ -638,7 +1814,44 @@ export async function runAgent(
     identity.type !== "visitor";
 
   // 3. Detect intent (skipped when reshareEmail short-circuits below)
-  const intent = detectIntent(input.message);
+  let intent = detectIntent(input.message);
+
+  // Load handoff state once — needed for confirm/decline detection and to
+  // continue staged flows (booking, cancel, reschedule).
+  const handoffState = await loadHandoffState(db, input.conversationId);
+  const hasPending =
+    !!handoffState.pendingBooking ||
+    !!handoffState.pendingCancel ||
+    !!handoffState.pendingReschedule;
+
+  // If something is pending and the user replied with a yes/no, route to
+  // the confirm/decline branches instead of the generic intent.
+  if (hasPending && intent !== "request_handover") {
+    const yn = detectYesNo(input.message);
+    if (yn === "confirm") intent = "confirm_pending";
+    else if (yn === "decline") intent = "decline_pending";
+  }
+
+  // Carry-over: if the assistant just asked for a date/time for a booking
+  // OR a reschedule, and the user's reply contains a parseable date/time,
+  // treat it as a continuation of that flow.
+  if (intent === "none" || intent === "provide_contact") {
+    const lastAssistant = [...input.history]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    const askedDateTime =
+      lastAssistant &&
+      /(date and time|what date|what time|when would|when works|when suits|new date|new time|متى يناسبك|التاريخ والوقت|التاريخ الجديد)/i.test(
+        lastAssistant.content
+      );
+    if (askedDateTime && parseDateTime(input.message)) {
+      if (handoffState.pendingReschedule) {
+        intent = "reschedule_appointment";
+      } else {
+        intent = "create_booking";
+      }
+    }
+  }
 
   const enrichedInput: AgentInput = {
     ...input,
@@ -666,6 +1879,71 @@ export async function runAgent(
   if (intent === "create_ticket") {
     return {
       ...(await executeCreateTicket(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "request_handover") {
+    return {
+      ...(await executeRequestHandover(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "confirm_pending") {
+    // Decide which pending flow to finalise
+    if (handoffState.pendingBooking) {
+      return {
+        ...(await executeConfirmPending(db, enrichedInput, handoffState)),
+        identity,
+        contact: updatedContact,
+      };
+    }
+    if (handoffState.pendingCancel) {
+      return {
+        ...(await executeConfirmCancel(db, enrichedInput, handoffState)),
+        identity,
+        contact: updatedContact,
+      };
+    }
+    if (handoffState.pendingReschedule?.newDate) {
+      return {
+        ...(await executeConfirmReschedule(db, enrichedInput, handoffState)),
+        identity,
+        contact: updatedContact,
+      };
+    }
+  }
+
+  if (intent === "decline_pending") {
+    return {
+      ...(await executeDeclinePending(db, enrichedInput, handoffState)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "cancel_appointment") {
+    return {
+      ...(await executeCancelAppointment(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "reschedule_appointment") {
+    return {
+      ...(await executeRescheduleAppointment(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "create_booking") {
+    return {
+      ...(await executeCreateBooking(db, enrichedInput)),
       identity,
       contact: updatedContact,
     };

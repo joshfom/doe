@@ -217,8 +217,39 @@ function splitNewlines(text: string, keyPrefix: string): React.ReactNode[] {
  * - Lines starting with `- ` or `* ` → <ul> with <li> items
  * - Lines starting with `1. `, `2. `, etc. → <ol> with <li> items
  */
-export function formatMessageContent(content: string): React.ReactNode {
-  // Split on double newlines to get paragraph blocks
+/**
+ * Format a message timestamp for display next to chat bubbles.
+ * Uses 24-hour format in Arabic, 12-hour in English. Same-day messages
+ * show only the time; older messages show date + time.
+ */
+export function formatMessageTime(date: Date, locale: 'en' | 'ar'): string {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  const localeTag = locale === 'ar' ? 'ar' : 'en-US';
+  if (sameDay) {
+    return d.toLocaleTimeString(localeTag, {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: locale === 'en',
+    });
+  }
+  return d.toLocaleString(localeTag, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: locale === 'en',
+  });
+}
+
+export function formatMessageContent(content: string): React.ReactNode {  // Split on double newlines to get paragraph blocks
   const blocks = content.split(/\n\n+/);
 
   const elements: React.ReactNode[] = blocks.map((block, blockIdx) => {
@@ -840,7 +871,7 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
                   className={`max-w-[80%] rounded px-3 py-2 text-sm leading-relaxed ${
@@ -851,6 +882,9 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
                 >
                   {msg.role === 'assistant' ? formatMessageContent(msg.content) : msg.content}
                 </div>
+                <span className="mt-1 px-1 text-[10px] text-ora-muted/70">
+                  {formatMessageTime(msg.timestamp, locale)}
+                </span>
               </div>
             ))}
 

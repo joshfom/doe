@@ -31,6 +31,12 @@ export interface OtpGateResult {
   action: "proceed" | "respond";
   response?: string;
   queryCategory: QueryCategory;
+  /**
+   * Set when verification just succeeded and the orchestrator should replay
+   * a previously-buffered personal/payment question through RAG instead of
+   * making the user retype it.
+   */
+  pendingQuery?: string;
 }
 
 export type OtpVerificationState =
@@ -435,11 +441,16 @@ const OTP_CONFIRM_PATTERNS = [
   "go ahead",
   "please do",
   "confirm",
+  "confirmed",
+  "i confirm",
+  "yes confirm",
+  "yes please",
   "نعم",
   "أرسل",
   "أرسل الرمز",
   "تحقق",
   "موافق",
+  "أؤكد",
 ];
 
 /**
@@ -464,15 +475,15 @@ export function isOtpConfirmation(message: string): boolean {
 
   const startWords = new Set([
     "yes", "yeah", "yep", "ok", "okay", "sure", "send", "verify", "confirm",
-    "please", "go", "نعم", "أرسل", "تحقق", "موافق",
+    "confirmed", "please", "go", "i", "نعم", "أرسل", "تحقق", "موافق", "أؤكد",
   ]);
   if (!startWords.has(words[0])) return false;
 
   // Only allow short follow-on words that are clearly affirmative filler
   const allowedFollow = new Set([
     "please", "send", "it", "the", "code", "otp", "now", "ahead", "and",
-    "do", "verify", "me", "go", "yes", "sure", "ok", "okay",
-    "أرسل", "الرمز", "نعم", "تفضل", "من", "فضلك",
+    "do", "verify", "me", "go", "yes", "sure", "ok", "okay", "confirm",
+    "أرسل", "الرمز", "نعم", "تفضل", "من", "فضلك", "أؤكد",
   ]);
   return words.slice(1).every((w) => allowedFollow.has(w));
 }
@@ -665,15 +676,56 @@ export async function handleOtpGate(
     const queryCategory: QueryCategory = "personal";
 
     switch (result.status) {
-      case "verified":
+      case "verified": {
+        // Look up any buffered personal question so the orchestrator can
+        // answer it automatically without making the user retype it.
+        let pendingQuery: string | undefined;
+        try {
+          const [row] = await db
+            .select({ summary: aiConversations.handoffSummary })
+            .from(aiConversations)
+            .where(eq(aiConversations.id, conversationId))
+            .limit(1);
+          const summary = row?.summary as { pendingQuery?: string } | null;
+          if (summary?.pendingQuery && typeof summary.pendingQuery === "string") {
+            pendingQuery = summary.pendingQuery;
+          }
+          // Clear ONLY the buffered query — preserve any running summary or
+          // other handoff fields so they survive the OTP round-trip.
+          if (summary && typeof summary === "object") {
+            const next = { ...summary } as Record<string, unknown>;
+            delete next.pendingQuery;
+            await db
+              .update(aiConversations)
+              .set({ handoffSummary: next, updatedAt: new Date() })
+              .where(eq(aiConversations.id, conversationId));
+          }
+        } catch {
+          // Best-effort
+        }
+
+        const baseEn = "You're verified! ✓";
+        const baseAr = "ممتاز، تم التحقق! ✓";
+        let response: string;
+        if (pendingQuery) {
+          response =
+            language === "ar"
+              ? `${baseAr} دعني أعود لسؤالك السابق…`
+              : `${baseEn} Let me get back to your earlier question…`;
+        } else {
+          response =
+            language === "ar"
+              ? `${baseAr} والآن، كيف يمكنني خدمتك في حسابك؟`
+              : `${baseEn} Now — how can I help you with your account?`;
+        }
+
         return {
           action: "respond",
-          response:
-            language === "ar"
-              ? "ممتاز، تم التحقق! ✓ والآن، كيف يمكنني خدمتك في حسابك؟"
-              : "You're verified! ✓ Now — how can I help you with your account?",
+          response,
           queryCategory,
+          pendingQuery,
         };
+      }
 
       case "invalid_code":
         return {
@@ -806,6 +858,28 @@ export async function handleOtpGate(
   }
 
   const masked = maskEmail(email);
+
+  // Buffer the personal/payment question on the conversation row so we can
+  // automatically answer it after OTP verification — saves the user from
+  // retyping the same question. Merge into existing handoff state instead
+  // of clobbering (preserves running summary etc.).
+  try {
+    const [existing] = await db
+      .select({ s: aiConversations.handoffSummary })
+      .from(aiConversations)
+      .where(eq(aiConversations.id, conversationId))
+      .limit(1);
+    const merged = {
+      ...((existing?.s as Record<string, unknown> | null) ?? {}),
+      pendingQuery: message,
+    };
+    await db
+      .update(aiConversations)
+      .set({ handoffSummary: merged, updatedAt: new Date() })
+      .where(eq(aiConversations.id, conversationId));
+  } catch {
+    // Best-effort — never fail the gate because of buffering.
+  }
 
   return {
     action: "respond",

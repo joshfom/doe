@@ -398,9 +398,9 @@ describe("handleChatMessage", () => {
         message: "I want to book an appointment for a site visit",
       });
 
-      expect(result.metadata?.actionPerformed).toBe(
-        "booking_intent_detected"
-      );
+      // Booking intent now routes to the agent's executeCreateBooking,
+      // which short-circuits and asks for contact info before any booking.
+      expect(result.metadata?.actionPerformed).toBe("create_booking");
     });
 
     it("detects account lookup intent and augments with account data", async () => {
@@ -483,9 +483,8 @@ describe("handleChatMessage", () => {
         phone: "+971501234567",
       });
 
-      expect(result.metadata?.actionPerformed).toBe(
-        "booking_intent_detected,account_lookup"
-      );
+      // Agent intercepts booking intent before account-lookup branch runs.
+      expect(result.metadata?.actionPerformed).toBe("create_booking");
     });
   });
 
