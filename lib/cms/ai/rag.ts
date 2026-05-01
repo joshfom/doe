@@ -201,12 +201,14 @@ export function buildPrompt(context: RAGContext): string {
   if (context.language === "ar") {
     parts.push(
       "Respond in Arabic only. Do not include any English words, English greetings, or Latin script. " +
-        "Use clear modern standard Arabic with light, professional warmth."
+        "Use clear modern standard Arabic with light, professional warmth. " +
+        "NEVER mix English and Arabic in the same response. NEVER repeat the answer in two languages."
     );
   } else {
     parts.push(
-      "Respond in English only. Do not include any Arabic words or Arabic script — no \"مرحبا\", no \"يا\", " +
-        "no transliterations like \"yalla\" unless the user used it first. Professional, friendly tone."
+      "Respond in English only. Do not include any Arabic words or Arabic script \u2014 no \"\u0645\u0631\u062d\u0628\u0627\", no \"\u064a\u0627\", " +
+        "no transliterations like \"yalla\" unless the user used it first. Professional, friendly tone. " +
+        "NEVER mix English and Arabic in the same response. NEVER repeat the answer in two languages."
     );
   }
 
@@ -220,8 +222,9 @@ export function buildPrompt(context: RAGContext): string {
       parts.push(
         "OTP Status: VERIFIED — the user has already passed identity verification " +
           "for this session. Do NOT ask them to verify again, do NOT say you need to " +
-          "verify their OTP, do NOT mention re-verification. Answer their account " +
-          "questions directly using the data below."
+          "verify their OTP, do NOT mention re-verification, do NOT claim a code has " +
+          "been sent, do NOT say 'I'll need to confirm your account details again'. " +
+          "Answer their account questions directly using the data below."
       );
     }
     if (identity.firstName) {

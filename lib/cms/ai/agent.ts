@@ -1844,11 +1844,22 @@ export async function runAgent(
       /(date and time|what date|what time|when would|when works|when suits|new date|new time|متى يناسبك|التاريخ والوقت|التاريخ الجديد)/i.test(
         lastAssistant.content
       );
-    if (askedDateTime && parseDateTime(input.message)) {
-      if (handoffState.pendingReschedule) {
-        intent = "reschedule_appointment";
-      } else {
-        intent = "create_booking";
+    if (askedDateTime) {
+      const lower = input.message.toLowerCase();
+      const hasDateHint =
+        /\btomorrow\b|\btoday\b|\btonight\b|\b\d{4}-\d{2}-\d{2}\b|\b(?:next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b|\b\d{1,2}[\/\-]\d{1,2}\b|غداً|غدا|اليوم/.test(
+          lower
+        );
+      const hasTimeHint =
+        /\d{1,2}(:\d{2})?\s*(a\.?m\.?|p\.?m\.?)|\b([01]?\d|2[0-3]):[0-5]\d\b/.test(
+          lower
+        );
+      if (hasDateHint || hasTimeHint || parseDateTime(input.message)) {
+        if (handoffState.pendingReschedule) {
+          intent = "reschedule_appointment";
+        } else {
+          intent = "create_booking";
+        }
       }
     }
   }

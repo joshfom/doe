@@ -109,7 +109,7 @@ export const aiConversationsRoutes = new Elysia({ name: "ai-conversations" })
         updatedAt: aiConversations.updatedAt,
         messageCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${aiMessages}
-          WHERE ${aiMessages.conversationId} = ${aiConversations.id}
+          WHERE ${aiMessages.conversationId} = "ai_conversations"."id"
         )`,
       })
       .from(aiConversations)

@@ -32,7 +32,7 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
     queryFn: () => fetch(`/api/ai/conversations/${id}`).then((r) => r.json()),
   });
 
-  const conv = data?.conversation ?? data;
+  const conv = data?.data ?? data?.conversation ?? data;
   const messages = conv?.messages ?? data?.messages ?? [];
 
   if (isLoading) {

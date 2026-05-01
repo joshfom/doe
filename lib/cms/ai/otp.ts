@@ -135,6 +135,14 @@ const PAYMENT_KEYWORDS = [
   "make payment",
   "payment method",
   "installment",
+  "payment schedule",
+  "payment plan",
+  "next payment",
+  "how to pay",
+  "how do i pay",
+  "milestone",
+  "balance",
+  "due",
 ];
 
 const PERSONAL_KEYWORDS = [
