@@ -176,8 +176,203 @@ export default function SiteSettingsPage() {
         <p className="mt-4 text-sm text-ora-error">Failed to save settings. Please try again.</p>
       )}
 
+      {/* AI Email Connection Test */}
+      <AiEmailTestSection />
+
       {/* Content Approval Section */}
       <ContentApprovalSection />
+    </div>
+  );
+}
+
+
+// ── AI Email Connection Test ─────────────────────────────────────────────────
+
+interface EmailTestEnv {
+  AZURE_COMMUNICATION_TENANT_ID: boolean;
+  AZURE_COMMUNICATION_CLIENT_ID: boolean;
+  AZURE_COMMUNICATION_CLIENT_SECRET: boolean;
+  AZURE_COMMUNICATION_SENDER: string | null;
+}
+
+interface EmailTestResult {
+  ok: boolean;
+  message: string;
+  env?: EmailTestEnv;
+  details?: string;
+  missing?: string[];
+}
+
+function AiEmailTestSection() {
+  const [recipient, setRecipient] = useState('');
+  const [language, setLanguage] = useState<'en' | 'ar'>('en');
+  const [submitting, setSubmitting] = useState(false);
+  const [env, setEnv] = useState<EmailTestEnv | null>(null);
+  const [result, setResult] = useState<EmailTestResult | null>(null);
+
+  // Fetch env presence on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/ai/email-test', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.data?.env) setEnv(data.data.env as EmailTestEnv);
+      })
+      .catch(() => {
+        // Ignore — UI will still render and surface errors when test runs
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSend = async () => {
+    if (!recipient) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/ai/email-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ recipient, language }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.data?.success) {
+        setResult({
+          ok: true,
+          message: data.data.message ?? 'Email sent.',
+          env: data.data.env,
+        });
+        if (data.data.env) setEnv(data.data.env as EmailTestEnv);
+      } else {
+        setResult({
+          ok: false,
+          message: data?.error ?? 'Email send failed.',
+          details: data?.details,
+          missing: data?.missing,
+          env: data?.env,
+        });
+        if (data?.env) setEnv(data.env as EmailTestEnv);
+      }
+    } catch (err) {
+      setResult({
+        ok: false,
+        message: 'Network error',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-xl font-semibold text-ora-charcoal mb-1">
+        AI Email Connection
+      </h2>
+      <p className="text-sm text-ora-charcoal-light mb-4">
+        Send a sample OTP email through Microsoft Graph to confirm Azure
+        Communication credentials are working in this environment.
+      </p>
+
+      {env && (
+        <div className="mb-4 border border-ora-sand/60 bg-ora-white p-4 text-sm">
+          <p className="mb-2 text-xs font-medium text-ora-charcoal-light">
+            Environment variables
+          </p>
+          <ul className="space-y-1 text-xs text-ora-charcoal">
+            <li>
+              <span className={env.AZURE_COMMUNICATION_TENANT_ID ? 'text-emerald-700' : 'text-ora-error'}>
+                {env.AZURE_COMMUNICATION_TENANT_ID ? '✓' : '✗'}
+              </span>{' '}
+              AZURE_COMMUNICATION_TENANT_ID
+            </li>
+            <li>
+              <span className={env.AZURE_COMMUNICATION_CLIENT_ID ? 'text-emerald-700' : 'text-ora-error'}>
+                {env.AZURE_COMMUNICATION_CLIENT_ID ? '✓' : '✗'}
+              </span>{' '}
+              AZURE_COMMUNICATION_CLIENT_ID
+            </li>
+            <li>
+              <span className={env.AZURE_COMMUNICATION_CLIENT_SECRET ? 'text-emerald-700' : 'text-ora-error'}>
+                {env.AZURE_COMMUNICATION_CLIENT_SECRET ? '✓' : '✗'}
+              </span>{' '}
+              AZURE_COMMUNICATION_CLIENT_SECRET
+            </li>
+            <li>
+              <span className={env.AZURE_COMMUNICATION_SENDER ? 'text-emerald-700' : 'text-ora-error'}>
+                {env.AZURE_COMMUNICATION_SENDER ? '✓' : '✗'}
+              </span>{' '}
+              AZURE_COMMUNICATION_SENDER
+              {env.AZURE_COMMUNICATION_SENDER ? (
+                <span className="ml-2 text-ora-muted">({env.AZURE_COMMUNICATION_SENDER})</span>
+              ) : null}
+            </li>
+          </ul>
+        </div>
+      )}
+
+      <div className="border border-ora-sand/60 bg-ora-white p-4 space-y-3">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-ora-charcoal-light">
+            Recipient email
+          </label>
+          <input
+            type="email"
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="someone@example.com"
+            className="h-10 w-full border border-ora-stone bg-ora-white px-4 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-ora-charcoal-light">
+            Template language
+          </label>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as 'en' | 'ar')}
+            className="h-10 w-full border border-ora-stone bg-ora-white px-4 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+          >
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+          </select>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!recipient || submitting}
+            className="inline-flex h-10 items-center gap-2 bg-ora-charcoal px-6 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50"
+          >
+            {submitting ? 'Sending…' : 'Send test email'}
+          </button>
+        </div>
+
+        {result && (
+          <div
+            className={`mt-3 border-l-4 p-3 text-sm ${
+              result.ok
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                : 'border-ora-error bg-red-50 text-ora-error'
+            }`}
+          >
+            <p className="font-medium">{result.message}</p>
+            {result.missing && result.missing.length > 0 && (
+              <p className="mt-1 text-xs">
+                Missing: {result.missing.join(', ')}
+              </p>
+            )}
+            {result.details && (
+              <pre className="mt-2 wrap-break-word whitespace-pre-wrap text-[11px] opacity-80">
+                {result.details}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

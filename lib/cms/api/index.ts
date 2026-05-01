@@ -30,6 +30,7 @@ import { ticketCategoriesRoutes } from "./routes/ticket-categories";
 import { communitiesRoutes } from "./routes/communities";
 import { projectsRoutes } from "./routes/projects";
 import { aiChatRoutes } from "./routes/ai-chat";
+import { aiEmailTestRoutes } from "./routes/ai-email-test";
 import { aiConversationsRoutes } from "./routes/ai-conversations";
 import { aiKnowledgeBaseRoutes } from "./routes/ai-knowledge-base";
 import { aiRecordsRoutes } from "./routes/ai-records";
@@ -111,6 +112,7 @@ export const api = new Elysia({ prefix: "/api" })
   .use(communitiesRoutes)
   .use(projectsRoutes)
   .use(aiChatRoutes)
+  .use(aiEmailTestRoutes)
   .use(aiConversationsRoutes)
   .use(aiKnowledgeBaseRoutes)
   .use(aiRecordsRoutes)

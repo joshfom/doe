@@ -626,7 +626,18 @@ export async function runAgent(
     }
   }
 
-  // 3. Detect intent
+  // 2b. Re-shared email path: if the user just typed an email we already
+  //     have on this conversation (and they're recognized), they're most
+  //     likely confirming "yes, here's my email again — please send the
+  //     code." Acknowledge warmly and route straight into OTP send instead
+  //     of asking for it a second time.
+  const reshareEmail =
+    !!extractedEmail &&
+    !!input.contact.email &&
+    extractedEmail === input.contact.email.toLowerCase() &&
+    identity.type !== "visitor";
+
+  // 3. Detect intent (skipped when reshareEmail short-circuits below)
   const intent = detectIntent(input.message);
 
   const enrichedInput: AgentInput = {
@@ -634,6 +645,23 @@ export async function runAgent(
     contact: updatedContact,
     identity,
   };
+
+  if (reshareEmail) {
+    const otpResult = await executeRequestOtp(db, enrichedInput);
+    // Soften the response with an acknowledgment that we already had it
+    if (otpResult.handled && otpResult.response) {
+      const ack =
+        input.language === "ar"
+          ? "وصلني بريدك مسبقاً — شكراً للتأكيد! "
+          : "Got your email already — thanks for confirming! ";
+      otpResult.response = ack + otpResult.response;
+    }
+    return {
+      ...otpResult,
+      identity,
+      contact: updatedContact,
+    };
+  }
 
   if (intent === "create_ticket") {
     return {

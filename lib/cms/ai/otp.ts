@@ -446,12 +446,35 @@ const OTP_CONFIRM_PATTERNS = [
  * Detects whether a user message is confirming they want to receive an OTP.
  *
  * Matches against common confirmation phrases in English and Arabic
- * (case-insensitive). Only short, affirmative messages are treated as
- * confirmations to avoid false positives in longer messages.
+ * (case-insensitive). Allows short multi-word affirmations like "yes please",
+ * "yes send it", "ok send the code", "go ahead and send it" — but rejects
+ * longer messages that just happen to contain "yes" or "ok" inside a
+ * larger sentence to avoid false positives.
  */
 export function isOtpConfirmation(message: string): boolean {
-  const trimmed = message.trim().toLowerCase();
-  return OTP_CONFIRM_PATTERNS.some((p) => trimmed === p);
+  const trimmed = message.trim().toLowerCase().replace(/[!.?,]+$/g, "");
+
+  // Exact match against any pattern
+  if (OTP_CONFIRM_PATTERNS.some((p) => trimmed === p)) return true;
+
+  // Short messages (≤ 6 words) that START with a confirm word are treated
+  // as confirmations: "yes please", "yes send it", "ok go ahead", "sure send it"
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 6) return false;
+
+  const startWords = new Set([
+    "yes", "yeah", "yep", "ok", "okay", "sure", "send", "verify", "confirm",
+    "please", "go", "نعم", "أرسل", "تحقق", "موافق",
+  ]);
+  if (!startWords.has(words[0])) return false;
+
+  // Only allow short follow-on words that are clearly affirmative filler
+  const allowedFollow = new Set([
+    "please", "send", "it", "the", "code", "otp", "now", "ahead", "and",
+    "do", "verify", "me", "go", "yes", "sure", "ok", "okay",
+    "أرسل", "الرمز", "نعم", "تفضل", "من", "فضلك",
+  ]);
+  return words.slice(1).every((w) => allowedFollow.has(w));
 }
 
 // ── Email Lookup ─────────────────────────────────────────────────────────────

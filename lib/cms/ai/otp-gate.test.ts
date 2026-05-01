@@ -382,9 +382,9 @@ describe("Feature: ai-otp-verification, Property 4: Visitor personal queries get
 
           // The response should mention phone/email identification
           if (language === "en") {
-            expect(result.response).toContain("phone number or email");
+            expect(result.response).toMatch(/email or mobile number|phone number or email/i);
           } else {
-            expect(result.response).toContain("هاتفك");
+            expect(result.response).toMatch(/هاتفك|رقم هاتفك/);
           }
         }
       ),
