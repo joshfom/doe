@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Image from "next/image";
 import Link from "next/link";
 import { apiFetch } from "@/lib/cms/hooks/api";
 import type { ProjectMedia } from "./types";
@@ -106,12 +105,10 @@ export function FeaturedProjectsRuntime({
               >
                 <div className="relative aspect-4/3 bg-ora-sand/40">
                   {hero && (
-                    <Image
+                    <img
                       src={hero.url}
                       alt={hero.alt || p.nameEn}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      className="object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   )}
                   {status && (

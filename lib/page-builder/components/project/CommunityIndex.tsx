@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import type { Locale, ProjectMedia } from "./types";
@@ -63,12 +62,10 @@ function CommunityCard({
     >
       <div className="relative aspect-4/3 overflow-hidden bg-ora-charcoal/5">
         {hero ? (
-          <Image
+          <img
             src={hero.url}
             alt={hero.alt || name}
-            fill
-            sizes="(min-width: 768px) 33vw, 100vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-ora-muted">
@@ -226,13 +223,10 @@ export function CommunityDetail({
     <main className="min-h-screen bg-ora-bone">
       <section className="relative h-96 bg-ora-charcoal">
         {hero && (
-          <Image
+          <img
             src={hero.url}
             alt={hero.alt || name}
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover opacity-70"
+            className="absolute inset-0 h-full w-full object-cover opacity-70"
           />
         )}
         <div className="absolute inset-0 flex items-end bg-linear-to-t from-ora-charcoal/80 to-transparent">
@@ -306,12 +300,10 @@ export function CommunityDetail({
                   >
                     <div className="relative aspect-4/3 overflow-hidden bg-ora-charcoal/5">
                       {ph && (
-                        <Image
+                        <img
                           src={ph.url}
                           alt={ph.alt || pname}
-                          fill
-                          sizes="(min-width: 768px) 33vw, 100vw"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                       )}
                     </div>

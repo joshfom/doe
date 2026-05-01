@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { apiFetch } from "@/lib/cms/hooks/api";
 
@@ -101,12 +100,10 @@ export function FeaturedCommunitiesRuntime({
               >
                 <div className="relative aspect-4/3 overflow-hidden bg-ora-charcoal/5">
                   {hero && (
-                    <Image
+                    <img
                       src={hero.url}
                       alt={hero.alt || c.nameEn}
-                      fill
-                      sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   )}
                 </div>

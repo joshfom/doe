@@ -13,7 +13,7 @@ import {
   useReorderMenuItems,
   useSetActiveMenu,
 } from '@/lib/cms/hooks/use-menus';
-import { useSiteSettings, useUpdateSettings } from '@/lib/cms/hooks';
+import { useSiteSettings, useUpdateSettings, settingsKeys } from '@/lib/cms/hooks';
 import type { MenuItemTree, ItemType } from '@/lib/cms/types';
 import {
   DndContext,
@@ -407,12 +407,20 @@ function CtaSettingsPanel() {
 
 export default function MenuBuilderPage() {
   const { data: menus, isLoading: menusLoading } = useMenus();
+  const { data: settings } = useSiteSettings();
   const createMenu = useCreateMenu();
   const updateMenu = useUpdateMenu();
   const deleteMenu = useDeleteMenu();
   const setActiveMenu = useSetActiveMenu();
   const deleteMenuItem = useDeleteMenuItem();
   const reorderItems = useReorderMenuItems();
+
+  // Derive active menu ID from site settings
+  const activeMenuId = useMemo(() => {
+    if (!settings) return null;
+    const entry = settings.find((s) => s.key === 'active_menu_id');
+    return entry?.value ?? null;
+  }, [settings]);
 
   const [selectedMenuId, setSelectedMenuId] = useState<string>('');
   const [newMenuName, setNewMenuName] = useState('');
@@ -569,7 +577,7 @@ export default function MenuBuilderPage() {
                         <>
                           <span className="flex-1 text-sm text-ora-charcoal truncate">{menu.name}</span>
                           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => handleSetActive(menu.id)} className={`flex h-8 w-8 items-center justify-center transition-colors ${setActiveMenu.isPending ? 'opacity-50' : 'text-ora-muted hover:text-ora-gold'}`} title="Set as active menu"><Star className="h-3.5 w-3.5 stroke-1" /></button>
+                            <button onClick={() => handleSetActive(menu.id)} className={`flex h-8 w-8 items-center justify-center transition-colors ${activeMenuId === menu.id ? 'text-ora-gold' : setActiveMenu.isPending ? 'opacity-50 text-ora-muted' : 'text-ora-muted hover:text-ora-gold'}`} title={activeMenuId === menu.id ? 'Active menu' : 'Set as active menu'}><Star className={`h-3.5 w-3.5 ${activeMenuId === menu.id ? 'fill-ora-gold stroke-ora-gold' : 'stroke-1'}`} /></button>
                             <button onClick={() => { setEditingMenuId(menu.id); setEditingMenuName(menu.name); }} className="flex h-8 w-8 items-center justify-center text-ora-charcoal-light hover:bg-ora-cream-light transition-colors" title="Edit name"><Pencil className="h-3.5 w-3.5 stroke-1" /></button>
                             {isConfirmingDelete ? (
                               <div className="flex items-center gap-1">

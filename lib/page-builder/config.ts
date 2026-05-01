@@ -361,6 +361,8 @@ const imageUploadField = {
   label: "Image",
   render: ({ value, onChange, readOnly }: { value: unknown; onChange: (v: string) => void; readOnly?: boolean }) => {
     const currentSrc = (value as string) || "";
+    const [mode, setMode] = React.useState<"upload" | "url">("upload");
+    const [urlInput, setUrlInput] = React.useState("");
 
     const uploadFile = async (file: File) => {
       const form = new FormData();
@@ -373,21 +375,6 @@ const imageUploadField = {
       } catch { /* */ }
     };
 
-    const browseLibrary = async () => {
-      if (readOnly) return;
-      try {
-        const res = await fetch("/api/media", { credentials: "include" });
-        if (!res.ok) return;
-        const json = await res.json();
-        const items = json.data as Array<{ storageUrl?: string; storage_url?: string; filename: string }>;
-        if (!items?.length) { triggerUpload(); return; }
-        // Simple: show a prompt-style picker using the first available image
-        // For a proper modal, the MediaPickerModal component should be used
-        // For now, open file picker as fallback
-        triggerUpload();
-      } catch { triggerUpload(); }
-    };
-
     const triggerUpload = () => {
       if (readOnly) return;
       const inp = document.createElement("input");
@@ -396,10 +383,18 @@ const imageUploadField = {
       inp.click();
     };
 
+    const handleUrlApply = () => {
+      const trimmed = urlInput.trim();
+      if (trimmed) {
+        onChange(trimmed);
+        setUrlInput("");
+      }
+    };
+
     if (currentSrc) {
       return React.createElement("div", {
         style: { position: "relative", cursor: readOnly ? "default" : "pointer" },
-        onClick: triggerUpload,
+        onClick: () => { if (mode === "upload") triggerUpload(); },
         onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
         onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
       },
@@ -424,14 +419,55 @@ const imageUploadField = {
       );
     }
 
-    return React.createElement("div", {
-      onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
-      onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
-      onClick: triggerUpload,
-      style: { border: "2px dashed #D4CFC8", padding: "20px 12px", textAlign: "center" as const, cursor: "pointer", background: "#F9F7F5", fontSize: 13, color: "#6B6B6B" },
-    },
-      React.createElement("div", { style: { fontSize: 20, marginBottom: 4 } }, "📁"),
-      React.createElement("div", null, "Drop image or click to upload"),
+    return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+      // Mode toggle: Upload vs URL
+      React.createElement("div", { style: { display: "flex", gap: 0 } },
+        React.createElement("button", {
+          type: "button",
+          onClick: () => setMode("upload"),
+          style: {
+            flex: 1, height: 30, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
+            background: mode === "upload" ? "#2C2C2C" : "#F9F7F5",
+            color: mode === "upload" ? "#FFF" : "#6B6B6B",
+            fontWeight: mode === "upload" ? 600 : 400,
+          },
+        }, "Upload"),
+        React.createElement("button", {
+          type: "button",
+          onClick: () => setMode("url"),
+          style: {
+            flex: 1, height: 30, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
+            background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
+            color: mode === "url" ? "#FFF" : "#6B6B6B",
+            fontWeight: mode === "url" ? 600 : 400,
+          },
+        }, "URL"),
+      ),
+      mode === "url"
+        ? React.createElement("div", { style: { display: "flex", gap: 4 } },
+            React.createElement("input", {
+              type: "text",
+              value: urlInput,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setUrlInput(e.target.value),
+              onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter") handleUrlApply(); },
+              placeholder: "https://example.com/image.jpg",
+              style: { flex: 1, height: 34, border: "1px solid #E8E4DF", padding: "0 8px", fontSize: 12, color: "#2C2C2C" },
+            }),
+            React.createElement("button", {
+              type: "button",
+              onClick: handleUrlApply,
+              style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
+            }, "Apply"),
+          )
+        : React.createElement("div", {
+            onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
+            onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
+            onClick: triggerUpload,
+            style: { border: "2px dashed #D4CFC8", padding: "20px 12px", textAlign: "center" as const, cursor: "pointer", background: "#F9F7F5", fontSize: 13, color: "#6B6B6B" },
+          },
+            React.createElement("div", { style: { fontSize: 20, marginBottom: 4 } }, "📁"),
+            React.createElement("div", null, "Drop image or click to upload"),
+          ),
     );
   },
 };
@@ -497,6 +533,7 @@ const Section: Config["components"][string] = {
     bgVideoSound: createToggleField("Video Sound", [{ label: "Off", value: "off" }, { label: "On", value: "on" }], "Background videos default to muted."),
     bgVideoControls: createToggleField("Video Controls", [{ label: "Hidden", value: "no" }, { label: "Visible", value: "yes" }]),
     bgVideoFit: createCustomSelectField("Video Fit", [{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]),
+    bgVideoPoster: imageUploadField,
     bgOpacity: createCustomSelectField("Background Opacity", [
       { label: "100%", value: "1" }, { label: "90%", value: "0.9" }, { label: "75%", value: "0.75" },
       { label: "50%", value: "0.5" }, { label: "25%", value: "0.25" }, { label: "10%", value: "0.1" },
@@ -529,6 +566,7 @@ const Section: Config["components"][string] = {
     bgVideoSound: "off",
     bgVideoControls: "no",
     bgVideoFit: "cover",
+    bgVideoPoster: "",
     bgOpacity: "1",
     textColor: "auto",
     minHeight: "auto",
@@ -567,6 +605,7 @@ const Section: Config["components"][string] = {
     setVisible("bgVideoSound", media === "video");
     setVisible("bgVideoControls", media === "video");
     setVisible("bgVideoFit", media === "video");
+    setVisible("bgVideoPoster", media === "video");
     setVisible("bgOpacity", media !== "none");
 
     return nextFields;
@@ -587,6 +626,7 @@ const Section: Config["components"][string] = {
       bgVideoSound,
       bgVideoControls,
       bgVideoFit,
+      bgVideoPoster,
       bgPosition,
       bgVideoPosition,
       bgOpacity,
@@ -604,6 +644,7 @@ const Section: Config["components"][string] = {
     const direction = (gradientDirection as string) || "to bottom";
     const gradientValue = `linear-gradient(${direction}, ${from}, ${to})`;
     const img = mediaType === "image" ? ((bgImage as string) || "") : "";
+    const videoPoster = mediaType === "video" ? ((bgVideoPoster as string) || "") : "";
     const videoResolved = mediaType === "video"
       ? resolveVideoSource((bgVideoUrl as string) || "", {
         autoplay: (bgVideoAutoplay as string) !== "no",
@@ -626,7 +667,13 @@ const Section: Config["components"][string] = {
     const isDark = bg === "#1A1A1A" || bg === "#2C2C2C" || bg === "#B8956B" || (mode === "gradient" && from === "#1A1A1A" && to === "#2C2C2C");
     const color = textColor === "auto" ? (isDark ? "#FFFFFF" : undefined) : (textColor as string);
 
-    const outerStyle: React.CSSProperties = { position: "relative", overflow: "hidden", width: "100%" };
+    const outerStyle: React.CSSProperties = {
+      position: "relative",
+      overflow: "hidden",
+      width: "100vw",
+      marginLeft: "calc(-50vw + 50%)",
+      boxSizing: "border-box" as const,
+    };
     if (!hasMedia) {
       if (mode === "gradient") {
         outerStyle.backgroundImage = gradientValue;
@@ -650,6 +697,10 @@ const Section: Config["components"][string] = {
     const alignContentValue: React.CSSProperties["alignContent"] =
       alignRaw === "center" ? "center" : alignRaw === "flex-end" ? "end" : "start";
 
+    // Video poster state management: show poster until video fires "playing" event
+    const videoRef = React.useRef<HTMLVideoElement | null>(null);
+    const [videoReady, setVideoReady] = React.useState(false);
+
     return styledRender(props, React.createElement("section", { id: sectionIdValue || undefined, style: outerStyle },
       // Background image overlay
       img ? React.createElement("div", { style: {
@@ -657,22 +708,32 @@ const Section: Config["components"][string] = {
         backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: (bgPosition as string) || "center center",
         opacity,
       }}) : null,
+      // Video poster image (shows until video is playing)
+      videoPoster && videoResolved && !videoReady ? React.createElement("div", { style: {
+        position: "absolute", inset: 0, zIndex: 1,
+        backgroundImage: `url(${videoPoster})`, backgroundSize: "cover", backgroundPosition: "center center",
+        opacity,
+        transition: "opacity 0.5s ease",
+      }}) : null,
       // Background video overlay
-      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 0, opacity } },
+      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: videoReady || !videoPoster ? 1 : 0, opacity } },
         videoResolved.kind === "embed"
           ? React.createElement("iframe", {
             src: videoResolved.src,
             title: "Section background video",
             allow: "autoplay; fullscreen; picture-in-picture",
             style: { width: "100%", height: "100%", border: "none", pointerEvents: "none" },
+            onLoad: () => setVideoReady(true),
           })
           : React.createElement("video", {
+            ref: videoRef,
             src: videoResolved.src,
             autoPlay: (bgVideoAutoplay as string) !== "no",
             loop: (bgVideoLoop as string) !== "no",
             muted: (bgVideoSound as string) !== "on",
             controls: (bgVideoControls as string) === "yes",
             playsInline: true,
+            onPlaying: () => setVideoReady(true),
             style: { width: "100%", height: "100%", objectFit: videoFit, objectPosition: (bgVideoPosition as string) || "center center" },
           }),
       ) : null,
@@ -680,7 +741,7 @@ const Section: Config["components"][string] = {
       shouldRenderTintOverlay ? React.createElement("div", { style: {
         position: "absolute",
         inset: 0,
-        zIndex: 1,
+        zIndex: 2,
         backgroundImage: hasGradientTint ? gradientValue : undefined,
         backgroundColor: hasSolidTint ? bg : undefined,
         opacity: 1 - opacity,
@@ -689,7 +750,7 @@ const Section: Config["components"][string] = {
       React.createElement("div", {
         style: {
           position: "relative",
-          zIndex: 2,
+          zIndex: 3,
           width: "100%",
           flex: 1,
           minHeight: "100%",

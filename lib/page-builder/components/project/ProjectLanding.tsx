@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { ProjectInquiryCTA } from "./ProjectInquiryCTA";
 import {
   Bed,
@@ -82,13 +81,10 @@ export function ProjectHero({
   return (
     <section className="relative h-[78vh] min-h-130 w-full overflow-hidden bg-ora-charcoal text-ora-white">
       {hero && (
-        <Image
+        <img
           src={hero.url}
           alt={hero.alt || title}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       )}
       <div
@@ -220,12 +216,10 @@ export function BrochureGallery({
                 key={`${id}-${i}`}
                 className="relative aspect-4/3 overflow-hidden bg-ora-sand/40"
               >
-                <Image
+                <img
                   src={m.url}
                   alt={m.alt}
-                  fill
-                  sizes="(max-width: 768px) 50vw, 33vw"
-                  className="object-cover"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               </div>
             );
@@ -265,12 +259,10 @@ export function FloorplanGrid({
               >
                 <div className="relative aspect-4/3 bg-ora-sand/40">
                   {img && (
-                    <Image
+                    <img
                       src={img.url}
                       alt={img.alt || name}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      className="object-contain p-3"
+                      className="absolute inset-0 h-full w-full object-contain p-3"
                     />
                   )}
                 </div>

@@ -43,6 +43,8 @@ export function MediaPickerModal({
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [mode, setMode] = useState<'library' | 'url'>('library');
+  const [urlInput, setUrlInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch media items
@@ -122,6 +124,13 @@ export function MediaPickerModal({
     [onSelect, onSelectItem, onClose]
   );
 
+  const handleUrlApply = useCallback(() => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    onSelect?.(trimmed);
+    onClose();
+  }, [urlInput, onSelect, onClose]);
+
   if (!open) return null;
 
   return (
@@ -137,7 +146,25 @@ export function MediaPickerModal({
       <div className="relative z-10 flex h-[85vh] w-[90vw] max-w-5xl flex-col bg-ora-white border border-ora-sand shadow-ora-lg">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ora-sand px-6 py-4">
-          <h2 className="text-lg font-semibold text-ora-charcoal">Media Library</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-ora-charcoal">Media Library</h2>
+            <div className="flex border border-ora-sand">
+              <button
+                type="button"
+                onClick={() => setMode('library')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${mode === 'library' ? 'bg-ora-charcoal text-ora-white' : 'bg-ora-cream-light text-ora-charcoal-light hover:bg-ora-cream'}`}
+              >
+                Library
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('url')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${mode === 'url' ? 'bg-ora-charcoal text-ora-white' : 'bg-ora-cream-light text-ora-charcoal-light hover:bg-ora-cream'}`}
+              >
+                URL
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -166,7 +193,8 @@ export function MediaPickerModal({
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search - only show in library mode */}
+        {mode === 'library' && (
         <div className="border-b border-ora-sand px-6 py-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 stroke-1 text-ora-muted" />
@@ -179,9 +207,45 @@ export function MediaPickerModal({
             />
           </div>
         </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {mode === 'url' ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <p className="mb-4 text-sm text-ora-charcoal-light">Paste an external image URL</p>
+              <div className="flex w-full max-w-lg gap-2">
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleUrlApply(); }}
+                  placeholder="https://example.com/image.jpg"
+                  className="h-10 flex-1 border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleUrlApply}
+                  disabled={!urlInput.trim()}
+                  className="h-10 bg-ora-charcoal px-6 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50"
+                >
+                  Use URL
+                </button>
+              </div>
+              {urlInput.trim() && (
+                <div className="mt-6 border border-ora-sand p-2">
+                  <img
+                    src={urlInput.trim()}
+                    alt="Preview"
+                    className="max-h-48 max-w-full object-contain"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.display = 'block'; }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
           {loading && (
             <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-5">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -244,6 +308,8 @@ export function MediaPickerModal({
                 </button>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
       </div>
