@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, ChevronDown } from "lucide-react";
+import { X, ChevronDown, CheckCircle } from "lucide-react";
 import IntlTelInput from "intl-tel-input/react";
 import "intl-tel-input/styles";
 
 interface RegisterInterestDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Optional project or page context to attach to the submission */
+  source?: string;
 }
 
 const HEAR_ABOUT_OPTIONS = [
@@ -23,6 +25,7 @@ const HEAR_ABOUT_OPTIONS = [
 export function RegisterInterestDialog({
   open,
   onClose,
+  source,
 }: RegisterInterestDialogProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -32,6 +35,9 @@ export function RegisterInterestDialog({
   const [hearAbout, setHearAbout] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = useCallback(
@@ -64,11 +70,55 @@ export function RegisterInterestDialog({
     return () => document.removeEventListener("mousedown", handler);
   }, [dropdownOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneValid) return;
-    // TODO: wire to API
+    if (!phoneValid || submitting) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/interest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone: phoneNumber,
+          hearAbout: hearAbout || null,
+          marketingConsent: agreed,
+          source: source ?? null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Something went wrong. Please try again.");
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
     onClose();
+    // Reset form after animation completes
+    setTimeout(() => {
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhoneNumber("");
+      setPhoneValid(false);
+      setHearAbout("");
+      setAgreed(false);
+      setSubmitted(false);
+      setError("");
+    }, 300);
   };
 
   return (
@@ -79,7 +129,7 @@ export function RegisterInterestDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-ora-charcoal/60 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={handleClose}
         >
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -93,13 +143,33 @@ export function RegisterInterestDialog({
             {/* Close button */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute top-5 right-5 flex h-10 w-10 items-center justify-center text-ora-charcoal-light hover:text-ora-charcoal transition-colors"
               aria-label="Close"
             >
               <X className="h-5 w-5 stroke-[1.5]" />
             </button>
 
+            {/* Success State */}
+            {submitted ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <CheckCircle className="h-16 w-16 text-ora-gold mb-6 stroke-[1]" />
+                <h2 className="text-2xl sm:text-3xl font-light text-ora-charcoal mb-4">
+                  Thank You!
+                </h2>
+                <p className="text-sm text-ora-charcoal-light max-w-md leading-relaxed">
+                  Your interest has been registered successfully. Our team will be in touch with you shortly.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="mt-8 h-12 px-16 bg-ora-charcoal text-white text-sm uppercase tracking-widest hover:bg-ora-graphite transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+            <>
             <h2 className="text-2xl sm:text-3xl font-light text-ora-charcoal mb-10">
               Register your Interest
             </h2>
@@ -240,14 +310,19 @@ export function RegisterInterestDialog({
               </div>
 
               {/* Submit */}
+              {error && (
+                <p className="text-sm text-ora-error">{error}</p>
+              )}
               <button
                 type="submit"
                 className="w-full sm:w-auto h-12 px-16 bg-ora-charcoal text-white text-sm uppercase tracking-widest hover:bg-ora-graphite transition-colors disabled:opacity-40"
-                disabled={!firstName || !lastName || !email || !phoneValid}
+                disabled={!firstName || !lastName || !email || !phoneValid || submitting}
               >
-                Submit
+                {submitting ? "Submitting…" : "Submit"}
               </button>
             </form>
+            </>
+            )}
           </motion.div>
         </motion.div>
       )}

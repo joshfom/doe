@@ -38,6 +38,7 @@ import { aiAppointmentsRoutes } from "./routes/ai-appointments";
 import { aiAnalyticsRoutes } from "./routes/ai-analytics";
 import { aiConfigRoutes } from "./routes/ai-config";
 import { calendarRoutes } from "./routes/calendar";
+import { interestRoutes } from "./routes/interest";
 
 // ── One-time RBAC init ───────────────────────────────────────────────────────
 // When running under `next dev`, the standalone server.ts entry never executes,
@@ -119,4 +120,5 @@ export const api = new Elysia({ prefix: "/api" })
   .use(aiAppointmentsRoutes)
   .use(aiAnalyticsRoutes)
   .use(aiConfigRoutes)
-  .use(calendarRoutes);
+  .use(calendarRoutes)
+  .use(interestRoutes);
