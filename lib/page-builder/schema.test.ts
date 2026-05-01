@@ -25,6 +25,29 @@ describe("validatePageData", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts Section at root content", () => {
+    const result = validatePageData({
+      root: { props: {} },
+      content: [{ type: "Section", props: { id: "section-1" } }],
+      zones: {
+        "section-1:section-content": [{ type: "Text", props: { id: "text-1" } }],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects nested Section inside zones", () => {
+    const result = validatePageData({
+      root: { props: {} },
+      content: [{ type: "Section", props: { id: "section-1" } }],
+      zones: {
+        "section-1:section-content": [{ type: "Section", props: { id: "section-2" } }],
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(result.errors?.some((e) => e.message.includes("cannot be nested"))).toBe(true);
+  });
+
   it("accepts valid PageData with empty content", () => {
     const result = validatePageData({ root: { props: {} }, content: [] });
     expect(result.success).toBe(true);

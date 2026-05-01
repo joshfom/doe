@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import type { Plugin } from "@puckeditor/core";
+import { Settings, Search, Rocket } from "lucide-react";
+import { createTemplatesPlugin, createSaveAsTemplatePlugin } from "./templates";
 
 // ─── Page Settings Panel ─────────────────────────────────────────────────────
 
@@ -124,7 +126,7 @@ export function createPageSettingsPlugin(): Plugin {
   return {
     name: "page-settings",
     label: "Page Settings",
-    icon: React.createElement("span", null, "⚙"),
+    icon: React.createElement(Settings, { size: 16 }),
     render: () => React.createElement(PageSettingsPanel),
   };
 }
@@ -136,7 +138,7 @@ export function createSeoPlugin(): Plugin {
   return {
     name: "seo-metadata",
     label: "SEO",
-    icon: React.createElement("span", null, "🔍"),
+    icon: React.createElement(Search, { size: 16 }),
     render: () => React.createElement(SeoMetadataPanel),
   };
 }
@@ -148,7 +150,7 @@ export function createPublishingPlugin(onPublish?: () => void): Plugin {
   return {
     name: "publishing-controls",
     label: "Publish",
-    icon: React.createElement("span", null, "🚀"),
+    icon: React.createElement(Rocket, { size: 16 }),
     render: () => React.createElement(PublishingControlsPanel, { onPublish }),
   };
 }
@@ -162,6 +164,8 @@ export function createEditorPlugins(options?: {
   return [
     createPageSettingsPlugin(),
     createSeoPlugin(),
+    createTemplatesPlugin(),
+    createSaveAsTemplatePlugin(),
     createPublishingPlugin(options?.onPublish),
   ];
 }

@@ -1,34 +1,29 @@
 /**
  * Shared style control fields (padding, margin, border) for all components.
- * All numeric fields use type: "text" so users can type any value freely.
+ * These are rendered through the shared custom control system so every block
+ * gets the same UI language.
  */
 
 import type { CSSProperties } from "react";
+import {
+  createColorField,
+  createSliderField,
+  createStepperField,
+  normalizeLength,
+} from "./shared-field-controls";
 
 // ─── Field Definitions ───────────────────────────────────────────────────────
 
 export const styleFields = {
-  paddingTop: { type: "text" as const, label: "Top" },
-  paddingBottom: { type: "text" as const, label: "Bottom" },
-  paddingLeft: { type: "text" as const, label: "Left" },
-  paddingRight: { type: "text" as const, label: "Right" },
-  marginTop: { type: "text" as const, label: "Top" },
-  marginBottom: { type: "text" as const, label: "Bottom" },
-  borderWidth: { type: "text" as const, label: "Width" },
-  borderColor: {
-    type: "select" as const,
-    label: "Color",
-    options: [
-      { label: "Sand", value: "#E8E4DF" },
-      { label: "Sand Dark", value: "#D4CFC8" },
-      { label: "Stone Dark", value: "#B8B3AB" },
-      { label: "Charcoal", value: "#2C2C2C" },
-      { label: "Gold", value: "#B8956B" },
-      { label: "Charcoal Dark", value: "#1A1A1A" },
-      { label: "White", value: "#FFFFFF" },
-    ],
-  },
-  borderRadius: { type: "text" as const, label: "Radius" },
+  paddingTop: createStepperField("Top", 4, 0, "Top padding"),
+  paddingBottom: createStepperField("Bottom", 4, 0, "Bottom padding"),
+  paddingLeft: createStepperField("Left", 4, 0, "Left padding"),
+  paddingRight: createStepperField("Right", 4, 0, "Right padding"),
+  marginTop: createStepperField("Top", 4, 0, "Top margin"),
+  marginBottom: createStepperField("Bottom", 4, 0, "Bottom margin"),
+  borderWidth: createSliderField("Width", 0, 12, "px", "Border thickness"),
+  borderColor: createColorField("Color", "#E8E4DF", "Border color"),
+  borderRadius: createSliderField("Radius", 0, 100, "px", "Border radius"),
 };
 
 // ─── Default Values ──────────────────────────────────────────────────────────
@@ -62,19 +57,19 @@ export interface StyleProps {
 export function stylePropsToCSS(props: Record<string, unknown>): CSSProperties {
   const css: CSSProperties = {};
 
-  const pt = Number(props.paddingTop) || 0;
-  const pb = Number(props.paddingBottom) || 0;
-  const pl = Number(props.paddingLeft) || 0;
-  const pr = Number(props.paddingRight) || 0;
+  const pt = normalizeLength(props.paddingTop, "px");
+  const pb = normalizeLength(props.paddingBottom, "px");
+  const pl = normalizeLength(props.paddingLeft, "px");
+  const pr = normalizeLength(props.paddingRight, "px");
   if (pt || pb || pl || pr) {
-    css.padding = `${pt}px ${pr}px ${pb}px ${pl}px`;
+    css.padding = `${pt || "0px"} ${pr || "0px"} ${pb || "0px"} ${pl || "0px"}`;
   }
 
-  const mt = Number(props.marginTop) || 0;
-  const mb = Number(props.marginBottom) || 0;
+  const mt = normalizeLength(props.marginTop, "px");
+  const mb = normalizeLength(props.marginBottom, "px");
   if (mt || mb) {
-    css.marginTop = mt ? `${mt}px` : undefined;
-    css.marginBottom = mb ? `${mb}px` : undefined;
+    css.marginTop = mt || undefined;
+    css.marginBottom = mb || undefined;
   }
 
   const bw = Number(props.borderWidth) || 0;
@@ -82,9 +77,9 @@ export function stylePropsToCSS(props: Record<string, unknown>): CSSProperties {
     css.border = `${bw}px solid ${(props.borderColor as string) || "#E8E4DF"}`;
   }
 
-  const br = Number(props.borderRadius) || 0;
-  if (br > 0) {
-    css.borderRadius = br >= 9999 ? "9999px" : `${br}px`;
+  const br = normalizeLength(props.borderRadius, "px");
+  if (br) {
+    css.borderRadius = br === "9999px" ? "9999px" : br;
   }
 
   return css;

@@ -25,14 +25,31 @@ export const pageDataSchema = z.object({
 export function validatePageData(data: unknown): ValidationResult {
   const result = pageDataSchema.safeParse(data);
 
-  if (result.success) {
-    return { success: true };
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message,
+    }));
+
+    return { success: false, errors };
   }
 
-  const errors = result.error.issues.map((issue) => ({
-    path: issue.path.join("."),
-    message: issue.message,
-  }));
+  const sectionErrors: Array<{ path: string; message: string }> = [];
+  const zones = result.data.zones ?? {};
 
-  return { success: false, errors };
+  for (const [zoneKey, items] of Object.entries(zones)) {
+    items.forEach((item, index) => {
+      if (item.type !== "Section") return;
+      sectionErrors.push({
+        path: `zones.${zoneKey}.${index}.type`,
+        message: "Section components must be placed at root content and cannot be nested in zones.",
+      });
+    });
+  }
+
+  if (sectionErrors.length > 0) {
+    return { success: false, errors: sectionErrors };
+  }
+
+  return { success: true };
 }

@@ -14,6 +14,11 @@ globalThis.ResizeObserver ??= class ResizeObserver {
 const { pageBuilderConfig } = await import("./config");
 
 const Section = pageBuilderConfig.components.Section;
+const Text = pageBuilderConfig.components.Text;
+const Video = pageBuilderConfig.components.Video;
+const Button = pageBuilderConfig.components.Button;
+const AccordionGroup = pageBuilderConfig.components.AccordionGroup;
+const StatsGrid = pageBuilderConfig.components.StatsGrid;
 
 /**
  * Feature: atomic-component-architecture — Unit tests for Section refactor
@@ -68,6 +73,222 @@ describe("Section refactor", () => {
     expect(style.marginLeft).toBeFalsy();
     expect(style.marginRight).toBeFalsy();
   });
+
+  it("Section exposes maxHeight and gradient controls", () => {
+    const fieldKeys = Object.keys(Section.fields ?? {});
+    expect(fieldKeys).toContain("maxHeight");
+    expect(fieldKeys).toContain("bgMode");
+    expect(fieldKeys).toContain("bgMediaType");
+    expect(fieldKeys).toContain("bgVideoUrl");
+    expect(fieldKeys).toContain("gradientFrom");
+    expect(fieldKeys).toContain("gradientTo");
+    expect(fieldKeys).toContain("gradientDirection");
+  });
+
+  it("Section applies 100vh min/max height for hero use cases", () => {
+    const props = {
+      ...(Section.defaultProps as Record<string, unknown>),
+      id: "hero-section",
+      minHeight: "100vh",
+      maxHeight: "100vh",
+    };
+
+    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+    const sectionEl = container.querySelector("section") as HTMLElement | null;
+
+    expect(sectionEl).toBeTruthy();
+    expect(sectionEl!.style.width).toBe("100%");
+    expect(sectionEl!.style.minHeight).toBe("100vh");
+    expect(sectionEl!.style.maxHeight).toBe("100vh");
+  });
+
+  it("Section renders gradient background when bgMode is gradient", () => {
+    const props = {
+      ...(Section.defaultProps as Record<string, unknown>),
+      id: "gradient-section",
+      bgMode: "gradient",
+      gradientFrom: "#1A1A1A",
+      gradientTo: "#2C2C2C",
+      gradientDirection: "to right",
+      bgImage: "",
+    };
+
+    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+    const sectionEl = container.querySelector("section") as HTMLElement | null;
+
+    expect(sectionEl).toBeTruthy();
+    expect(sectionEl!.style.backgroundImage).toContain("linear-gradient");
+  });
+
+  it("Section renders video background when media type is video", () => {
+    const props = {
+      ...(Section.defaultProps as Record<string, unknown>),
+      id: "video-bg-section",
+      bgMediaType: "video",
+      bgVideoUrl: "https://cdn.example.com/video.mp4",
+      bgImage: "https://placehold.co/1200x600",
+    };
+
+    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    expect(container.querySelector("video")).toBeTruthy();
+    expect(container.querySelector("iframe")).toBeFalsy();
+  });
+
+  it("Section shows gradient controls only in gradient mode", () => {
+    const fields = (Section.fields as Record<string, unknown>) ?? {};
+    const resolved = (Section.resolveFields as (data: unknown, params: {
+      changed: Record<string, boolean>;
+      fields: Record<string, Record<string, unknown>>;
+      lastFields: Record<string, Record<string, unknown>>;
+      lastData: unknown;
+      metadata: unknown;
+      appState: unknown;
+      parent: unknown;
+    }) => Record<string, Record<string, unknown>>)(
+      { ...(Section.defaultProps as Record<string, unknown>), bgMode: "gradient" },
+      {
+        changed: {},
+        fields: fields as Record<string, Record<string, unknown>>,
+        lastFields: fields as Record<string, Record<string, unknown>>,
+        lastData: null,
+        metadata: {},
+        appState: {},
+        parent: null,
+      },
+    );
+
+    expect(resolved.gradientFrom.visible).toBe(true);
+    expect(resolved.gradientTo.visible).toBe(true);
+    expect(resolved.gradientDirection.visible).toBe(true);
+    expect(resolved.bgColor.visible).toBe(false);
+  });
+
+  it("Section shows only image controls in image media mode", () => {
+    const fields = (Section.fields as Record<string, unknown>) ?? {};
+    const resolved = (Section.resolveFields as (data: unknown, params: {
+      changed: Record<string, boolean>;
+      fields: Record<string, Record<string, unknown>>;
+      lastFields: Record<string, Record<string, unknown>>;
+      lastData: unknown;
+      metadata: unknown;
+      appState: unknown;
+      parent: unknown;
+    }) => Record<string, Record<string, unknown>>)(
+      { ...(Section.defaultProps as Record<string, unknown>), bgMediaType: "image" },
+      {
+        changed: {},
+        fields: fields as Record<string, Record<string, unknown>>,
+        lastFields: fields as Record<string, Record<string, unknown>>,
+        lastData: null,
+        metadata: {},
+        appState: {},
+        parent: null,
+      },
+    );
+
+    expect(resolved.bgImage.visible).toBe(true);
+    expect(resolved.bgPosition.visible).toBe(true);
+    expect(resolved.bgVideoUrl.visible).toBe(false);
+    expect(resolved.bgVideoPosition.visible).toBe(false);
+    expect(resolved.bgOpacity.visible).toBe(true);
+  });
+
+  it("Section shows only video controls in video media mode", () => {
+    const fields = (Section.fields as Record<string, unknown>) ?? {};
+    const resolved = (Section.resolveFields as (data: unknown, params: {
+      changed: Record<string, boolean>;
+      fields: Record<string, Record<string, unknown>>;
+      lastFields: Record<string, Record<string, unknown>>;
+      lastData: unknown;
+      metadata: unknown;
+      appState: unknown;
+      parent: unknown;
+    }) => Record<string, Record<string, unknown>>)(
+      { ...(Section.defaultProps as Record<string, unknown>), bgMediaType: "video" },
+      {
+        changed: {},
+        fields: fields as Record<string, Record<string, unknown>>,
+        lastFields: fields as Record<string, Record<string, unknown>>,
+        lastData: null,
+        metadata: {},
+        appState: {},
+        parent: null,
+      },
+    );
+
+    expect(resolved.bgImage.visible).toBe(false);
+    expect(resolved.bgVideoUrl.visible).toBe(true);
+    expect(resolved.bgVideoPosition.visible).toBe(true);
+    expect(resolved.bgVideoControls.visible).toBe(true);
+    expect(resolved.bgOpacity.visible).toBe(true);
+  });
+
+  it("Section hides media-specific controls when media mode is none", () => {
+    const fields = (Section.fields as Record<string, unknown>) ?? {};
+    const resolved = (Section.resolveFields as (data: unknown, params: {
+      changed: Record<string, boolean>;
+      fields: Record<string, Record<string, unknown>>;
+      lastFields: Record<string, Record<string, unknown>>;
+      lastData: unknown;
+      metadata: unknown;
+      appState: unknown;
+      parent: unknown;
+    }) => Record<string, Record<string, unknown>>)(
+      { ...(Section.defaultProps as Record<string, unknown>), bgMediaType: "none" },
+      {
+        changed: {},
+        fields: fields as Record<string, Record<string, unknown>>,
+        lastFields: fields as Record<string, Record<string, unknown>>,
+        lastData: null,
+        metadata: {},
+        appState: {},
+        parent: null,
+      },
+    );
+
+    expect(resolved.bgImage.visible).toBe(false);
+    expect(resolved.bgVideoUrl.visible).toBe(false);
+    expect(resolved.bgOpacity.visible).toBe(false);
+  });
+
+  it("Section resolveFields reads mode values from runtime props shape", () => {
+    const fields = (Section.fields as Record<string, unknown>) ?? {};
+    const resolved = (Section.resolveFields as (data: unknown, params: {
+      changed: Record<string, boolean>;
+      fields: Record<string, Record<string, unknown>>;
+      lastFields: Record<string, Record<string, unknown>>;
+      lastData: unknown;
+      metadata: unknown;
+      appState: unknown;
+      parent: unknown;
+    }) => Record<string, Record<string, unknown>>)(
+      {
+        props: {
+          ...(Section.defaultProps as Record<string, unknown>),
+          bgMode: "gradient",
+          bgMediaType: "video",
+        },
+      },
+      {
+        changed: {},
+        fields: fields as Record<string, Record<string, unknown>>,
+        lastFields: fields as Record<string, Record<string, unknown>>,
+        lastData: null,
+        metadata: {},
+        appState: {},
+        parent: null,
+      },
+    );
+
+    expect(resolved.gradientFrom.visible).toBe(true);
+    expect(resolved.bgColor.visible).toBe(false);
+    expect(resolved.bgImage.visible).toBe(false);
+    expect(resolved.bgVideoUrl.visible).toBe(true);
+  });
 });
 
 /**
@@ -93,41 +314,225 @@ describe("Sidebar categories", () => {
     ]);
   });
 
-  it("Basic category contains Heading, Text, Button, InlineLink, Image, Quote, Icon", () => {
+  it("Basic category contains Heading, Text, Button, InlineLink, Image, Video, Quote, Icon", () => {
     expect(categories.basic.components).toEqual([
       "Heading",
       "Text",
       "Button",
       "InlineLink",
       "Image",
+      "Video",
       "Quote",
       "Icon",
     ]);
   });
 
-  it("ORA category contains HeroBanner, PropertyCard, FeatureGrid, FilterTabs, StatRow, Footer, MegaFooter", () => {
-    expect(categories.ora.components).toEqual([
-      "HeroBanner",
-      "PropertyCard",
-      "FeatureGrid",
-      "FilterTabs",
-      "StatRow",
-      "Footer",
-      "MegaFooter",
-    ]);
+  it("ORA category and Templates category have been removed", () => {
+    expect((categories as Record<string, unknown>).ora).toBeUndefined();
+    expect((categories as Record<string, unknown>).templates).toBeUndefined();
   });
 
-  it("Templates category contains all 5 template components", () => {
-    expect(categories.templates.components).toEqual([
-      "TplContentBlock",
-      "TplHeroSection",
-      "TplFeatureSection",
-      "TplCTASection",
-      "TplTestimonialSection",
+  it("Interactive category contains FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap", () => {
+    expect(categories.interactive.components).toEqual([
+      "FilterTabs",
+      "ScrollIndicator",
+      "IconFeatureList",
+      "AccordionGroup",
+      "StatsGrid",
+      "LocationMap",
     ]);
   });
 
   it("Layout category has defaultExpanded: true", () => {
     expect(categories.layout.defaultExpanded).toBe(true);
+  });
+});
+
+describe("Text rich content rendering", () => {
+  it("renders bullet lists as ul/li elements", () => {
+    const props = {
+      ...(Text.defaultProps as Record<string, unknown>),
+      id: "text-list-test",
+      content: "<p>Intro</p><ul><li>Item one</li><li>Item two</li></ul>",
+    };
+
+    const element = (Text.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    const list = container.querySelector("ul");
+    const items = container.querySelectorAll("li");
+
+    expect(list).toBeTruthy();
+    expect(items).toHaveLength(2);
+    expect(container.textContent).toContain("Item one");
+    expect(container.textContent).toContain("Item two");
+  });
+});
+
+describe("Video component rendering", () => {
+  it("renders Vimeo URL as iframe embed", () => {
+    const props = {
+      ...(Video.defaultProps as Record<string, unknown>),
+      id: "video-embed-test",
+      src: "https://player.vimeo.com/video/1101785637?muted=1&autoplay=1&controls=0&loop=1",
+    };
+
+    const element = (Video.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    expect(container.querySelector("iframe")).toBeTruthy();
+  });
+});
+
+describe("Button hover rendering", () => {
+  it("exposes hover-related fields", () => {
+    const fieldKeys = Object.keys(Button.fields ?? {});
+    expect(fieldKeys).toContain("bgColorHover");
+    expect(fieldKeys).toContain("textColorHover");
+    expect(fieldKeys).toContain("borderColorHover");
+  });
+
+  it("emits hover CSS variables and hover class", () => {
+    const props = {
+      ...(Button.defaultProps as Record<string, unknown>),
+      text: "Hover me",
+      bgColor: "#111111",
+      bgColorHover: "#222222",
+      textColor: "#eeeeee",
+      textColorHover: "#ffcc00",
+      borderSize: "1",
+      borderColor: "#333333",
+      borderColorHover: "#00aacc",
+      _icon: { name: "star", position: "left", size: "16", gap: "8px" },
+    };
+
+    const element = (Button.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    const anchor = container.querySelector("a") as HTMLAnchorElement | null;
+    expect(anchor).toBeTruthy();
+    expect(anchor!.className).toContain("ora-builder-button");
+
+    expect(anchor!.style.getPropertyValue("--btn-bg")).toBe("#111111");
+    expect(anchor!.style.getPropertyValue("--btn-bg-hover")).toBe("#222222");
+    expect(anchor!.style.getPropertyValue("--btn-text")).toBe("#eeeeee");
+    expect(anchor!.style.getPropertyValue("--btn-text-hover")).toBe("#ffcc00");
+    expect(anchor!.style.getPropertyValue("--btn-border")).toBe("#333333");
+    expect(anchor!.style.getPropertyValue("--btn-border-hover")).toBe("#00aacc");
+
+    const styleTag = container.querySelector("style");
+    expect(styleTag?.textContent).toContain(".ora-builder-button:hover");
+  });
+});
+
+describe("StatsGrid rendering", () => {
+  it("renders stat values and labels from items array", () => {
+    const props = {
+      ...(StatsGrid.defaultProps as Record<string, unknown>),
+      columns: "4",
+      gap: "0px",
+      items: [
+        { value: "4.8M²", label: "Total Land Area", valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
+        { value: "55%",   label: "Open Spaces",     valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
+      ],
+    };
+
+    const element = (StatsGrid.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    expect(container.textContent).toContain("4.8M²");
+    expect(container.textContent).toContain("Total Land Area");
+    expect(container.textContent).toContain("55%");
+    expect(container.textContent).toContain("Open Spaces");
+  });
+
+  it("applies per-item border-left when borderLeft is yes", () => {
+    const props = {
+      ...(StatsGrid.defaultProps as Record<string, unknown>),
+      columns: "2",
+      items: [
+        { value: "100", label: "Units", valueColor: "#fff", valueFontSize: "48px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "#fff", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "2", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
+      ],
+    };
+
+    const element = (StatsGrid.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    // styledRender wraps in a div (container → styledRender-wrapper → grid → stat-item)
+    // container is itself a div, so we need 4 levels deep to reach the stat item
+    const statItem = container.querySelector("div > div > div > div") as HTMLElement | null;
+    expect(statItem).toBeTruthy();
+    const styleAttr = statItem!.getAttribute("style") ?? "";
+    expect(styleAttr).toContain("2px");
+    expect(styleAttr).not.toContain("border-right");
+  });
+});
+
+describe("AccordionGroup content rendering", () => {
+  it("renders rich content body with list formatting", () => {
+    const props = {
+      ...(AccordionGroup.defaultProps as Record<string, unknown>),
+      heading: "FAQs",
+      items: [
+        {
+          title: "What is included?",
+          body: "<p>Includes:</p><ul><li>Airport transfer</li><li>Daily breakfast</li></ul>",
+        },
+      ],
+    };
+
+    const element = (AccordionGroup.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    expect(container.querySelector("li")).toBeTruthy();
+    expect(container.textContent).toContain("Airport transfer");
+    expect(container.textContent).toContain("Daily breakfast");
+  });
+
+  it("does not render [object Object] for structured title/body values", () => {
+    const props = {
+      ...(AccordionGroup.defaultProps as Record<string, unknown>),
+      heading: "FAQs",
+      items: [
+        {
+          title: { text: "Accordion Title" },
+          body: { children: [{ text: "Accordion Body" }] },
+        },
+      ],
+    };
+
+    const element = (AccordionGroup.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    expect(container.textContent).toContain("Accordion Title");
+    expect(container.textContent).toContain("Accordion Body");
+    expect(container.textContent).not.toContain("[object Object]");
+  });
+});
+
+describe("LocationMap registration", () => {
+  it("LocationMap is registered with default props and renders a title", () => {
+    const LocationMap = pageBuilderConfig.components.LocationMap;
+    expect(LocationMap).toBeDefined();
+    expect(LocationMap.defaultProps).toBeDefined();
+
+    const props = {
+      ...(LocationMap.defaultProps as Record<string, unknown>),
+      id: "loc-map-test",
+      puck: { renderDropZone: () => null, isEditing: false },
+    };
+    const element = (LocationMap.render as (p: Record<string, unknown>) => React.ReactElement)(props);
+    const { container } = render(element);
+
+    // Title from defaultProps is "Location"
+    expect(container.textContent).toContain("Location");
+    // Cards from defaultProps include these names
+    expect(container.textContent).toContain("Downtown Dubai");
+    expect(container.textContent).toContain("35 Minutes");
+    // Falls back to "Missing API key" notice when no key is configured at test time
+    // (only when env var isn't set — guard so it doesn't fail in environments that have one)
+    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+      expect(container.textContent?.toLowerCase()).toContain("api key");
+    }
   });
 });

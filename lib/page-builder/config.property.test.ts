@@ -106,7 +106,7 @@ describe("Icon renders valid SVG for any predefined icon name", () => {
 
 
 // ─── Dynamic import for component templates ──────────────────────────────────
-const { componentTemplates } = await import("./templates/component-templates");
+const { componentTemplates, instantiate } = await import("./templates/component-templates");
 
 /**
  * Feature: atomic-component-architecture, Property 5: Template expansion produces unique component IDs
@@ -137,9 +137,9 @@ describe("Template expansion produces unique component IDs", () => {
   });
 
   it.each(componentTemplates.map((t) => [t.name, t] as const))(
-    "%s — all IDs within a single build() are unique",
+    "%s — all IDs within a single instantiate() are unique",
     (_name, template) => {
-      const result = template.build();
+      const result = instantiate(template);
       const ids = collectIds(result);
 
       expect(ids.length).toBeGreaterThan(0);
@@ -148,10 +148,10 @@ describe("Template expansion produces unique component IDs", () => {
   );
 
   it.each(componentTemplates.map((t) => [t.name, t] as const))(
-    "%s — two build() calls produce non-overlapping ID sets",
+    "%s — two instantiate() calls produce non-overlapping ID sets",
     (_name, template) => {
-      const first = collectIds(template.build());
-      const second = collectIds(template.build());
+      const first = collectIds(instantiate(template));
+      const second = collectIds(instantiate(template));
 
       const firstSet = new Set(first);
       for (const id of second) {
@@ -172,9 +172,9 @@ describe("Template expansion produces unique component IDs", () => {
  */
 describe("Template expanded data JSON round-trip", () => {
   it.each(componentTemplates.map((t) => [t.name, t] as const))(
-    "%s — build() output survives JSON round-trip",
+    "%s — instantiate() output survives JSON round-trip",
     (_name, template) => {
-      const original = template.build();
+      const original = instantiate(template);
       const roundTripped = JSON.parse(JSON.stringify(original));
       expect(roundTripped).toEqual(original);
     },
@@ -226,10 +226,10 @@ describe("All built-in page templates pass schema validation", () => {
  */
 describe("Style system fields present on all atomic components", () => {
   // Atomic components that include spacingBorderFields
+  // Note: Button is excluded — it has its own per-side padding/border controls
   const atomicComponents = [
     "Heading",
     "Text",
-    "Button",
     "InlineLink",
     "Image",
     "Quote",
@@ -248,6 +248,18 @@ describe("Style system fields present on all atomic components", () => {
       expect(fieldKeys).toContain("_border");
     },
   );
+
+  it("Button — has its own padding/border/margin controls", () => {
+    const btn = pageBuilderConfig.components.Button;
+    expect(btn).toBeDefined();
+    const fieldKeys = Object.keys(btn.fields ?? {});
+    // Button uses per-side stepper padding, inline border sliders and _margin
+    expect(fieldKeys).toContain("btnPadding");
+    expect(fieldKeys).toContain("borderSize");
+    expect(fieldKeys).toContain("borderRadius");
+    expect(fieldKeys).toContain("borderColor");
+    expect(fieldKeys).toContain("_margin");
+  });
 
   it("Spacer is intentionally minimal (no style system fields)", () => {
     const spacer = pageBuilderConfig.components.Spacer;

@@ -23,6 +23,7 @@ window.matchMedia ??= ((query: string) => ({
 
 import React from "react";
 import { render } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Dynamic imports after polyfill is in place
 const { PageEditor } = await import("./components/PageEditor");
@@ -96,11 +97,18 @@ describe("PageEditor integration", () => {
 
     // PageEditor wraps Puck which has complex internal requirements.
     // We verify it renders without throwing a fatal error.
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const { container, unmount } = render(
-      React.createElement(PageEditor, {
-        initialData: validPageData,
-        onSave,
-      })
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(PageEditor, {
+          initialData: validPageData,
+          onSave,
+        })
+      )
     );
 
     // The editor should produce some DOM output

@@ -1,24 +1,67 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Puck } from "@puckeditor/core";
 import type { Data } from "@puckeditor/core";
 import { pageBuilderConfig } from "../config";
 import { createOverrides } from "./ui-overrides";
 import { createEditorPlugins } from "./plugins";
 import { defaultTheme } from "../theme";
-import type { PageData, EditorTheme } from "../types";
+import type { PageData, EditorTheme, ComponentInstance } from "../types";
 import type { AIGenerator } from "../ai-generator";
-import { componentTemplates } from "../templates/component-templates";
 
-// Template component type → template ID mapping
-const TEMPLATE_MAP: Record<string, string> = {
-  TplContentBlock: "tpl-content-block",
-  TplHeroSection: "tpl-hero-section",
-  TplFeatureSection: "tpl-feature-section",
-  TplCTASection: "tpl-cta-section",
-  TplTestimonialSection: "tpl-testimonial-section",
-};
+/**
+ * Strip any component instances whose `type` is no longer registered in the
+ * Puck config. This protects the editor from legacy / removed component types
+ * (e.g. the old ORA monolithic blocks or Tpl* placeholders) that would
+ * otherwise render as "No configuration for X" on the canvas.
+ */
+function sanitizePageData(data: PageData): {
+  data: PageData;
+  removed: string[];
+} {
+  const known = new Set(Object.keys(pageBuilderConfig.components ?? {}));
+  const removed: string[] = [];
+
+  const filterItems = (items: ComponentInstance[]): ComponentInstance[] =>
+    items.filter((item) => {
+      if (known.has(item.type)) return true;
+      removed.push(item.type);
+      return false;
+    });
+
+  const cleanContent = filterItems(data.content ?? []);
+  const cleanZones: Record<string, ComponentInstance[]> = {};
+  if (data.zones) {
+    const liveIds = new Set<string>();
+    const collect = (items: ComponentInstance[]) => {
+      for (const i of items) {
+        if (i.props?.id) liveIds.add(i.props.id);
+      }
+    };
+    collect(cleanContent);
+    // Iterate until no new live IDs appear (zones can hold parents of zones).
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [zoneKey, items] of Object.entries(data.zones)) {
+        const [ownerId] = zoneKey.split(":");
+        if (!liveIds.has(ownerId)) continue;
+        if (cleanZones[zoneKey]) continue;
+        const filtered = filterItems(items);
+        cleanZones[zoneKey] = filtered;
+        const before = liveIds.size;
+        collect(filtered);
+        if (liveIds.size !== before) changed = true;
+      }
+    }
+  }
+
+  return {
+    data: { ...data, content: cleanContent, zones: cleanZones },
+    removed,
+  };
+}
 
 export interface PageEditorProps {
   /** Initial page data to load into the editor. */
@@ -49,67 +92,24 @@ export function PageEditor({
   theme = defaultTheme,
   aiGenerator,
 }: PageEditorProps) {
-  const [error, setError] = useState<string | null>(null);
-  const [puckData, setPuckData] = useState<PageData>(initialData);
+  const sanitized = useMemo(() => sanitizePageData(initialData), [initialData]);
+  const removedTypes = sanitized.removed;
+  const [error, setError] = useState<string | null>(
+    removedTypes.length > 0
+      ? `Removed ${removedTypes.length} unsupported block${removedTypes.length === 1 ? "" : "s"} (${Array.from(new Set(removedTypes)).join(", ")}). Save the page to make this permanent.`
+      : null
+  );
+  const [puckData, setPuckData] = useState<PageData>(sanitized.data);
+  const [resetKey, setResetKey] = useState(0);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const latestDataRef = useRef<PageData>(initialData);
+  const latestDataRef = useRef<PageData>(sanitized.data);
 
-  // Track the latest data via onChange — also detect and expand template components
-  const expandingRef = useRef(false);
+  // Track the latest data via onChange. Puck owns its own internal state — we
+  // only mirror it here so other handlers (AI prompt, publish) can read it.
   const handleChange = useCallback((data: Data) => {
     const pageData = data as unknown as PageData;
     latestDataRef.current = pageData;
-
-    // Don't re-enter while we're expanding a template
-    if (expandingRef.current) return;
-
-    // Check if any template component was just inserted into content or zones
-    const findTemplate = (items: Array<{ type: string; props: { id: string; [k: string]: unknown } }>) =>
-      items.findIndex(item => TEMPLATE_MAP[item.type] !== undefined);
-
-    let templateIdx = findTemplate(pageData.content);
-    let templateZone: string | null = null;
-
-    if (templateIdx === -1 && pageData.zones) {
-      for (const [zone, items] of Object.entries(pageData.zones)) {
-        const idx = findTemplate(items);
-        if (idx !== -1) {
-          templateIdx = idx;
-          templateZone = zone;
-          break;
-        }
-      }
-    }
-
-    if (templateIdx === -1) return; // No template found
-
-    const items = templateZone ? pageData.zones![templateZone] : pageData.content;
-    const templateComponent = items[templateIdx];
-    const templateId = TEMPLATE_MAP[templateComponent.type];
-    const template = componentTemplates.find(t => t.id === templateId);
-    if (!template) return;
-
-    const expanded = template.build();
-    const newData: PageData = JSON.parse(JSON.stringify(pageData));
-
-    // Replace the template placeholder with expanded content
-    if (templateZone) {
-      newData.zones![templateZone].splice(templateIdx, 1, ...expanded.content);
-    } else {
-      newData.content.splice(templateIdx, 1, ...expanded.content);
-    }
-
-    // Merge expanded zones
-    if (!newData.zones) newData.zones = {};
-    Object.assign(newData.zones, expanded.zones);
-
-    // Prevent re-entry and update
-    expandingRef.current = true;
-    setPuckData(newData);
-    latestDataRef.current = newData;
-    // Reset the flag after React processes the state update
-    requestAnimationFrame(() => { expandingRef.current = false; });
   }, []);
 
   // AI generation handler
@@ -122,9 +122,10 @@ export function PageEditor({
         prompt: aiPrompt.trim(),
         existingData: latestDataRef.current,
       });
-      // Load generated data into the editor by updating the Puck data key
+      // Load generated data into the editor by remounting with the new tree
       setPuckData(generated);
       latestDataRef.current = generated;
+      setResetKey((k) => k + 1);
       setAiPrompt("");
     } catch (err) {
       const message =
@@ -273,7 +274,7 @@ export function PageEditor({
       )}
 
       <Puck
-        key={JSON.stringify(puckData)}
+        key={resetKey}
         config={pageBuilderConfig}
         data={puckData}
         onChange={handleChange}

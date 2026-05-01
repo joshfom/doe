@@ -131,7 +131,9 @@ function findTextProp(defaultProps: Record<string, unknown>): string | null {
   for (const key of preferredKeys) {
     const val = defaultProps[key];
     if (typeof val === "string" && val.length > 0) {
-      return val;
+      // Rich text defaults may be HTML (e.g. "<p>...</p>").
+      // Assertions should compare against rendered plain text content.
+      return val.replace(/<[^>]+>/g, "").trim();
     }
   }
   return null;
