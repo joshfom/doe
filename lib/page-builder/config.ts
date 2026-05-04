@@ -2339,6 +2339,52 @@ const AccordionGroup: Config["components"][string] = {
       }, plain);
     };
 
+    // AccordionItem sub-component with toggle state
+    const AccordionItem = ({ row, i, isDefaultOpen }: { row: Record<string, unknown>; i: number; isDefaultOpen: boolean }) => {
+      const [isOpen, setIsOpen] = React.useState(isDefaultOpen);
+      return React.createElement("div", {
+        key: `${String(row.title ?? "item")}-${i}`,
+        style: {
+          borderBottom: dividerWidth > 0 ? `${dividerWidth}px solid ${dividerColor}` : undefined,
+          padding: `${itemPaddingY} 0`,
+        },
+      },
+      React.createElement("div", {
+        onClick: () => setIsOpen((v) => !v),
+        role: "button",
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIsOpen((v) => !v); } },
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          cursor: "pointer",
+          color: titleColor,
+          fontSize: titleSize,
+          lineHeight: 1.25,
+          fontWeight: 400,
+          padding: "8px 0",
+          userSelect: "none",
+        },
+      },
+      React.createElement("span", { style: { color: titleColor, flex: 1, minWidth: 0 } }, extractIconFeatureLabel(row.title).trim()),
+      React.createElement(ChevronDown, {
+        size: iconSize,
+        color: iconColor,
+        strokeWidth: iconStroke,
+        style: {
+          transition: "transform 0.2s ease",
+          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+          flexShrink: 0,
+        },
+      })),
+      isOpen && React.createElement("div", {
+        style: {
+          borderBottom: activeLineWidth > 0 ? `${activeLineWidth}px solid ${activeLineColor}` : undefined,
+        },
+      }, renderBody(row.body)));
+    };
+
     return styledRender(props, React.createElement("div", {
       style: { display: "flex", flexDirection: "column", gap: 12 },
     },
@@ -2353,38 +2399,14 @@ const AccordionGroup: Config["components"][string] = {
             },
           }, heading)
         : null,
-      ...rows.map((row, i) => {
-        const open = i === defaultOpenIndex;
-        return React.createElement("details", {
+      ...rows.map((row, i) =>
+        React.createElement(AccordionItem, {
           key: `${String(row.title ?? "item")}-${i}`,
-          open: open || undefined,
-          style: {
-            borderBottom: dividerWidth > 0 ? `${dividerWidth}px solid ${dividerColor}` : undefined,
-            padding: `${itemPaddingY} 0`,
-          },
-        },
-        React.createElement("summary", {
-          style: {
-            listStyle: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            cursor: "pointer",
-            color: titleColor,
-            fontSize: titleSize,
-            lineHeight: 1.25,
-            fontWeight: 400,
-            padding: "8px 0",
-          },
-        },
-        React.createElement("span", null, extractIconFeatureLabel(row.title).trim()),
-        React.createElement(ChevronDown, { size: iconSize, color: iconColor, strokeWidth: iconStroke })),
-        React.createElement("div", {
-          style: {
-            borderBottom: open && activeLineWidth > 0 ? `${activeLineWidth}px solid ${activeLineColor}` : undefined,
-          },
-        }, renderBody(row.body)));
-      }),
+          row,
+          i,
+          isDefaultOpen: i === defaultOpenIndex,
+        })
+      ),
     ));
   },
 };
