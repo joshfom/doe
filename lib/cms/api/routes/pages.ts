@@ -325,31 +325,51 @@ const protectedPages = new Elysia({ name: "pages-protected" })
       return { error: "AR locale version already exists for this namespace" };
     }
 
-    const [cloned] = await db
-      .insert(pages)
-      .values({
-        title: source.title,
-        slug: source.slug,
-        locale: "ar",
-        namespace: source.namespace,
-        status: "draft",
-        isSystem: source.isSystem,
-        data: source.data,
-        metaTitle: source.metaTitle,
-        metaDescription: source.metaDescription,
-      })
-      .returning();
+    // Ensure the slug is unique within the AR locale
+    const existingArPages = await db
+      .select({ slug: pages.slug })
+      .from(pages)
+      .where(eq(pages.locale, "ar"));
+    const arSlug = ensureUniqueSlug(source.slug, existingArPages.map((p) => p.slug));
 
-    await logAudit(db, {
-      userId,
-      action: "create",
-      entityType: "page",
-      entityId: cloned.id,
-      summary: `Cloned page "${source.title}" to AR locale`,
-    });
+    try {
+      const [cloned] = await db
+        .insert(pages)
+        .values({
+          title: source.title,
+          slug: arSlug,
+          locale: "ar",
+          namespace: source.namespace,
+          status: "draft",
+          isSystem: source.isSystem,
+          data: source.data ?? { root: { props: {} }, content: [] },
+          metaTitle: source.metaTitle,
+          metaDescription: source.metaDescription,
+          metaKeywords: source.metaKeywords,
+          ogImage: source.ogImage,
+          canonicalUrl: source.canonicalUrl,
+          robotsDirective: source.robotsDirective,
+        })
+        .returning();
 
-    set.status = 201;
-    return { data: cloned };
+      await logAudit(db, {
+        userId,
+        action: "create",
+        entityType: "page",
+        entityId: cloned.id,
+        summary: `Cloned page "${source.title}" to AR locale`,
+      });
+
+      set.status = 201;
+      return { data: cloned };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("duplicate") || message.includes("unique")) {
+        set.status = 409;
+        return { error: "A page with this slug already exists in AR locale" };
+      }
+      throw err;
+    }
   })
 
   // POST /pages/:id/set-home — Set page as home page
