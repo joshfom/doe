@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import '@puckeditor/core/dist/index.css';
@@ -56,7 +56,9 @@ function sanitizePageData(data: PageData): { data: PageData; removed: string[] }
   return { data: { ...data, content: cleanContent, zones: cleanZones }, removed };
 }
 
-const AUTO_SAVE_INTERVAL = 30_000; // 30 seconds
+// Auto-save was removed: it was re-mounting Puck mid-edit and losing focus on
+// inputs. Saving is now manual (Save Draft button) plus a sendBeacon flush on
+// page unload as a safety net.
 const SAVED_INDICATOR_DURATION = 2_000; // 2 seconds
 
 export default function PageEditorPage({
@@ -72,9 +74,8 @@ export default function PageEditorPage({
   const [saving, setSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
 
-  // Ref to track the latest editor data for auto-save and beforeunload
+  // Ref to track the latest editor data for manual save and beforeunload
   const latestDataRef = useRef<Data | null>(null);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingRef = useRef(false);
 
@@ -117,19 +118,12 @@ export default function PageEditorPage({
     [id]
   );
 
-  // Auto-save every 30 seconds
+  // Cleanup the "Saved" indicator timer on unmount.
   useEffect(() => {
-    autoSaveTimerRef.current = setInterval(() => {
-      if (latestDataRef.current) {
-        saveDraft(latestDataRef.current);
-      }
-    }, AUTO_SAVE_INTERVAL);
-
     return () => {
-      if (autoSaveTimerRef.current) clearInterval(autoSaveTimerRef.current);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
-  }, [saveDraft]);
+  }, []);
 
   // Save on page unload / navigation
   useEffect(() => {
@@ -205,7 +199,15 @@ export default function PageEditorPage({
     root: { props: {} },
     content: [],
   };
-  const { data: pageData, removed: removedTypes } = sanitizePageData(rawPageData);
+  // Memoize so transient parent re-renders (e.g. toggling the "Saved"
+  // indicator) don't hand Puck a fresh `data` reference and cause it to
+  // re-mount mid-edit (which would lose focus / collapse open panels).
+  const { data: pageData, removed: removedTypes } = useMemo(
+    () => sanitizePageData(rawPageData),
+    // We intentionally re-derive only when the loaded page changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page]
+  );
 
   const overrides = createOverrides(defaultTheme);
   const plugins = createEditorPlugins({
@@ -226,6 +228,17 @@ export default function PageEditorPage({
         >
           ← Back
         </Link>
+        <button
+          type="button"
+          onClick={() => {
+            if (latestDataRef.current) saveDraft(latestDataRef.current);
+          }}
+          disabled={saving}
+          className="flex h-8 items-center gap-1.5 bg-ora-cream px-3 text-xs text-ora-charcoal hover:bg-ora-cream-dark transition-colors disabled:opacity-50"
+          title="Save draft (auto-save is off)"
+        >
+          Save Draft
+        </button>
       </div>
       {saving && (
         <div className="fixed top-4 right-4 z-[9999] bg-ora-charcoal px-4 py-2 text-sm text-white">

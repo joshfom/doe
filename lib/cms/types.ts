@@ -112,14 +112,33 @@ export type TicketRequestType =
   | "technician_visit"
   | "construction_material_delivery"
   | "vendor_access"
-  | "maintenance_request";
+  | "maintenance_request"
+  // Off-plan / pre-handover (Bayn is still under construction)
+  | "site_visit_booking"
+  | "brochure_request"
+  | "payment_milestone"
+  | "oqood_assistance"
+  | "mortgage_noc"
+  | "construction_progress_inquiry"
+  | "snag_submission"
+  | "handover_appointment"
+  | "hot_works_permit"
+  | "work_at_height_permit"
+  | "lift_usage_booking"
+  | "inspection_request"
+  // Sales / lead capture (Ora AI converts visitor interest into a tracked lead)
+  | "lead_inquiry";
 
 // Tickets — approval scopes
 export type TicketApprovalScope =
   | "noc"
   | "move_in"
   | "vendor_access"
-  | "construction_material_delivery";
+  | "construction_material_delivery"
+  | "hot_works_permit"
+  | "work_at_height_permit"
+  | "handover_appointment"
+  | "mortgage_noc";
 
 export type TicketApprovalStatus =
   | "pending"

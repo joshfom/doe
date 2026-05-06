@@ -30,6 +30,43 @@ export const TICKET_ROLE_PERMISSION_MAP: Record<string, string[]> = {
   ],
   content_manager: ["tickets:read"],
   viewer: ["tickets:read"],
+  // Off-plan / construction-stage roles
+  project_manager: [
+    "tickets:create",
+    "tickets:read",
+    "tickets:update",
+    "tickets:assign",
+    "tickets:approve",
+  ],
+  hse_officer: [
+    "tickets:read",
+    "tickets:update",
+    "tickets:approve",
+  ],
+  site_security: [
+    "tickets:read",
+    "tickets:update",
+  ],
+  marketing: [
+    "tickets:create",
+    "tickets:read",
+    "tickets:update",
+  ],
+  contractor: [
+    "tickets:create",
+    "tickets:read",
+  ],
+  consultant: [
+    "tickets:create",
+    "tickets:read",
+  ],
+  booked_client: [
+    "tickets:create",
+    "tickets:read",
+  ],
+  prospective_buyer: [
+    "tickets:create",
+  ],
 };
 
 // ── Seed Function ────────────────────────────────────────────────────────────

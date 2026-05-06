@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { formatTicketNumber, parseTicketNumber } from "./ticket-number";
+import {
+  formatTicketNumber,
+  parseTicketNumber,
+  formatLeadReference,
+} from "./ticket-number";
 
 describe("formatTicketNumber", () => {
   it("zero-pads single digit to 6 digits", () => {
@@ -55,5 +59,24 @@ describe("parseTicketNumber", () => {
 
   it("returns null for lowercase prefix", () => {
     expect(parseTicketNumber("ora-000001")).toBeNull();
+  });
+});
+
+describe("formatLeadReference", () => {
+  it("maps a ticket number to a LEAD- reference with the same sequence", () => {
+    expect(formatLeadReference("ORA-000042")).toBe("LEAD-000042");
+  });
+
+  it("preserves zero-padding to 6 digits", () => {
+    expect(formatLeadReference("ORA-000001")).toBe("LEAD-000001");
+  });
+
+  it("handles the max 6-digit sequence", () => {
+    expect(formatLeadReference("ORA-999999")).toBe("LEAD-999999");
+  });
+
+  it("returns input unchanged when format is unknown (no silent corruption)", () => {
+    expect(formatLeadReference("WAT-000042")).toBe("WAT-000042");
+    expect(formatLeadReference("not-a-ticket")).toBe("not-a-ticket");
   });
 });

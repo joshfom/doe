@@ -79,6 +79,26 @@ export const PERMISSIONS = [
   { resource: "own_leads", action: "read", description: "View own leads" },
   { resource: "own_leads", action: "create", description: "Create own leads" },
   { resource: "own_leads", action: "update", description: "Update own leads" },
+  // Project / construction operations (off-plan stage)
+  { resource: "projects", action: "read", description: "View development projects" },
+  { resource: "projects", action: "update", description: "Update project status, milestones, photos" },
+  { resource: "site_permits", action: "read", description: "View construction-site permits" },
+  { resource: "site_permits", action: "approve", description: "Approve hot-works / work-at-height / lift permits" },
+  // Marketing collateral
+  { resource: "marketing", action: "read", description: "View marketing assets and leads" },
+  { resource: "marketing", action: "manage", description: "Manage brochures, campaigns, RSVPs" },
+  // Site security gatehouse
+  { resource: "gate", action: "read", description: "View gate passes and visitor log" },
+  { resource: "gate", action: "checkin", description: "Check visitors / vehicles in and out at the gate" },
+  // Vendor / contractor self-service portal
+  { resource: "own_permits", action: "read", description: "View own submitted permits" },
+  { resource: "own_permits", action: "create", description: "Submit construction-site permits" },
+  { resource: "own_deliveries", action: "read", description: "View own material deliveries" },
+  { resource: "own_deliveries", action: "create", description: "Schedule own material deliveries" },
+  // Client (buyer / booked) self-service
+  { resource: "own_unit", action: "read", description: "View own unit / SPA status" },
+  { resource: "own_payments", action: "read", description: "View own payment milestones" },
+  { resource: "own_documents", action: "read", description: "View own oqood / NOC / handover documents" },
   // Wildcard (super_admin)
   { resource: "*", action: "*", description: "Full access to all resources" },
 ] as const;
@@ -130,6 +150,57 @@ export const SYSTEM_ROLES = [
     description: "Access own bookings and leads in the broker portal",
     userType: "broker" as const,
   },
+  // Off-plan / construction-stage employee roles
+  {
+    name: "project_manager",
+    displayName: "Project Manager",
+    description: "Owns construction progress, approvals, and pre-handover operations",
+    userType: "employee" as const,
+  },
+  {
+    name: "hse_officer",
+    displayName: "HSE Officer",
+    description: "Approves hot-works, work-at-height and other safety permits on site",
+    userType: "employee" as const,
+  },
+  {
+    name: "site_security",
+    displayName: "Site Security",
+    description: "Validates gate passes and material deliveries at the construction site",
+    userType: "employee" as const,
+  },
+  {
+    name: "marketing",
+    displayName: "Marketing",
+    description: "Manages brochures, launch events, and marketing-driven leads",
+    userType: "employee" as const,
+  },
+  // Client-side roles (off-plan stage — no occupants yet)
+  {
+    name: "prospective_buyer",
+    displayName: "Prospective Buyer",
+    description: "Public visitor / lead exploring Bayn before reserving a unit",
+    userType: "client" as const,
+  },
+  {
+    name: "booked_client",
+    displayName: "Booked Client",
+    description: "Reserved or SPA-signed buyer awaiting handover",
+    userType: "client" as const,
+  },
+  // Vendor-side roles
+  {
+    name: "contractor",
+    displayName: "Main Contractor",
+    description: "Construction main contractor submitting site permits and deliveries",
+    userType: "vendor" as const,
+  },
+  {
+    name: "consultant",
+    displayName: "Consultant / Engineer",
+    description: "Project consultant requesting inspections and approvals",
+    userType: "vendor" as const,
+  },
 ] as const;
 
 // ── Role → Permission Mappings ───────────────────────────────────────────────
@@ -174,6 +245,51 @@ export const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   agent: [
     "own_bookings:read", "own_bookings:create", "own_bookings:update",
     "own_leads:read", "own_leads:create", "own_leads:update",
+  ],
+
+  // Off-plan / construction-stage employee roles
+  project_manager: [
+    "projects:read", "projects:update",
+    "site_permits:read", "site_permits:approve",
+    "settings:read", "audit:read",
+  ],
+
+  hse_officer: [
+    "site_permits:read", "site_permits:approve",
+    "projects:read",
+  ],
+
+  site_security: [
+    "gate:read", "gate:checkin",
+  ],
+
+  marketing: [
+    "marketing:read", "marketing:manage",
+    "pages:read", "posts:read", "media:read",
+    "leads:read", "leads:create", "leads:update",
+  ],
+
+  // Client-side roles (off-plan stage — no occupants yet)
+  prospective_buyer: [
+    "marketing:read",
+  ],
+
+  booked_client: [
+    "own_unit:read",
+    "own_payments:read",
+    "own_documents:read",
+    "marketing:read",
+  ],
+
+  // Vendor-side roles
+  contractor: [
+    "own_permits:read", "own_permits:create",
+    "own_deliveries:read", "own_deliveries:create",
+  ],
+
+  consultant: [
+    "own_permits:read", "own_permits:create",
+    "projects:read",
   ],
 };
 

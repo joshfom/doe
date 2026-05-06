@@ -19,6 +19,10 @@ export const TICKET_APPROVAL_SCOPES: TicketApprovalScope[] = [
   "move_in",
   "vendor_access",
   "construction_material_delivery",
+  "hot_works_permit",
+  "work_at_height_permit",
+  "handover_appointment",
+  "mortgage_noc",
 ];
 
 export interface TicketApprovalRecord {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, X, Minus, ChevronDown } from 'lucide-react';
+import { Send, X, Minus, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { OraAiIcon } from './OraAiIcon';
 
@@ -29,6 +29,8 @@ const i18n = {
     send: 'Send message',
     open: 'Open chat',
     minimize: 'Minimize chat',
+    expand: 'Expand to side panel',
+    collapse: 'Collapse to floating chat',
     scrollToBottom: 'Scroll to latest',
     thinkingSteps: [
       'Understanding your question…',
@@ -44,6 +46,8 @@ const i18n = {
     send: 'إرسال الرسالة',
     open: 'فتح المحادثة',
     minimize: 'تصغير المحادثة',
+    expand: 'توسيع إلى لوحة جانبية',
+    collapse: 'تصغير إلى محادثة عائمة',
     scrollToBottom: 'انتقل إلى الأحدث',
     thinkingSteps: [
       'جارٍ فهم سؤالك…',
@@ -57,11 +61,41 @@ const i18n = {
 
 export const MIN_WIDTH = 320;
 export const MIN_HEIGHT = 400;
-export const DEFAULT_WIDTH = 400;
-export const DEFAULT_HEIGHT = 600;
-export const MAX_VIEWPORT_RATIO = 0.9;
+export const DEFAULT_WIDTH = 440;
+export const DEFAULT_HEIGHT = 640;
+export const MAX_VIEWPORT_RATIO = 0.95;
 export const MOBILE_BREAKPOINT = 640;
 export const STORAGE_KEY = 'ora-chat-widget-size';
+export const MODE_STORAGE_KEY = 'ora-chat-widget-mode';
+
+/** Sheet mode (slide-in side panel) sizing. */
+export const SHEET_WIDTH_RATIO = 0.6;
+export const SHEET_MAX_WIDTH = 720;
+export const SHEET_MIN_WIDTH = 480;
+
+export type ChatPanelMode = 'bubble' | 'sheet';
+
+/** Compute the effective sheet width for a given viewport. */
+export function computeSheetWidth(viewportWidth: number): number {
+  const target = Math.floor(viewportWidth * SHEET_WIDTH_RATIO);
+  return Math.max(SHEET_MIN_WIDTH, Math.min(target, SHEET_MAX_WIDTH));
+}
+
+export function persistMode(mode: ChatPanelMode): void {
+  try {
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
+  } catch { /* silently ignore */ }
+}
+
+export function loadPersistedMode(): ChatPanelMode | null {
+  try {
+    const raw = localStorage.getItem(MODE_STORAGE_KEY);
+    if (raw === 'bubble' || raw === 'sheet') return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 // ── Size utility functions ───────────────────────────────────────────────────
 
@@ -467,6 +501,8 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
   });
+  const [panelMode, setPanelMode] = useState<ChatPanelMode>('bubble');
+  const [sheetWidth, setSheetWidth] = useState<number>(SHEET_MIN_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<'top' | 'left' | 'right' | 'corner' | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -505,6 +541,24 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
     } else {
       setPanelSize(clampSize(DEFAULT_WIDTH, DEFAULT_HEIGHT, vw, vh));
     }
+    setSheetWidth(computeSheetWidth(vw));
+    const persistedMode = loadPersistedMode();
+    if (persistedMode) setPanelMode(persistedMode);
+  }, []);
+
+  // Recompute sheet width on viewport resize.
+  useEffect(() => {
+    const onResize = () => setSheetWidth(computeSheetWidth(window.innerWidth));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const togglePanelMode = useCallback(() => {
+    setPanelMode((prev) => {
+      const next: ChatPanelMode = prev === 'bubble' ? 'sheet' : 'bubble';
+      persistMode(next);
+      return next;
+    });
   }, []);
 
   // Track mobile state via matchMedia
@@ -787,17 +841,22 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
     };
   }, [isResizing, handleResizePointerMove, handleResizePointerUp]);
 
+  // True when we want a fullscreen / edge-anchored layout (mobile, or sheet mode on desktop).
+  const isSheet = !isMobile && panelMode === 'sheet';
+  const isEdgeAnchored = (isMobile && isOpen) || (isSheet && isOpen);
+
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className={isMobile && isOpen ? 'fixed inset-0 z-50' : 'fixed bottom-6 z-50'}
-      style={isMobile && isOpen ? undefined : (isRtl ? { left: '1.5rem' } : { right: '1.5rem' })}
+      className={isEdgeAnchored ? 'fixed inset-0 z-50 pointer-events-none' : 'fixed bottom-6 z-50'}
+      style={isEdgeAnchored ? undefined : (isRtl ? { left: '1.5rem' } : { right: '1.5rem' })}
     >
       {/* ── Chat Panel ── */}
       {isOpen && (
         <div
           data-testid="chat-panel"
-          className={`flex flex-col bg-ora-white shadow-ora-lg border border-ora-sand${isMobile ? '' : ' mb-3'}`}
+          data-mode={isMobile ? 'mobile' : panelMode}
+          className={`flex flex-col bg-ora-white shadow-ora-lg border border-ora-sand pointer-events-auto${isMobile || isSheet ? '' : ' mb-3'}`}
           style={isMobile ? {
             position: 'fixed',
             top: 0,
@@ -807,6 +866,14 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
             width: '100vw',
             height: '100vh',
             padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)',
+          } : isSheet ? {
+            position: 'fixed',
+            top: 0,
+            bottom: 0,
+            ...(isRtl ? { left: 0 } : { right: 0 }),
+            width: `${sheetWidth}px`,
+            height: '100vh',
+            borderRadius: 0,
           } : {
             position: 'relative',
             width: `${panelSize.width}px`,
@@ -815,8 +882,8 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
             maxHeight: 'calc(100vh - 6rem)',
           }}
         >
-          {/* Resize Handles (hidden on mobile) */}
-          {!isMobile && (
+          {/* Resize Handles (hidden on mobile and sheet) */}
+          {!isMobile && !isSheet && (
             <>
               <ResizeHandle direction="top" isRtl={isRtl} onPointerDown={handleResizePointerDown} />
               <ResizeHandle direction="side" isRtl={isRtl} onPointerDown={handleResizePointerDown} />
@@ -845,6 +912,16 @@ export function ChatWidget({ locale }: ChatWidgetProps) {
               {strings.title}
             </h2>
             <div className="flex items-center gap-1">
+              {!isMobile && (
+                <button
+                  onClick={togglePanelMode}
+                  aria-label={isSheet ? strings.collapse : strings.expand}
+                  data-testid="mode-toggle-button"
+                  className="text-ora-white/70 hover:text-ora-white transition-colors p-1"
+                >
+                  {isSheet ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+              )}
               {!isMobile && (
                 <button
                   onClick={() => setIsOpen(false)}

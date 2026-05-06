@@ -23,8 +23,9 @@ import {
   createOtpRecord,
   maskEmail,
 } from "./otp";
-import { sendOtpEmail, sendAppointmentEmail } from "./email";
+import { sendOtpEmail, sendAppointmentEmail, sendLeadEmail } from "./email";
 import { createTicket } from "../tickets/service";
+import { formatLeadReference } from "../tickets/ticket-number";
 import {
   bookAppointment,
   lookupClientAccount,
@@ -290,9 +291,50 @@ const DECLINE_KEYWORDS = [
   "ليس الآن",
 ];
 
+// Lead-capture intent: visitor (not yet a client) is asking for project info,
+// pricing, brochures, or expressing interest in buying / investing. We treat
+// this as distinct from `create_booking` (a scheduled visit) and from
+// `brochure_request` (a logistical ticket once they're identified) — it's the
+// upstream signal that this person is a sales prospect worth tracking.
+const LEAD_KEYWORDS = [
+  "i'm interested",
+  "im interested",
+  "interested in buying",
+  "interested in investing",
+  "interested in the project",
+  "interested in your project",
+  "looking to buy",
+  "looking to invest",
+  "thinking of buying",
+  "thinking about buying",
+  "want to buy",
+  "want to invest",
+  "send me a brochure",
+  "send me the brochure",
+  "send me brochure",
+  "can i get a brochure",
+  "can i get the brochure",
+  "share the brochure",
+  "share a brochure",
+  "share floor plans",
+  "share the floor plans",
+  "price list",
+  "pricing details",
+  "payment plan options",
+  "investment opportunity",
+  "أرغب بالشراء",
+  "مهتم بالشراء",
+  "مهتمة بالشراء",
+  "أريد البروشور",
+  "أرسل لي البروشور",
+  "خطة الدفع",
+  "قائمة الأسعار",
+];
+
 export type AgentIntent =
   | "create_ticket"
   | "create_booking"
+  | "create_lead"
   | "confirm_pending"
   | "decline_pending"
   | "cancel_appointment"
@@ -308,6 +350,12 @@ export function detectIntent(message: string): AgentIntent {
   if (containsAny(message, OTP_REQUEST_KEYWORDS)) return "request_otp";
   if (containsAny(message, CANCEL_KEYWORDS)) return "cancel_appointment";
   if (containsAny(message, RESCHEDULE_KEYWORDS)) return "reschedule_appointment";
+  // Lead capture is checked BEFORE booking so "send me the brochure" doesn't
+  // accidentally read as "book a tour". A booking is a scheduled time slot;
+  // a lead is upstream interest. If the visitor uses both signals
+  // ("interested, can we book a visit"), booking wins via order — but the
+  // ticket created downstream will still record the lead context.
+  if (containsAny(message, LEAD_KEYWORDS)) return "create_lead";
   if (containsAny(message, BOOKING_KEYWORDS)) return "create_booking";
   if (containsAny(message, TICKET_KEYWORDS)) return "create_ticket";
   if (containsAny(message, NAVIGATE_KEYWORDS)) return "navigate";
@@ -565,6 +613,168 @@ ${transcript}`;
       handled: true,
       response,
       metadata: { intent: "create_ticket", executed: false, error: String(err) },
+    };
+  }
+}
+
+// ── Tool: create_lead ────────────────────────────────────────────────────────
+
+/**
+ * Pull a likely "project of interest" hint out of the conversation. Looks
+ * for the most recent mention of a project name token from the message or
+ * the last few user turns. Best-effort — sales advisors will refine.
+ */
+function inferProjectInterest(
+  message: string,
+  history: Array<{ role: string; content: string }>
+): string | undefined {
+  const all = [
+    message,
+    ...history.filter((m) => m.role === "user").slice(-4).map((m) => m.content),
+  ].join(" ");
+  // Crude but useful: capitalised multi-word phrase that ends with a known
+  // suffix or is followed by "project/tower/residences/villas".
+  const m = all.match(
+    /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s+(?:project|tower|residences|villas|community|by Ora)\b/
+  );
+  if (m) return m[1];
+  // Bare project name mentions we know about (Bayn is the demo flagship).
+  const known = ["Bayn"];
+  for (const name of known) {
+    const re = new RegExp(`\\b${name}\\b`, "i");
+    if (re.test(all)) return name;
+  }
+  return undefined;
+}
+
+async function executeCreateLead(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  // We need name + email at minimum to create a useful lead and email the
+  // visitor. Phone is nice-to-have. If anything's missing, ask warmly
+  // rather than just refusing.
+  const missing: MissingFields = {
+    name: !input.contact.name,
+    email: !input.contact.email,
+    phone: false, // phone is optional for leads
+  };
+
+  const haveEnough = !!input.contact.name && !!input.contact.email;
+  if (!haveEnough) {
+    const need: string[] = [];
+    if (input.language === "ar") {
+      if (missing.name) need.push("اسمك");
+      if (missing.email) need.push("بريدك الإلكتروني");
+      const list = need.join(" و");
+      return {
+        handled: true,
+        response: `بكل سرور أشاركك التفاصيل وأرسل لك ملف المشروع. هل تشاركني ${list} لأتمكن من المتابعة معك؟`,
+        metadata: { intent: "create_lead", awaiting: missing },
+      };
+    }
+    if (missing.name) need.push("your name");
+    if (missing.email) need.push("an email address");
+    const list =
+      need.length === 2 ? need.join(" and ") : need[0];
+    return {
+      handled: true,
+      response: `Happy to share the details and send the project pack over. Could I get ${list} so a sales advisor can follow up properly?`,
+      metadata: { intent: "create_lead", awaiting: missing },
+    };
+  }
+
+  const projectInterest = inferProjectInterest(input.message, input.history);
+  const transcript = input.history
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-8)
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  const subject = projectInterest
+    ? `Lead — ${input.contact.name} (interest: ${projectInterest})`
+    : `Lead — ${input.contact.name}`;
+
+  const description = `Captured by Ora AI from chat.
+
+Latest message:
+${input.message}
+
+Recent conversation:
+${transcript}`;
+
+  try {
+    const { ticketId, ticketNumber } = await createTicket(db, {
+      subject,
+      description,
+      contactName: input.contact.name!,
+      contactEmail: input.contact.email!,
+      contactPhone: input.contact.phone ?? undefined,
+      priority: "medium",
+      source: "api",
+      createdBy: null,
+      requestType: "lead_inquiry",
+      requestData: {
+        projectInterest,
+        source: "chat",
+        notes: input.message.slice(0, 500),
+        locale: input.language,
+        consentToContact: true,
+      },
+    });
+
+    const leadReference = formatLeadReference(ticketNumber);
+
+    // Fire-and-await the email; we want the visitor to know it landed.
+    // If email fails we still consider the lead created — sales gets it
+    // from the panel either way.
+    let emailSent = false;
+    let emailError: string | undefined;
+    try {
+      const emailResult = await sendLeadEmail({
+        recipientEmail: input.contact.email!,
+        recipientName: input.contact.name!,
+        leadReference,
+        ticketNumber,
+        projectInterest,
+        notes: input.message.slice(0, 240),
+        language: input.language,
+      });
+      emailSent = emailResult.success;
+      if (!emailResult.success) emailError = emailResult.error;
+    } catch (mailErr) {
+      emailError = String(mailErr);
+    }
+
+    const response =
+      input.language === "ar"
+        ? `ممتاز ${input.contact.name}! سجّلت اهتمامك تحت المرجع ${leadReference}${projectInterest ? ` (${projectInterest})` : ""} وسيتواصل معك أحد مستشاري المبيعات قريباً.${emailSent ? ` أرسلت لك التفاصيل على ${input.contact.email}.` : ""}`
+        : `Lovely, ${input.contact.name}! I've registered your interest as ${leadReference}${projectInterest ? ` for ${projectInterest}` : ""} and a sales advisor will reach out shortly.${emailSent ? ` I've also sent the details to ${input.contact.email}.` : ""}`;
+
+    return {
+      handled: true,
+      response,
+      metadata: {
+        intent: "create_lead",
+        executed: true,
+        leadReference,
+        ticketNumber,
+        ticketId,
+        projectInterest,
+        emailSent,
+        emailError,
+      },
+    };
+  } catch (err) {
+    console.error("[agent] createLead failed", err);
+    const response =
+      input.language === "ar"
+        ? "اعتذر، لم أتمكن من تسجيل اهتمامك الآن. هل أحاول مرة أخرى أو أحوّلك إلى مستشار مبيعات مباشرة؟"
+        : "I couldn't register your interest just now. Want me to try again, or shall I connect you with a sales advisor directly?";
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "create_lead", executed: false, error: String(err) },
     };
   }
 }
@@ -1890,6 +2100,14 @@ export async function runAgent(
   if (intent === "create_ticket") {
     return {
       ...(await executeCreateTicket(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "create_lead") {
+    return {
+      ...(await executeCreateLead(db, enrichedInput)),
       identity,
       contact: updatedContact,
     };

@@ -519,3 +519,112 @@ export async function sendAppointmentEmail(
     return { success: false, error: message };
   }
 }
+
+// ── Lead acknowledgement email ────────────────────────────────────────────────
+
+export interface SendLeadEmailInput {
+  recipientEmail: string;
+  recipientName: string;
+  /** Cosmetic reference shown to the lead (e.g. "LEAD-000042"). */
+  leadReference: string;
+  /** Underlying ticket number (e.g. "ORA-000042") — kept for ops follow-up. */
+  ticketNumber: string;
+  /** Project the visitor expressed interest in, when known. */
+  projectInterest?: string;
+  /** Free-form summary of what the visitor asked for. */
+  notes?: string;
+  language: "en" | "ar";
+}
+
+export function buildLeadEmailHtml(input: SendLeadEmailInput): string {
+  const {
+    recipientName,
+    leadReference,
+    ticketNumber,
+    projectInterest,
+    notes,
+    language,
+  } = input;
+
+  if (language === "ar") {
+    return `<!DOCTYPE html><html dir="rtl" lang="ar"><body style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="background:#0a0a0a;color:#fff;padding:28px 32px;"><h1 style="margin:0;font-size:22px;font-weight:600;">شكراً لاهتمامك</h1></div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">مرحباً ${recipientName}،</p>
+      <p style="margin:0 0 24px;line-height:1.6;">سعدنا بتواصلك. سجّلنا اهتمامك وسيتواصل معك أحد مستشاري المبيعات قريباً.</p>
+      <div style="background:#fafafa;border:1px solid #ececec;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;"><strong>المرجع:</strong> ${leadReference}</p>
+        ${projectInterest ? `<p style="margin:0 0 8px;"><strong>المشروع:</strong> ${projectInterest}</p>` : ""}
+        ${notes ? `<p style="margin:0 0 8px;"><strong>ملاحظات:</strong> ${notes}</p>` : ""}
+        <p style="margin:0;color:#666;font-size:12px;">رقم المتابعة الداخلي: ${ticketNumber}</p>
+      </div>
+      <p style="margin:0 0 16px;line-height:1.6;">إذا أردت إضافة تفاصيل، فقط رد على هذا البريد أو تابع الدردشة.</p>
+      <p style="margin:24px 0 0;color:#666;font-size:13px;">مع تحيات فريق المبيعات — ORA</p>
+    </div>
+  </div></body></html>`;
+  }
+
+  return `<!DOCTYPE html><html lang="en"><body style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#f5f5f5;margin:0;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="background:#0a0a0a;color:#fff;padding:28px 32px;"><h1 style="margin:0;font-size:22px;font-weight:600;">Thanks for your interest</h1></div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:16px;">Hello ${recipientName},</p>
+      <p style="margin:0 0 24px;line-height:1.6;">It was great chatting with you. We've recorded your interest and a sales advisor will reach out shortly to follow up.</p>
+      <div style="background:#fafafa;border:1px solid #ececec;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
+        <p style="margin:0 0 8px;"><strong>Lead reference:</strong> ${leadReference}</p>
+        ${projectInterest ? `<p style="margin:0 0 8px;"><strong>Project of interest:</strong> ${projectInterest}</p>` : ""}
+        ${notes ? `<p style="margin:0 0 8px;"><strong>Notes:</strong> ${notes}</p>` : ""}
+        <p style="margin:0;color:#666;font-size:12px;">Internal tracking ticket: ${ticketNumber}</p>
+      </div>
+      <p style="margin:0 0 16px;line-height:1.6;">If you'd like to add anything in the meantime, just reply to this email or continue the chat.</p>
+      <p style="margin:24px 0 0;color:#666;font-size:13px;">— The ORA sales team</p>
+    </div>
+  </div></body></html>`;
+}
+
+export async function sendLeadEmail(
+  input: SendLeadEmailInput
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await acquireToken();
+    const senderEmail = getSenderEmail();
+
+    const subject =
+      input.language === "ar"
+        ? `ORA — تأكيد اهتمامك ${input.leadReference}`
+        : `ORA — We've received your interest (${input.leadReference})`;
+
+    const htmlContent = buildLeadEmailHtml(input);
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "HTML", content: htmlContent },
+          toRecipients: [{ emailAddress: { address: input.recipientEmail } }],
+        },
+        saveToSentItems: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "Unknown error");
+      return {
+        success: false,
+        error: `Graph API sendMail failed (${response.status}): ${errorBody}`,
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return { success: false, error: message };
+  }
+}

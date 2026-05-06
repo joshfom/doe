@@ -11,7 +11,10 @@
  * Tagging strategy:
  *   - communities.slug starts with `demo-bayn-`
  *   - projects.slug starts with `demo-`
- *   - aiClients.email = `demo-<n>@bayn-demo.local`
+ *   - aiClients.email = `<role>[n]@ora-demo.com` (e.g. `investor@ora-demo.com`,
+ *     `broker@ora-demo.com`, `buyer@ora-demo.com`, `contractor@ora-demo.com`).
+ *     The prefix tells the demo actor *which role they're playing* so they can
+ *     just paste the email into Ora chat to be identified.
  *   - aiUnits.projectName starts with `[DEMO]` (rare legacy field) — we instead
  *     identify units via project FK
  *   - tickets.description starts with `[DEMO]`
@@ -37,12 +40,12 @@ import { ORA_KNOWLEDGE_DOCS } from "./ora-knowledge";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-const DEMO_EMAIL_DOMAIN = "@bayn-demo.local";
+const DEMO_EMAIL_DOMAIN = "@ora-demo.com";
 const DEMO_TICKET_PREFIX = "[DEMO]";
 const DEMO_APPOINTMENT_PREFIX = "ORA-APT-DEMO-";
 
-function demoEmail(n: number) {
-  return `demo-${String(n).padStart(2, "0")}${DEMO_EMAIL_DOMAIN}`;
+function demoEmail(prefix: string) {
+  return `${prefix}${DEMO_EMAIL_DOMAIN}`;
 }
 
 function pad(n: number, width = 2) {
@@ -212,40 +215,44 @@ async function seedProjects(
 
 // ── Seed: clients ───────────────────────────────────────────────────────────
 
-const CLIENT_FIRST_NAMES = [
-  "Ahmed",
-  "Sara",
-  "Khalid",
-  "Layla",
-  "Omar",
-  "Mariam",
-  "Yousef",
-  "Nour",
-  "Hassan",
-  "Aisha",
-  "Tariq",
-  "Hala",
-  "Bilal",
-  "Rania",
-  "Karim",
-  "Dina",
-  "Faisal",
-  "Maya",
-  "Ziad",
-  "Fatima",
-];
-const CLIENT_LAST_NAMES = [
-  "Al Mansoori",
-  "Al Hashimi",
-  "Al Suwaidi",
-  "Al Ahmadi",
-  "Al Marri",
-  "Al Falasi",
-  "Al Ameri",
-  "Al Hosani",
-  "Al Shamsi",
-  "Al Zaabi",
-];
+/**
+ * Demo personas. Each entry is a real person playing a role; the email prefix
+ * IS the role label so demo actors can identify themselves to Ora AI by
+ * pasting (or saying) the email and Ora resolves them via
+ * `resolveIdentityByEmail`.
+ *
+ * Phones follow `+97150 <role-bucket><nn>` so the same lookup works on
+ * WhatsApp / phone-based intake. Order is preserved so the existing
+ * `seededClients[i % N]` rotations in tickets/units stay deterministic.
+ */
+const DEMO_PERSONAS = [
+  // Buyer family (used by handover, mortgage NOC, oqood, snag scenarios)
+  { prefix: "buyer",       firstName: "Hala",   lastName: "Al Mansoori", phone: "+971507711000", lang: "en" as const },
+  { prefix: "cobuyer",     firstName: "Ahmed",  lastName: "Al Mansoori", phone: "+971507711001", lang: "en" as const },
+  // Investors / prospective buyers
+  { prefix: "investor",    firstName: "Sara",   lastName: "Mendes",      phone: "+971509002233", lang: "en" as const },
+  { prefix: "investor2",   firstName: "Yousef", lastName: "Al Ahmadi",   phone: "+971509002234", lang: "ar" as const },
+  { prefix: "prospect1",   firstName: "Layla",  lastName: "Hassan",      phone: "+971509100001", lang: "en" as const },
+  { prefix: "prospect2",   firstName: "Nour",   lastName: "Al Marri",    phone: "+971509100002", lang: "ar" as const },
+  { prefix: "prospect3",   firstName: "Rania",  lastName: "Al Zaabi",    phone: "+971509100003", lang: "en" as const },
+  { prefix: "prospect4",   firstName: "Fatima", lastName: "Al Falasi",   phone: "+971509100004", lang: "ar" as const },
+  // Brokers (chat side — separate from broker portal logins)
+  { prefix: "broker",      firstName: "Khalid", lastName: "Al Rashid",   phone: "+971508001122", lang: "ar" as const },
+  { prefix: "broker2",     firstName: "Tariq",  lastName: "Al Hosani",   phone: "+971508001123", lang: "en" as const },
+  // Additional booked clients (units already reserved)
+  { prefix: "buyer2",      firstName: "Omar",   lastName: "Al Hashimi",  phone: "+971507711002", lang: "en" as const },
+  { prefix: "buyer3",      firstName: "Mariam", lastName: "Al Suwaidi",  phone: "+971507711003", lang: "ar" as const },
+  { prefix: "buyer4",      firstName: "Bilal",  lastName: "Al Shamsi",   phone: "+971507711004", lang: "en" as const },
+  // Future tenants (post-handover roadmap personas)
+  { prefix: "tenant1",     firstName: "Hassan", lastName: "Al Ameri",    phone: "+971507822001", lang: "en" as const },
+  { prefix: "tenant2",     firstName: "Aisha",  lastName: "Al Hashimi",  phone: "+971507822002", lang: "ar" as const },
+  // Vendors + contractors + consultant (off-plan operations)
+  { prefix: "vendor",      firstName: "Karim",  lastName: "Stone & Surface",   phone: "+971507777301", lang: "en" as const },
+  { prefix: "vendor2",     firstName: "Dina",   lastName: "Greenleaf Landscape", phone: "+971504445566", lang: "en" as const },
+  { prefix: "contractor",  firstName: "Faisal", lastName: "BuildRight",  phone: "+971506000044", lang: "en" as const },
+  { prefix: "contractor2", firstName: "Maya",   lastName: "SkyLine Access",   phone: "+971506111188", lang: "en" as const },
+  { prefix: "consultant",  firstName: "Ziad",   lastName: "Project Consultancy", phone: "+971507333101", lang: "en" as const },
+] as const;
 
 interface SeededClient {
   id: string;
@@ -256,14 +263,14 @@ interface SeededClient {
 }
 
 async function seedClients(db: Database): Promise<SeededClient[]> {
-  const rows = CLIENT_FIRST_NAMES.map((firstName, i) => ({
-    firstName,
-    lastName: pickFrom(CLIENT_LAST_NAMES, i),
-    email: demoEmail(i + 1),
-    phone: `+97150${String(1000000 + i * 7).slice(0, 7)}`,
+  const rows = DEMO_PERSONAS.map((p) => ({
+    firstName: p.firstName,
+    lastName: p.lastName,
+    email: demoEmail(p.prefix),
+    phone: p.phone,
     nationality: "AE",
-    preferredLanguage: (i % 4 === 0 ? "ar" : "en") as "en" | "ar",
-    notes: "[DEMO] Seeded client",
+    preferredLanguage: p.lang,
+    notes: `[DEMO] Role: ${p.prefix}`,
   }));
 
   const inserted = await db.insert(aiClients).values(rows).returning({
@@ -514,6 +521,247 @@ async function seedTickets(
         },
       },
       scheduleOffsetDays: 6,
+    },
+    // ── Off-plan / pre-handover demo tickets ────────────────────────────────
+    {
+      requestType: "site_visit_booking" as const,
+      subject: "Site visit — Bayn Marina sales gallery",
+      priority: "medium" as const,
+      status: "assigned" as const,
+      requestData: {
+        visitor: {
+          name: "Khalid Al-Rashid",
+          phone: "+971508001122",
+          email: "broker@ora-demo.com",
+          company: "Crown Properties",
+        },
+        party: "broker" as const,
+        interestedProjects: ["demo-bayn-marina"],
+        preferredDate: daysFromNow(3).toISOString().slice(0, 10),
+        preferredWindow: { start: "10:00", end: "11:30" },
+        partySize: 2,
+        transport: "own_car" as const,
+        language: "ar" as const,
+        notes: "Client interested in 2BR sea view, AED 2.5–3M budget.",
+      },
+      scheduleOffsetDays: 3,
+    },
+    {
+      requestType: "brochure_request" as const,
+      subject: "Brochure + payment plan — Bayn Hills villas",
+      priority: "low" as const,
+      status: "resolved" as const,
+      requestData: {
+        requester: {
+          name: "Sara Mendes",
+          email: "investor@ora-demo.com",
+          phone: "+971509002233",
+        },
+        documents: ["brochure", "floor_plan", "payment_plan"] as const,
+        projectSlug: "demo-bayn-hills",
+        unitType: "4BR villa",
+        language: "en" as const,
+        deliveryChannel: "email" as const,
+      },
+      scheduleOffsetDays: null,
+    },
+    {
+      requestType: "payment_milestone" as const,
+      subject: "Milestone 30% — structural completion due",
+      priority: "high" as const,
+      status: "open" as const,
+      requestData: {
+        milestoneLabel: "Structural completion (30%)",
+        milestonePct: 30,
+        dueDate: daysFromNow(14).toISOString().slice(0, 10),
+        amount: 540000,
+        currency: "AED",
+        status: "due" as const,
+        notes: "Reminder issued by Ora AI; awaiting bank transfer reference.",
+      },
+      scheduleOffsetDays: 14,
+    },
+    {
+      requestType: "oqood_assistance" as const,
+      subject: "Oqood registration — SPA BAYN-2025-0188",
+      priority: "medium" as const,
+      status: "in_progress" as const,
+      requestData: {
+        requestKind: "register" as const,
+        spaReference: "BAYN-2025-0188",
+        buyerName: "Hala Al-Mansoori",
+        emiratesId: "784-1988-XXXXXXX-1",
+        attachments: [],
+        notes: "Buyer uploaded passport copy via Ora AI; needs DLD slot.",
+      },
+      scheduleOffsetDays: 7,
+    },
+    {
+      requestType: "mortgage_noc" as const,
+      subject: "Mortgage NOC — Emirates NBD pre-approval",
+      priority: "high" as const,
+      status: "open" as const,
+      requestData: {
+        bankName: "Emirates NBD",
+        loanReference: "ENBD-MTG-77231",
+        spaReference: "BAYN-2025-0188",
+        buyerName: "Hala Al-Mansoori",
+        requestedAmount: 1620000,
+        currency: "AED",
+        purpose: "pre_approval" as const,
+        requiredBy: daysFromNow(10).toISOString().slice(0, 10),
+        attachments: [],
+      },
+      scheduleOffsetDays: 10,
+    },
+    {
+      requestType: "construction_progress_inquiry" as const,
+      subject: "Progress update — Bayn Marina Tower B",
+      priority: "low" as const,
+      status: "resolved" as const,
+      requestData: {
+        projectSlug: "demo-bayn-marina",
+        unitNumber: "B-1204",
+        asOfMonth: "2026-04",
+        requestedFormat: "photos" as const,
+        notes: "Owner asked for photos of the unit floor and lobby progress.",
+      },
+      scheduleOffsetDays: null,
+    },
+    {
+      requestType: "snag_submission" as const,
+      subject: "Pre-handover snag list — unit M-0801",
+      priority: "medium" as const,
+      status: "assigned" as const,
+      requestData: {
+        walkthroughDate: daysFromNow(-2).toISOString().slice(0, 10),
+        items: [
+          {
+            location: "Master bathroom",
+            category: "tiling" as const,
+            description: "Hairline crack on the wall tile next to vanity.",
+            photos: [],
+            severity: "medium" as const,
+          },
+          {
+            location: "Living room",
+            category: "paint" as const,
+            description: "Roller marks visible on the south wall.",
+            photos: [],
+            severity: "low" as const,
+          },
+        ],
+        accompaniedBy: "Project engineer Omar",
+      },
+      scheduleOffsetDays: -2,
+    },
+    {
+      requestType: "handover_appointment" as const,
+      subject: "Handover appointment — unit H-V14",
+      priority: "high" as const,
+      status: "open" as const,
+      requestData: {
+        appointmentDate: daysFromNow(21).toISOString().slice(0, 10),
+        appointmentWindow: { start: "10:00", end: "12:00" },
+        attendees: [
+          { name: "Hala Al-Mansoori", phone: "+97150 7711000" },
+          { name: "Ahmed Al-Mansoori", phone: "+97150 7711001" },
+        ],
+        documentsReady: {
+          finalPaymentCleared: false,
+          oqoodIssued: true,
+          serviceChargeSettled: false,
+          idVerified: true,
+        },
+        notes: "Final 20% pending; once cleared, schedule keys collection.",
+      },
+      scheduleOffsetDays: 21,
+    },
+    {
+      requestType: "hot_works_permit" as const,
+      subject: "Hot works permit — welding Tower B Level 14",
+      priority: "high" as const,
+      status: "open" as const,
+      requestData: {
+        contractor: {
+          name: "BuildRight Contracting LLC",
+          phone: "+97150 6000044",
+          company: "BuildRight Contracting LLC",
+        },
+        workDescription: "MEP riser bracket welding, north shaft.",
+        location: "Bayn Marina — Tower B — Level 14 north shaft",
+        workTypes: ["welding", "grinding"] as const,
+        validFrom: daysFromNow(2, 7).toISOString(),
+        validUntil: daysFromNow(2, 17).toISOString(),
+        fireWatchAssigned: true,
+        nearbyHazards: "Cable trays below — covered with fire blanket.",
+        extinguisherCount: 4,
+        permitToWorkRef: "PTW-2026-0314",
+      },
+      scheduleOffsetDays: 2,
+    },
+    {
+      requestType: "work_at_height_permit" as const,
+      subject: "Work-at-height — facade cleaning Tower A",
+      priority: "high" as const,
+      status: "assigned" as const,
+      requestData: {
+        contractor: {
+          name: "SkyLine Access Services",
+          phone: "+97150 6111188",
+          company: "SkyLine Access Services",
+        },
+        workDescription: "Final facade cleaning before handover inspection.",
+        location: "Bayn Marina — Tower A — Levels 18 to 24",
+        heightMeters: 78,
+        accessMethod: "rope_access" as const,
+        crewSize: 4,
+        fallProtection: ["full body harness", "twin lanyard", "backup line"],
+        validFrom: daysFromNow(5, 6).toISOString(),
+        validUntil: daysFromNow(7, 17).toISOString(),
+        rescuePlan: "Standby rescue team on Level 18 with descent kit.",
+      },
+      scheduleOffsetDays: 5,
+    },
+    {
+      requestType: "lift_usage_booking" as const,
+      subject: "Hoist booking — finishing materials Tower B",
+      priority: "medium" as const,
+      status: "open" as const,
+      requestData: {
+        requester: {
+          name: "BuildRight Site Office",
+          phone: "+97150 6000045",
+          company: "BuildRight Contracting LLC",
+        },
+        purpose: "material_lift" as const,
+        tower: "Tower B",
+        floors: ["12", "13", "14"],
+        startAt: daysFromNow(1, 6).toISOString(),
+        endAt: daysFromNow(1, 18).toISOString(),
+        weightKg: 1800,
+        requiresProtection: true,
+      },
+      scheduleOffsetDays: 1,
+    },
+    {
+      requestType: "inspection_request" as const,
+      subject: "Civil Defence inspection — Tower A handover readiness",
+      priority: "high" as const,
+      status: "open" as const,
+      requestData: {
+        inspectionType: "civil_defence" as const,
+        location: "Bayn Marina — Tower A — all common areas",
+        requestedDate: daysFromNow(12).toISOString().slice(0, 10),
+        requestedWindow: { start: "09:00", end: "13:00" },
+        inspectorParty: {
+          name: "Dubai Civil Defence inspector",
+          phone: "+9714 0000000",
+        },
+        scope: "Fire alarm test, sprinkler flow test, smoke control verification.",
+        attachments: [],
+      },
+      scheduleOffsetDays: 12,
     },
   ];
 
