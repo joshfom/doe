@@ -160,12 +160,21 @@ export default function PageEditorPage({
         // Then publish
         await apiFetch(`/api/pages/${id}/publish`, {
           method: 'POST',
+          body: {},
         });
         setShowSaved(true);
         if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
         savedTimerRef.current = setTimeout(() => setShowSaved(false), SAVED_INDICATOR_DURATION);
-      } catch {
-        setError('Failed to publish page');
+      } catch (err) {
+        // If the save succeeded but publish returned 202 (approval pending), don't show error
+        const e = err as { data?: { approvalRequestId?: string }; error?: string };
+        if (e?.data?.approvalRequestId) {
+          setShowSaved(true);
+          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+          savedTimerRef.current = setTimeout(() => setShowSaved(false), SAVED_INDICATOR_DURATION);
+        } else {
+          setError(e?.error || 'Failed to publish page');
+        }
       } finally {
         setSaving(false);
       }
