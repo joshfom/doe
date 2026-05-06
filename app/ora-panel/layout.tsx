@@ -62,6 +62,7 @@ const navItems = [
   { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
   { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
   { href: '/ora-panel/audit', label: 'Audit', icon: Shield, permission: 'audit:read' },
+  { href: '/ora-panel/ai', label: 'AI Copilot', icon: BrainCircuit, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/knowledge-base', label: 'AI Knowledge', icon: BrainCircuit, permission: 'ai:knowledge-base:manage' },
   { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/clients', label: 'AI Clients', icon: Users, permission: 'ai:clients:manage' },
