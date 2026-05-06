@@ -7,7 +7,7 @@ import {
   useApprovalConfig,
 } from '@/lib/cms/hooks/use-approvals';
 import type { ContentModule, ApprovalDecisionValue } from '@/lib/cms/types';
-import { CheckCircle, XCircle, Clock, MessageSquare } from 'lucide-react';
+import { CheckCircle, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
 
 interface ApprovalActionsProps {
   contentId: string;
@@ -26,6 +26,8 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
   const submitDecision = useSubmitDecision();
   const [comment, setComment] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   if (isLoading) {
     return (
@@ -53,12 +55,15 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
     (d) => assignedApproverIds.includes(d.approverId)
   );
 
-  const handleDecision = async (decision: ApprovalDecisionValue) => {
+  // Find rejection decision(s) for prominent display
+  const rejectionDecisions = decisions.filter((d) => d.decision === 'rejected');
+
+  const handleApprove = async () => {
     setError(null);
     try {
       await submitDecision.mutateAsync({
         id: request.id,
-        decision,
+        decision: 'approved',
         comment: comment.trim() || undefined,
       });
       setComment('');
@@ -70,6 +75,39 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
       setError(message);
     }
   };
+
+  const handleRejectClick = () => {
+    setShowRejectDialog(true);
+    setRejectionReason('');
+  };
+
+  const handleRejectSubmit = async () => {
+    setError(null);
+    try {
+      await submitDecision.mutateAsync({
+        id: request.id,
+        decision: 'rejected',
+        comment: rejectionReason.trim(),
+      });
+      setRejectionReason('');
+      setShowRejectDialog(false);
+      setComment('');
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'error' in err
+          ? (err as { error: string }).error
+          : 'Failed to submit decision';
+      setError(message);
+    }
+  };
+
+  const handleRejectCancel = () => {
+    setShowRejectDialog(false);
+    setRejectionReason('');
+    setError(null);
+  };
+
+  const isRejectReasonValid = rejectionReason.trim().length > 0;
 
   return (
     <div className="border border-ora-sand/60 bg-ora-white p-6">
@@ -97,8 +135,31 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
         </div>
       </div>
 
+      {/* Rejection Reason Display — shown prominently when request is rejected */}
+      {request.status === 'rejected' && rejectionDecisions.length > 0 && (
+        <div className="mb-6 border border-ora-error/30 bg-ora-error/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-ora-error" />
+            <h4 className="text-sm font-semibold text-ora-error">Rejection Reason</h4>
+          </div>
+          {rejectionDecisions.map((d) => (
+            <div key={d.id} className="mt-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-ora-charcoal">{d.approverName}</span>
+                <span className="text-xs text-ora-muted">
+                  {new Date(d.createdAt).toLocaleString()}
+                </span>
+              </div>
+              {d.comment && (
+                <p className="mt-1 text-sm text-ora-charcoal-light">{d.comment}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Actions — only for pending requests */}
-      {isPending && (
+      {isPending && !showRejectDialog && (
         <div className="mb-6">
           <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">
             Comment (optional)
@@ -112,7 +173,7 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
           />
           <div className="flex gap-2">
             <button
-              onClick={() => handleDecision('approved')}
+              onClick={handleApprove}
               disabled={submitDecision.isPending}
               className="inline-flex h-9 items-center gap-1.5 bg-ora-success px-5 text-sm text-ora-white hover:bg-ora-success/90 transition-colors disabled:opacity-50"
             >
@@ -120,12 +181,53 @@ export function ApprovalActions({ contentId, contentModule }: ApprovalActionsPro
               Approve
             </button>
             <button
-              onClick={() => handleDecision('rejected')}
+              onClick={handleRejectClick}
               disabled={submitDecision.isPending}
               className="inline-flex h-9 items-center gap-1.5 bg-ora-error px-5 text-sm text-ora-white hover:bg-ora-error/90 transition-colors disabled:opacity-50"
             >
               <XCircle className="h-3.5 w-3.5 stroke-1" />
               Reject
+            </button>
+          </div>
+          {error && (
+            <p className="mt-2 text-xs text-ora-error">{error}</p>
+          )}
+        </div>
+      )}
+
+      {/* Rejection Dialog — inline modal requiring a reason */}
+      {isPending && showRejectDialog && (
+        <div className="mb-6 border border-ora-error/30 bg-ora-error/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-ora-error" />
+            <h4 className="text-sm font-semibold text-ora-charcoal">Reject with Reason</h4>
+          </div>
+          <p className="mb-2 text-xs text-ora-charcoal-light">
+            Please provide a reason for rejecting this content. This will be visible to the submitter.
+          </p>
+          <textarea
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="Explain why this content is being rejected…"
+            rows={3}
+            autoFocus
+            className="mb-3 w-full border border-ora-stone bg-ora-white px-3 py-2 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-error focus-visible:outline-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleRejectSubmit}
+              disabled={!isRejectReasonValid || submitDecision.isPending}
+              className="inline-flex h-9 items-center gap-1.5 bg-ora-error px-5 text-sm text-ora-white hover:bg-ora-error/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <XCircle className="h-3.5 w-3.5 stroke-1" />
+              Submit Rejection
+            </button>
+            <button
+              onClick={handleRejectCancel}
+              disabled={submitDecision.isPending}
+              className="inline-flex h-9 items-center gap-1.5 border border-ora-stone bg-ora-white px-5 text-sm text-ora-charcoal hover:bg-ora-sand/30 transition-colors disabled:opacity-50"
+            >
+              Cancel
             </button>
           </div>
           {error && (

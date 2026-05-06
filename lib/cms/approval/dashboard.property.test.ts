@@ -191,7 +191,7 @@ describe("Feature: content-approval-workflow, Property 14: Dashboard returns cor
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

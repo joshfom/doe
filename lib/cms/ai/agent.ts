@@ -83,23 +83,44 @@ const PHONE_RE = /\+?\d[\d\s\-]{7,}\d/;
 export function extractName(message: string): string | null {
   const trimmed = message.trim();
 
+  // If the message contains an email or phone number, it's almost certainly
+  // contact info — not just a name. Forms like "John Moore, x@y.com" must
+  // NOT be parsed as the requester's own name (it's usually a third party
+  // the user wants to register or book on behalf of).
+  if (EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed)) return null;
+
+  // Reject lines with commas or pipes — they're list-style contact handoffs,
+  // not a self-introduction.
+  if (/[,|\u060C]/.test(trimmed)) return null;
+
   const patterns: RegExp[] = [
-    /(?:my name is|i am|i'm|this is|here is|name's)\s+([A-Z][a-zA-Z'`-]+(?:\s+[A-Z][a-zA-Z'`-]+){0,3})/,
-    /^([A-Z][a-zA-Z'`-]+(?:\s+[A-Z][a-zA-Z'`-]+){1,3})$/, // line is just a name, e.g. "John Smith"
+    /(?:my name is|i am|i'm|this is|here is|name's|call me)\s+([A-Z][a-zA-Z'`-]+(?:\s+[A-Z][a-zA-Z'`-]+){0,3})/,
+    /^([A-Z][a-zA-Z'`-]+(?:\s+[A-Z][a-zA-Z'`-]+){1,3})$/, // e.g. "John Smith"
+    // Single capitalised token answer to "may I have your name?" — e.g.
+    // "Rashid". Only when the WHOLE trimmed message is one short word.
+    /^([A-Z][a-zA-Z'`-]{1,30})$/,
   ];
 
   for (const re of patterns) {
     const m = trimmed.match(re);
     if (m && m[1]) {
       const candidate = m[1].trim();
-      // Reject obvious false positives (verbs, common short words)
-      if (
-        !/^(trying|looking|wondering|asking|interested|trying)\b/i.test(
-          candidate
-        )
-      ) {
-        return candidate;
+      // Reject obvious false positives (verbs, common short words, polite
+      // fillers Ora itself uses, role labels, common request keywords).
+      const lc = candidate.toLowerCase();
+      const STOPWORDS = new Set([
+        "trying", "looking", "wondering", "asking", "interested",
+        "hello", "hi", "hey", "yes", "no", "ok", "okay", "sure",
+        "thanks", "thank", "please", "register", "book", "buy",
+        "investor", "buyer", "broker", "tenant", "client", "contractor",
+        "vendor", "consultant", "agent", "owner", "prospect",
+        "unit", "site", "visit", "tour", "appointment",
+        "morning", "afternoon", "evening", "night",
+      ]);
+      if (STOPWORDS.has(lc) || /^(trying|looking|wondering|asking|interested)\b/i.test(candidate)) {
+        continue;
       }
+      return candidate;
     }
   }
 
@@ -331,10 +352,36 @@ const LEAD_KEYWORDS = [
   "قائمة الأسعار",
 ];
 
+// Broker / staff registering a third-party client / lead on someone else's
+// behalf. Distinct from `create_lead` (the requester themselves is the lead)
+// and from `create_booking` (a scheduled visit). Triggered by phrases like
+// "register a client", "add a client", "register my client", "new lead".
+const REGISTER_LEAD_KEYWORDS = [
+  "register a client",
+  "register my client",
+  "register a new client",
+  "register the client",
+  "register a lead",
+  "register my lead",
+  "add a client",
+  "add a new client",
+  "add my client",
+  "add a lead",
+  "new client registration",
+  "client registration",
+  "submit a lead",
+  "submit a client",
+  "تسجيل عميل",
+  "تسجيل عميل جديد",
+  "أسجل عميل",
+  "إضافة عميل",
+];
+
 export type AgentIntent =
   | "create_ticket"
   | "create_booking"
   | "create_lead"
+  | "register_lead"
   | "confirm_pending"
   | "decline_pending"
   | "cancel_appointment"
@@ -350,6 +397,9 @@ export function detectIntent(message: string): AgentIntent {
   if (containsAny(message, OTP_REQUEST_KEYWORDS)) return "request_otp";
   if (containsAny(message, CANCEL_KEYWORDS)) return "cancel_appointment";
   if (containsAny(message, RESCHEDULE_KEYWORDS)) return "reschedule_appointment";
+  // Broker/staff registering a third-party client must beat both create_lead
+  // (which would record the broker as the lead) and create_booking.
+  if (containsAny(message, REGISTER_LEAD_KEYWORDS)) return "register_lead";
   // Lead capture is checked BEFORE booking so "send me the brochure" doesn't
   // accidentally read as "book a tour". A booking is a scheduled time slot;
   // a lead is upstream interest. If the visitor uses both signals
@@ -779,6 +829,229 @@ ${transcript}`;
   }
 }
 
+// ── Tool: register_lead (broker / staff registers a third party) ─────────────
+
+/**
+ * Pull a "Name <email> [phone]" tuple out of free text. Used in the
+ * register-a-client flow where the broker pastes the client's details in
+ * a single line such as "John Moore, john@example.com, +971 50 111 2233".
+ */
+function extractThirdPartyContact(message: string): {
+  name?: string;
+  email?: string;
+  phone?: string;
+} {
+  const email = extractEmail(message) ?? undefined;
+  const phone = extractPhone(message) ?? undefined;
+  // Strip the email and phone from the message, then look for a leading
+  // capitalised name run.
+  let stripped = message;
+  if (email) stripped = stripped.replace(new RegExp(email, "i"), " ");
+  if (phone) stripped = stripped.replace(phone, " ");
+  // Drop common separators and noise words.
+  stripped = stripped.replace(/[,;|\u060C]/g, " ").replace(/\s+/g, " ").trim();
+  const nameMatch = stripped.match(
+    /\b([A-Z][a-zA-Z'`-]+(?:\s+[A-Z][a-zA-Z'`-]+){0,3})\b/
+  );
+  const name = nameMatch ? nameMatch[1].trim() : undefined;
+  return { name, email, phone };
+}
+
+async function executeRegisterLead(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+  const handoff = await loadHandoffState(db, input.conversationId);
+  const pending = handoff.pendingClientRegistration ?? {};
+
+  // Try to pull any client details from the current message, then merge
+  // with whatever we already buffered across previous turns.
+  const parsed = extractThirdPartyContact(input.message);
+  const merged = {
+    clientName: pending.clientName ?? parsed.name,
+    clientEmail: pending.clientEmail ?? parsed.email,
+    clientPhone: pending.clientPhone ?? parsed.phone,
+    projectInterest:
+      pending.projectInterest ??
+      inferProjectInterest(input.message, input.history) ??
+      undefined,
+    notes: pending.notes,
+  };
+
+  // If we still don't have name + email, ask for them and persist what we have.
+  if (!merged.clientName || !merged.clientEmail) {
+    await mergeHandoffState(db, input.conversationId, {
+      pendingClientRegistration: merged,
+    });
+    const need: string[] = [];
+    if (language === "ar") {
+      if (!merged.clientName) need.push("اسم العميل الكامل");
+      if (!merged.clientEmail) need.push("بريده الإلكتروني");
+      if (!merged.clientPhone) need.push("رقم جواله");
+      const list = need.join("، و");
+      const response =
+        `بكل سرور أسجّل عميلك. شاركني ${list} والمشروع الذي يهمه، ` +
+        `ويفضّل في رسالة واحدة (مثال: "John Moore، john@example.com، +971501112233، Bayn Marina").`;
+      return {
+        handled: true,
+        response,
+        metadata: { intent: "register_lead", awaiting: "client_contact" },
+      };
+    }
+    if (!merged.clientName) need.push("the client's full name");
+    if (!merged.clientEmail) need.push("their email");
+    if (!merged.clientPhone) need.push("their mobile");
+    const list =
+      need.length === 1
+        ? need[0]
+        : need.slice(0, -1).join(", ") + ", and " + need[need.length - 1];
+    const response =
+      `Happy to register your client. Could you share ${list} and the project they're interested in — ` +
+      `ideally in one line (e.g. "John Moore, john@example.com, +971501112233, Bayn Marina")?`;
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "register_lead", awaiting: "client_contact" },
+    };
+  }
+
+  // We have enough — open the lead ticket on behalf of the broker / staff.
+  const brokerLabel =
+    input.contact.name ??
+    (input.identity.type !== "visitor" ? input.identity.firstName ?? null : null) ??
+    "broker";
+  const brokerEmail = input.contact.email ?? "(unknown)";
+  const transcript = input.history
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-6)
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  const subject = merged.projectInterest
+    ? `Lead — ${merged.clientName} (via ${brokerLabel}, interest: ${merged.projectInterest})`
+    : `Lead — ${merged.clientName} (via ${brokerLabel})`;
+
+  const description = `Captured by Ora AI from chat — registered on behalf of ${brokerLabel} <${brokerEmail}>.
+
+Client: ${merged.clientName} <${merged.clientEmail}>${merged.clientPhone ? ` / ${merged.clientPhone}` : ""}
+Project interest: ${merged.projectInterest ?? "(unspecified)"}
+
+Recent conversation:
+${transcript}`;
+
+  try {
+    const { ticketId, ticketNumber } = await createTicket(db, {
+      subject,
+      description,
+      contactName: merged.clientName!,
+      contactEmail: merged.clientEmail!,
+      contactPhone: merged.clientPhone ?? undefined,
+      priority: "medium",
+      source: "api",
+      createdBy: null,
+      requestType: "lead_inquiry",
+      requestData: {
+        projectInterest: merged.projectInterest,
+        source: "chat",
+        registeredBy: brokerLabel,
+        registeredByEmail: brokerEmail,
+        notes: input.message.slice(0, 500),
+        locale: language,
+        consentToContact: true,
+      },
+    });
+
+    const leadReference = formatLeadReference(ticketNumber);
+    await clearHandoffFields(db, input.conversationId, [
+      "pendingClientRegistration",
+    ]);
+
+    const response =
+      language === "ar"
+        ? `تم! سجّلت ${merged.clientName} كعميل تحت المرجع ${leadReference}${merged.projectInterest ? ` (${merged.projectInterest})` : ""}. سيتواصل فريق المبيعات معه على ${merged.clientEmail} وسأبقيك على اطلاع.`
+        : `Done — registered ${merged.clientName} as a lead under ${leadReference}${merged.projectInterest ? ` for ${merged.projectInterest}` : ""}. Sales will reach out to ${merged.clientEmail} and I'll keep you posted.`;
+
+    return {
+      handled: true,
+      response,
+      metadata: {
+        intent: "register_lead",
+        executed: true,
+        leadReference,
+        ticketNumber,
+        ticketId,
+        projectInterest: merged.projectInterest,
+      },
+    };
+  } catch (err) {
+    console.error("[agent] registerLead failed", err);
+    const response =
+      language === "ar"
+        ? "اعتذر، لم أتمكن من تسجيل العميل الآن. هل أحاول مرة أخرى أو أحوّلك إلى مستشار مبيعات؟"
+        : "I couldn't register that client just now. Want me to try again, or shall I connect you with a sales advisor?";
+    return {
+      handled: true,
+      response,
+      metadata: { intent: "register_lead", executed: false, error: String(err) },
+    };
+  }
+}
+
+// ── Tool: provide_contact (deterministic email/phone acknowledgement) ────────
+
+/**
+ * The user just sent a message that contains an email or phone and nothing
+ * else actionable. Without this handler we'd fall through to the LLM, which
+ * tends to loop back with "may I have your email?" because it sees the email
+ * but doesn't realise the agent has already ingested it.
+ *
+ * Behaviour:
+ * - If the contact info upgraded the identity to a known client/tenant,
+ *   greet them by name and offer to help.
+ * - Otherwise acknowledge the email but be clear we don't see it on file
+ *   yet — ask to double-check rather than silently looping.
+ */
+async function executeProvideContact(
+  db: Database,
+  input: AgentInput
+): Promise<AgentResult> {
+  const language = input.language;
+  const email = input.contact.email;
+  const phone = input.contact.phone;
+
+  // If identity was upgraded by runAgent, welcome them by name.
+  if (input.identity.type !== "visitor") {
+    const first =
+      input.identity.firstName ??
+      (input.contact.name ? input.contact.name.split(" ")[0] : null);
+    const greet = first
+      ? language === "ar"
+        ? `أهلاً بك يا ${first} 👋 — وجدت حسابك. كيف أقدر أخدمك اليوم؟`
+        : `Got it — found you, ${first} 👋. How can I help today?`
+      : language === "ar"
+        ? "تم، حسابك موجود عندي. كيف أقدر أخدمك اليوم؟"
+        : "Got it — found your account. How can I help today?";
+    return {
+      handled: true,
+      response: greet,
+      metadata: { intent: "provide_contact", recognised: true },
+    };
+  }
+
+  // Visitor — email/phone not on file. Be honest, don't loop.
+  const value = email ?? phone ?? "";
+  const response =
+    language === "ar"
+      ? `شكراً! لكن لا أرى ${value} مسجلاً عندنا حتى الآن. هل تتأكد من صحة البريد، أم أنك مسجل ببريد أو رقم آخر؟ يمكنني أيضاً مساعدتك كزائر إذا أحببت — فقط أخبرني بما تريد.`
+      : `Thanks! I don't see ${value} on file yet. Could you double-check the spelling, or were you registered with a different email or mobile? Otherwise I'm happy to help as a guest — just tell me what you need.`;
+  return {
+    handled: true,
+    response,
+    metadata: { intent: "provide_contact", recognised: false },
+  };
+}
+
 // ── Tool: request_otp ────────────────────────────────────────────────────────
 
 async function executeRequestOtp(
@@ -999,7 +1272,7 @@ function classifyAppointmentType(message: string, history: Array<{ content: stri
 }
 
 // ── Working-hours guard ──────────────────────────────────────────────────────
-// UAE business hours: Mon–Sat 09:00–19:00. Friday is the cultural off-day.
+// Office hours: Mon–Fri 09:00–19:00. Closed on Saturday and Sunday.
 
 const WORK_OPEN_HOUR = 9;
 const WORK_CLOSE_HOUR = 19;
@@ -1041,11 +1314,12 @@ export function validateBookingWindow(
       ? "هذا الوقت في الماضي. ما هو موعد آخر يناسبك؟"
       : "That time has already passed. Could you pick another slot?";
   }
-  // Friday is day 5 (Sun=0)
-  if (slot.getDay() === 5) {
+  // Closed on weekends (Sat=6, Sun=0)
+  const dow = slot.getDay();
+  if (dow === 6 || dow === 0) {
     return language === "ar"
-      ? "نحن مغلقون أيام الجمعة. هل يمكنك اختيار يوم آخر بين السبت والخميس؟"
-      : "We're closed on Fridays. Could you pick another day (Saturday–Thursday)?";
+      ? "نحن مغلقون يومي السبت والأحد. هل يمكنك اختيار يوم آخر (الإثنين–الجمعة)؟"
+      : "We're closed on Saturdays and Sundays. Could you pick another day (Monday–Friday)?";
   }
   if (hh < WORK_OPEN_HOUR || hh >= WORK_CLOSE_HOUR) {
     return language === "ar"
@@ -1978,18 +2252,32 @@ export async function runAgent(
   db: Database,
   input: AgentInput
 ): Promise<AgentResult> {
+  // Load handoff state up-front so we can decide whether the current
+  // message is the broker's own contact info or a third party's (during
+  // a pending client registration).
+  const handoffState = await loadHandoffState(db, input.conversationId);
+  const inClientRegistrationFlow = !!handoffState.pendingClientRegistration;
+
   // 1. Extract any identity fields from the current message
   const extractedName = extractName(input.message);
   const extractedEmail = extractEmail(input.message);
   const extractedPhone = extractPhone(input.message);
 
+  // While a broker is registering a client, the email/phone/name in the
+  // message belong to the CLIENT, not the broker. Don't persist them onto
+  // the broker's conversation row and don't try to upgrade identity off them.
+  const captureForRequester = !inClientRegistrationFlow;
+
   const updatedContact: ConversationContact = {
-    name: input.contact.name ?? extractedName,
-    email: input.contact.email ?? extractedEmail,
-    phone: input.contact.phone ?? extractedPhone,
+    name: input.contact.name ?? (captureForRequester ? extractedName : null),
+    email: input.contact.email ?? (captureForRequester ? extractedEmail : null),
+    phone: input.contact.phone ?? (captureForRequester ? extractedPhone : null),
   };
 
-  if (extractedName || extractedEmail || extractedPhone) {
+  if (
+    captureForRequester &&
+    (extractedName || extractedEmail || extractedPhone)
+  ) {
     try {
       await persistContact(db, input.conversationId, {
         name: extractedName,
@@ -2004,7 +2292,7 @@ export async function runAgent(
   // 2. If we just learned an email or phone and identity was visitor, try to
   //    upgrade the identity now so downstream calls (RAG, OTP) personalize.
   let identity = input.identity;
-  if (identity.type === "visitor") {
+  if (captureForRequester && identity.type === "visitor") {
     if (extractedEmail) {
       identity = await resolveIdentityByEmail(db, extractedEmail);
     } else if (extractedPhone) {
@@ -2018,6 +2306,7 @@ export async function runAgent(
   //     code." Acknowledge warmly and route straight into OTP send instead
   //     of asking for it a second time.
   const reshareEmail =
+    !inClientRegistrationFlow &&
     !!extractedEmail &&
     !!input.contact.email &&
     extractedEmail === input.contact.email.toLowerCase() &&
@@ -2026,9 +2315,6 @@ export async function runAgent(
   // 3. Detect intent (skipped when reshareEmail short-circuits below)
   let intent = detectIntent(input.message);
 
-  // Load handoff state once — needed for confirm/decline detection and to
-  // continue staged flows (booking, cancel, reschedule).
-  const handoffState = await loadHandoffState(db, input.conversationId);
   const hasPending =
     !!handoffState.pendingBooking ||
     !!handoffState.pendingCancel ||
@@ -2051,7 +2337,7 @@ export async function runAgent(
       .find((m) => m.role === "assistant");
     const askedDateTime =
       lastAssistant &&
-      /(date and time|what date|what time|when would|when works|when suits|new date|new time|متى يناسبك|التاريخ والوقت|التاريخ الجديد)/i.test(
+      /(date and time|what date|what time|when would|when works|when suits|new date|new time|pick another day|pick another slot|pick a time|could you try again|we're closed|our hours are|that time has already passed|متى يناسبك|التاريخ والوقت|التاريخ الجديد|اختيار يوم آخر|ساعات عملنا|نحن مغلقون|في الماضي|إعادة المحاولة)/i.test(
         lastAssistant.content
       );
     if (askedDateTime) {
@@ -2108,6 +2394,14 @@ export async function runAgent(
   if (intent === "create_lead") {
     return {
       ...(await executeCreateLead(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  if (intent === "register_lead") {
+    return {
+      ...(await executeRegisterLead(db, enrichedInput)),
       identity,
       contact: updatedContact,
     };
@@ -2189,6 +2483,31 @@ export async function runAgent(
   if (intent === "navigate") {
     return {
       ...(await executeNavigate(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  // If a broker / staff member previously asked to "register a client" and
+  // is now providing the client's contact details (or anything that looks
+  // like a continuation), keep the registration flow in charge instead of
+  // letting the contact info silently flip the requester's identity.
+  if (
+    handoffState.pendingClientRegistration &&
+    (intent === "provide_contact" || intent === "none")
+  ) {
+    return {
+      ...(await executeRegisterLead(db, enrichedInput)),
+      identity,
+      contact: updatedContact,
+    };
+  }
+
+  // Pure contact handoff (user replied with just email/phone) — answer
+  // deterministically so we don't loop the LLM into asking for it again.
+  if (intent === "provide_contact") {
+    return {
+      ...(await executeProvideContact(db, enrichedInput)),
       identity,
       contact: updatedContact,
     };

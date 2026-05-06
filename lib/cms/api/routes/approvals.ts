@@ -127,6 +127,14 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       return { error: "Decision must be 'approved' or 'rejected'" };
     }
 
+    // Enforce mandatory non-empty, non-whitespace rejection reason
+    if (decision === "rejected") {
+      if (!comment || comment.trim().length === 0) {
+        set.status = 400;
+        return { error: "Rejection reason is required" };
+      }
+    }
+
     // Fetch the request
     const [request] = await db
       .select()
@@ -145,32 +153,47 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       return { error: "This approval request has already been resolved" };
     }
 
-    // Verify user is an assigned approver for this module
-    const approverConfig = await db
-      .select({ configId: approvalConfig.id })
-      .from(approvalConfig)
-      .where(eq(approvalConfig.contentModule, request.contentModule))
-      .limit(1);
+    // Authorization check — relaxed for "pages" module (any employee can decide)
+    if (request.contentModule === "pages") {
+      // For pages module: allow any employee to submit decisions
+      const [user] = await db
+        .select({ userType: users.userType })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
 
-    if (approverConfig.length === 0) {
-      set.status = 403;
-      return { error: "No approval configuration found for this module" };
-    }
+      if (!user || user.userType !== "employee") {
+        set.status = 403;
+        return { error: "Only employees can submit decisions" };
+      }
+    } else {
+      // For other modules: verify user is an assigned approver
+      const approverConfig = await db
+        .select({ configId: approvalConfig.id })
+        .from(approvalConfig)
+        .where(eq(approvalConfig.contentModule, request.contentModule))
+        .limit(1);
 
-    const [isApprover] = await db
-      .select({ id: approvalConfigApprovers.id })
-      .from(approvalConfigApprovers)
-      .where(
-        and(
-          eq(approvalConfigApprovers.configId, approverConfig[0].configId),
-          eq(approvalConfigApprovers.userId, userId)
+      if (approverConfig.length === 0) {
+        set.status = 403;
+        return { error: "No approval configuration found for this module" };
+      }
+
+      const [isApprover] = await db
+        .select({ id: approvalConfigApprovers.id })
+        .from(approvalConfigApprovers)
+        .where(
+          and(
+            eq(approvalConfigApprovers.configId, approverConfig[0].configId),
+            eq(approvalConfigApprovers.userId, userId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!isApprover) {
-      set.status = 403;
-      return { error: "You are not an assigned approver for this module" };
+      if (!isApprover) {
+        set.status = 403;
+        return { error: "You are not an assigned approver for this module" };
+      }
     }
 
     // Submit the decision — catch unique constraint violation for duplicate

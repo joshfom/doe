@@ -68,6 +68,7 @@ const navItems = [
   { href: '/ora-panel/ai/clients', label: 'AI Clients', icon: Users, permission: 'ai:clients:manage' },
   { href: '/ora-panel/ai/appointments', label: 'AI Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
   { href: '/ora-panel/ai/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'ai:analytics:read' },
+  { href: '/ora-panel/ai/audit', label: 'AI Audit', icon: Shield, permission: 'audit:read' },
   { href: '/ora-panel/ai/settings', label: 'AI Settings', icon: Cog, permission: 'ai:config:manage' },
 ];
 

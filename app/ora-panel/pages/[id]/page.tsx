@@ -12,12 +12,14 @@ import {
   useSetHomePage,
   useSiteSettings,
   useContentApprovalStatus,
+  usePendingDraft,
 } from '@/lib/cms/hooks';
 import { ApprovalActions } from '@/lib/cms/components/ApprovalActions';
 import {
   PenLine,
   Globe,
   EyeOff,
+  Eye,
   RotateCcw,
   Home,
   ChevronRight,
@@ -44,6 +46,8 @@ export default function PageDetailPage({
   const [rollbackTarget, setRollbackTarget] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'seo' | 'revisions'>('details');
   const { data: approvalStatus } = useContentApprovalStatus('pages', id);
+  const { data: pendingDraftData } = usePendingDraft(id);
+  const hasPendingDraft = pendingDraftData !== undefined;
 
   // Editable fields
   const [title, setTitle] = useState('');
@@ -205,6 +209,31 @@ export default function PageDetailPage({
       {approvalStatus?.request && (
         <div className="mb-6">
           <ApprovalActions contentId={id} contentModule="pages" />
+        </div>
+      )}
+
+      {/* Preview Links — shown when a pending draft exists */}
+      {hasPendingDraft && (
+        <div className="mb-6 flex items-center gap-3 border border-ora-sand/60 bg-ora-cream-light p-4">
+          <span className="text-sm font-medium text-ora-charcoal">Pending draft available:</span>
+          <a
+            href={`/ora-panel/pages/${id}/preview-pending`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 bg-ora-gold px-4 py-2 text-sm text-ora-white hover:bg-ora-gold-dark transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5 stroke-1" />
+            Preview Pending
+          </a>
+          <a
+            href={`/ora-panel/pages/${id}/preview-live`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 border border-ora-sand bg-ora-cream px-4 py-2 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors"
+          >
+            <Globe className="h-3.5 w-3.5 stroke-1" />
+            View Current Live
+          </a>
         </div>
       )}
 

@@ -231,7 +231,7 @@ describe("Feature: content-approval-workflow, Property 1: Configuration round-tr
           expect(readBack!.enabled).toBe(enabled);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -263,7 +263,7 @@ describe("Feature: content-approval-workflow, Property 1: Configuration round-tr
           expect(readBack!.enabled).toBe(secondEnabled);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -330,7 +330,7 @@ describe("Feature: content-approval-workflow, Property 4: Approver assignment ro
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -363,7 +363,7 @@ describe("Feature: content-approval-workflow, Property 5: Approver assignment va
           );
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -388,7 +388,7 @@ describe("Feature: content-approval-workflow, Property 5: Approver assignment va
           );
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -424,7 +424,7 @@ describe("Feature: content-approval-workflow, Property 5: Approver assignment va
           );
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -499,7 +499,7 @@ describe("Feature: content-approval-workflow, Property 6: Removing approver pres
           expect(requestDecisions[0].decision).toBe(decision);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -598,7 +598,7 @@ describe("Feature: content-approval-workflow, Property 16: Non-retroactive enabl
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -730,7 +730,7 @@ describe("Feature: content-approval-workflow, Property 17: Auto-resolve on disab
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

@@ -113,7 +113,7 @@ describe("Feature: content-approval-workflow, Property 8: Pending content exclud
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

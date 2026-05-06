@@ -22,13 +22,15 @@
  *   - aiConversations.participantEmail follows the demo client pattern
  *   - knowledgeDocuments.sourceRefId starts with `demo:`
  */
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, like, or, sql } from "drizzle-orm";
 import type { Database } from "../db";
 import {
   aiAppointments,
   aiClients,
   aiConversations,
   aiMessages,
+  aiUnitInstallments,
+  aiUnitPaymentPlans,
   aiUnits,
   communities,
   knowledgeDocuments,
@@ -79,6 +81,14 @@ interface SeededProject {
 }
 
 const COMMUNITY_SEEDS = [
+  {
+    slug: "demo-bayn",
+    nameEn: "Bayn",
+    nameAr: "بيـن",
+    descriptionEn:
+      "ORA's flagship master community on the UAE coast — three connected districts (Coast, Marina, Hills) with villa, townhome, and apartment offerings, branded resort residences, and a marina retail promenade.",
+    descriptionAr: null,
+  },
   {
     slug: "demo-bayn-coast",
     nameEn: "Bayn Coast",
@@ -178,6 +188,16 @@ const PROJECT_SEEDS = [
     status: "handover" as const,
     totalUnits: 120,
     availableUnits: 8,
+  },
+  {
+    slug: "demo-bayn-views-3",
+    communitySlug: "demo-bayn",
+    nameEn: "Bayn Views 3 Villas",
+    shortDescriptionEn:
+      "Signature villa cluster inside the Bayn masterplan — four to seven bedroom standalone villas with private gardens, rooftop decks, and panoramic community views. Handover targeted for December 2027.",
+    status: "selling" as const,
+    totalUnits: 60,
+    availableUnits: 22,
   },
 ] as const;
 
@@ -994,6 +1014,312 @@ async function seedKnowledgeBase(db: Database): Promise<void> {
   );
 }
 
+// ── Seed: named villa clients with payment plans ────────────────────────────
+
+/**
+ * Five real-name clients owning villas in the `Bayn Views 3 Villas` cluster.
+ *
+ * Unlike the role-based personas above, these use real-looking emails and
+ * model an actual contracted purchase. Each client has:
+ *   - one villa (`aiUnits` row, status `sold`, with `cluster = "Views 3"` and
+ *     a `purchasePrice`),
+ *   - one signed `aiUnitPaymentPlan` (10/10/40/40 over 36 post-handover months),
+ *   - a full installment ledger with paid history and computed
+ *     paid/upcoming/overdue status relative to today, so the AI can answer
+ *     "when is my next payment?" / "how much have I paid?" without hardcoding.
+ *
+ * Tagged with `[DEMO-NAMED]` in `notes` so `resetDemo()` removes them too.
+ */
+const NAMED_VILLA_CLIENTS = [
+  {
+    firstName: "Abanoub",
+    lastName: "Adel",
+    email: "aadel@ora-uae.com",
+    phone: "+971586166310",
+    nationality: "EG",
+    lang: "en" as const,
+    unitNumber: "Villa-279",
+    areaSqm: 620,
+    floors: null,
+    purchasePrice: 10_000_000,
+    bookingDate: "2026-03-15",
+  },
+  {
+    firstName: "Mariam",
+    lastName: "Al Suwaidi",
+    email: "mariam.suwaidi@example.ae",
+    phone: "+971501234567",
+    nationality: "AE",
+    lang: "ar" as const,
+    unitNumber: "Villa-142",
+    areaSqm: 540,
+    floors: null,
+    purchasePrice: 8_500_000,
+    bookingDate: "2025-11-01",
+  },
+  {
+    firstName: "Yousef",
+    lastName: "Al Ahmadi",
+    email: "yousef.ahmadi@example.ae",
+    phone: "+971502345678",
+    nationality: "AE",
+    lang: "ar" as const,
+    unitNumber: "Villa-188",
+    areaSqm: 700,
+    floors: null,
+    purchasePrice: 12_000_000,
+    bookingDate: "2026-01-20",
+  },
+  {
+    firstName: "Layla",
+    lastName: "Hassan",
+    email: "layla.hassan@example.ae",
+    phone: "+971503456789",
+    nationality: "JO",
+    lang: "en" as const,
+    unitNumber: "Villa-211",
+    areaSqm: 580,
+    floors: null,
+    purchasePrice: 9_200_000,
+    bookingDate: "2025-08-10",
+  },
+  {
+    firstName: "Khalid",
+    lastName: "Al Rashid",
+    email: "khalid.rashid@example.ae",
+    phone: "+971504567890",
+    nationality: "AE",
+    lang: "en" as const,
+    unitNumber: "Villa-305",
+    areaSqm: 820,
+    floors: null,
+    purchasePrice: 15_500_000,
+    bookingDate: "2026-04-05",
+  },
+] as const;
+
+const NAMED_DEMO_NOTE_PREFIX = "[DEMO-NAMED]";
+const HANDOVER_DATE = "2027-12-15";
+const POST_HANDOVER_MONTHS = 36;
+
+/** Add `months` calendar months to a YYYY-MM-DD date, keeping the day-of-month. */
+function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + months, d));
+  return date.toISOString().slice(0, 10);
+}
+
+/** Round to 2 decimal places (currency). */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+interface PlannedInstallment {
+  installmentNumber: number;
+  labelEn: string;
+  labelAr: string;
+  dueDate: string;
+  amountAed: number;
+  paid: boolean;
+}
+
+/**
+ * Build the full installment ledger for one named villa client.
+ * 10% on booking, 10% +3 months later, 40% on handover, then `postHandoverMonths`
+ * monthly installments starting one month after handover.
+ *
+ * Paid/upcoming/overdue status is derived at runtime in the seeder against
+ * `new Date()` so the demo data stays meaningful as the real date drifts.
+ */
+function buildInstallmentPlan(
+  totalPrice: number,
+  bookingDate: string,
+  handoverDate: string,
+  postHandoverMonths: number
+): PlannedInstallment[] {
+  const dp1 = round2(totalPrice * 0.1);
+  const dp2 = round2(totalPrice * 0.1);
+  const handover = round2(totalPrice * 0.4);
+  const postHandoverTotal = round2(totalPrice * 0.4);
+  const monthly = round2(postHandoverTotal / postHandoverMonths);
+
+  const items: PlannedInstallment[] = [
+    {
+      installmentNumber: 1,
+      labelEn: "1st down payment (10%)",
+      labelAr: "الدفعة الأولى (١٠٪)",
+      dueDate: bookingDate,
+      amountAed: dp1,
+      paid: true,
+    },
+    {
+      installmentNumber: 2,
+      labelEn: "2nd down payment (10%)",
+      labelAr: "الدفعة الثانية (١٠٪)",
+      dueDate: addMonthsIso(bookingDate, 3),
+      amountAed: dp2,
+      paid: false, // status decided later vs today
+    },
+    {
+      installmentNumber: 3,
+      labelEn: "Handover payment (40%)",
+      labelAr: "دفعة التسليم (٤٠٪)",
+      dueDate: handoverDate,
+      amountAed: handover,
+      paid: false,
+    },
+  ];
+
+  // Adjust last monthly installment to absorb rounding so totals match exactly.
+  let runningPostTotal = 0;
+  for (let i = 0; i < postHandoverMonths; i++) {
+    const isLast = i === postHandoverMonths - 1;
+    const amount = isLast ? round2(postHandoverTotal - runningPostTotal) : monthly;
+    runningPostTotal = round2(runningPostTotal + amount);
+    items.push({
+      installmentNumber: 4 + i,
+      labelEn: `Post-handover installment ${i + 1}/${postHandoverMonths}`,
+      labelAr: `قسط بعد التسليم ${i + 1}/${postHandoverMonths}`,
+      dueDate: addMonthsIso(handoverDate, i + 1),
+      amountAed: amount,
+      paid: false,
+    });
+  }
+
+  return items;
+}
+
+interface SeededNamedClient {
+  id: string;
+  unitId: string;
+  firstName: string;
+  email: string;
+  phone: string;
+}
+
+async function seedNamedVillaClients(
+  db: Database,
+  bayhViewsProjectId: string,
+  bayhMasterCommunityId: string
+): Promise<SeededNamedClient[]> {
+  const today = new Date();
+  const results: SeededNamedClient[] = [];
+
+  for (const persona of NAMED_VILLA_CLIENTS) {
+    // 1. Client
+    const [client] = await db
+      .insert(aiClients)
+      .values({
+        firstName: persona.firstName,
+        lastName: persona.lastName,
+        email: persona.email,
+        phone: persona.phone,
+        nationality: persona.nationality,
+        preferredLanguage: persona.lang,
+        notes: `${NAMED_DEMO_NOTE_PREFIX} Bayn Views 3 villa client`,
+      })
+      .returning({ id: aiClients.id });
+
+    // 2. Unit
+    const [unit] = await db
+      .insert(aiUnits)
+      .values({
+        projectName: "[DEMO] Bayn Views 3 Villas",
+        projectId: bayhViewsProjectId,
+        communityId: bayhMasterCommunityId,
+        unitNumber: persona.unitNumber,
+        unitType: "villa",
+        floorNumber: persona.floors,
+        areaSqm: persona.areaSqm,
+        status: "sold",
+        constructionProgress: 55,
+        estimatedHandoverDate: HANDOVER_DATE,
+        cluster: "Views 3",
+        purchasePrice: persona.purchasePrice,
+        clientId: client.id,
+      })
+      .returning({ id: aiUnits.id });
+
+    // 3. Payment plan
+    const [plan] = await db
+      .insert(aiUnitPaymentPlans)
+      .values({
+        clientId: client.id,
+        unitId: unit.id,
+        planName: "10/10/40/40 — Post-handover 36 months",
+        totalPrice: persona.purchasePrice,
+        bookingDate: persona.bookingDate,
+        expectedHandoverDate: HANDOVER_DATE,
+        downPaymentPct: 10,
+        secondPaymentPct: 10,
+        handoverPct: 40,
+        postHandoverPct: 40,
+        postHandoverMonths: POST_HANDOVER_MONTHS,
+        notes: `${NAMED_DEMO_NOTE_PREFIX} Standard Bayn Views 3 plan`,
+      })
+      .returning({ id: aiUnitPaymentPlans.id });
+
+    // 4. Installments — derive status from today
+    const planned = buildInstallmentPlan(
+      persona.purchasePrice,
+      persona.bookingDate,
+      HANDOVER_DATE,
+      POST_HANDOVER_MONTHS
+    );
+
+    const rows = planned.map((it) => {
+      const due = new Date(`${it.dueDate}T00:00:00Z`);
+      const isPast = due.getTime() < today.getTime();
+      // 1st DP is always paid (signing). 2nd DP and any other past-due
+      // installments are paid for clients who have stayed current; for
+      // Yousef Al Ahmadi we intentionally leave the 2nd DP overdue.
+      let status: "paid" | "upcoming" | "overdue" = "upcoming";
+      let paidAt: Date | null = null;
+      let paymentReference: string | null = null;
+
+      const allowOverdue = persona.email === "yousef.ahmadi@example.ae";
+
+      if (it.installmentNumber === 1) {
+        status = "paid";
+        paidAt = new Date(`${it.dueDate}T10:00:00Z`);
+        paymentReference = `PMT-${persona.unitNumber}-001`;
+      } else if (isPast) {
+        if (allowOverdue && it.installmentNumber === 2) {
+          status = "overdue";
+        } else {
+          status = "paid";
+          paidAt = new Date(`${it.dueDate}T10:00:00Z`);
+          paymentReference = `PMT-${persona.unitNumber}-${pad(it.installmentNumber, 3)}`;
+        }
+      }
+
+      return {
+        planId: plan.id,
+        installmentNumber: it.installmentNumber,
+        labelEn: it.labelEn,
+        labelAr: it.labelAr,
+        dueDate: it.dueDate,
+        amountAed: it.amountAed,
+        status,
+        paidAt,
+        paymentReference,
+      };
+    });
+
+    await db.insert(aiUnitInstallments).values(rows);
+
+    results.push({
+      id: client.id,
+      unitId: unit.id,
+      firstName: persona.firstName,
+      email: persona.email,
+      phone: persona.phone,
+    });
+  }
+
+  return results;
+}
+
 // ── Public entry points ─────────────────────────────────────────────────────
 
 export interface SeedDemoSummary {
@@ -1005,6 +1331,7 @@ export interface SeedDemoSummary {
   appointments: number;
   conversations: number;
   knowledgeDocs: number;
+  namedVillaClients: number;
 }
 
 /**
@@ -1041,6 +1368,15 @@ export async function seedDemo(db: Database): Promise<SeedDemoSummary> {
   // 8. Knowledge base
   await seedKnowledgeBase(db);
 
+  // 9. Named villa clients (Bayn Views 3) with payment plans
+  const bayhMaster = bySlug.get("demo-bayn");
+  const bayhViewsProject = seededProjects.find((p) => p.slug === "demo-bayn-views-3");
+  let namedVillaClients = 0;
+  if (bayhMaster && bayhViewsProject) {
+    const named = await seedNamedVillaClients(db, bayhViewsProject.id, bayhMaster.id);
+    namedVillaClients = named.length;
+  }
+
   return {
     communities: seededCommunities.length,
     projects: seededProjects.length,
@@ -1050,6 +1386,7 @@ export async function seedDemo(db: Database): Promise<SeedDemoSummary> {
     appointments: 8,
     conversations: 3,
     knowledgeDocs: ORA_KNOWLEDGE_DOCS.length,
+    namedVillaClients,
   };
 }
 
@@ -1097,11 +1434,18 @@ export async function resetDemo(db: Database): Promise<{
     .delete(aiAppointments)
     .where(like(aiAppointments.referenceNumber, `${DEMO_APPOINTMENT_PREFIX}%`));
 
-  // 4. Find demo clients by email pattern (used to scope conversations + units)
+  // 4. Find demo clients by email pattern OR demo notes prefix
+  //    (named villa clients use real-looking emails so notes is the only marker).
   const demoClients = await db
     .select({ id: aiClients.id })
     .from(aiClients)
-    .where(like(aiClients.email, `%${DEMO_EMAIL_DOMAIN}`));
+    .where(
+      or(
+        like(aiClients.email, `%${DEMO_EMAIL_DOMAIN}`),
+        like(aiClients.notes, `${NAMED_DEMO_NOTE_PREFIX}%`),
+        like(aiClients.notes, `${DEMO_TICKET_PREFIX}%`)
+      )
+    );
   const demoClientIds = demoClients.map((c) => c.id);
 
   let messagesRemoved = 0;
@@ -1120,6 +1464,12 @@ export async function resetDemo(db: Database): Promise<{
         .where(inArray(aiMessages.conversationId, demoConvIds));
       messagesRemoved = msgRes.rowCount ?? 0;
 
+      // Remove any appointments still referencing these conversations
+      // (covers appointments whose referenceNumber doesn't match the demo prefix).
+      await db
+        .delete(aiAppointments)
+        .where(inArray(aiAppointments.conversationId, demoConvIds));
+
       const convRes = await db
         .delete(aiConversations)
         .where(inArray(aiConversations.id, demoConvIds));
@@ -1132,20 +1482,26 @@ export async function resetDemo(db: Database): Promise<{
     .delete(aiUnits)
     .where(like(aiUnits.projectName, `${DEMO_TICKET_PREFIX}%`));
 
-  // 6. Clients
+  // 6. Clients (cascades to ai_unit_payment_plans and ai_unit_installments)
   const clientsRes = await db
     .delete(aiClients)
-    .where(like(aiClients.email, `%${DEMO_EMAIL_DOMAIN}`));
+    .where(
+      or(
+        like(aiClients.email, `%${DEMO_EMAIL_DOMAIN}`),
+        like(aiClients.notes, `${NAMED_DEMO_NOTE_PREFIX}%`),
+        like(aiClients.notes, `${DEMO_TICKET_PREFIX}%`)
+      )
+    );
 
   // 7. Projects (cascade-safe: unique slug prefix)
   const projectsRes = await db
     .delete(projects)
     .where(like(projects.slug, "demo-%"));
 
-  // 8. Communities
+  // 8. Communities — covers `demo-bayn` (master) and `demo-bayn-*` (subs)
   const communitiesRes = await db
     .delete(communities)
-    .where(like(communities.slug, "demo-bayn-%"));
+    .where(like(communities.slug, "demo-bayn%"));
 
   return {
     knowledgeDocs: knowledgeDocsRemoved,

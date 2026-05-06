@@ -16,12 +16,31 @@ const STATUS_DOT: Record<string, string> = {
 export default function PageIndexPage() {
   const [statusFilter, setStatusFilter] = useState<PageStatus | ''>('');
   const [search, setSearch] = useState('');
+  const [cloneError, setCloneError] = useState<{ id: string; message: string } | null>(null);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const { data: groups, isLoading } = usePages(
     statusFilter ? { status: statusFilter as PageStatus } : undefined
   );
   const { data: settingsEntries } = useSiteSettings();
   const cloneLocale = useCloneLocale();
+
+  const handleCloneAr = async (sourceId: string) => {
+    setCloneError(null);
+    setCloningId(sourceId);
+    try {
+      await cloneLocale.mutateAsync(sourceId);
+    } catch (err) {
+      const message =
+        (err as { error?: string })?.error ??
+        (err instanceof Error ? err.message : 'Failed to clone page to AR');
+      setCloneError({ id: sourceId, message });
+      // eslint-disable-next-line no-console
+      console.error('[clone-locale] failed', err);
+    } finally {
+      setCloningId(null);
+    }
+  };
 
   const homePageId = useMemo(() => {
     if (!settingsEntries) return null;
@@ -103,8 +122,9 @@ export default function PageIndexPage() {
             return (
               <div
                 key={group.namespace}
-                className="flex items-center gap-4 border border-ora-sand/60 bg-ora-white p-4"
+                className="border border-ora-sand/60 bg-ora-white"
               >
+                <div className="flex items-center gap-4 p-4">
                 {/* Locale dot */}
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT[status]}`}
@@ -168,12 +188,12 @@ export default function PageIndexPage() {
                     </Link>
                   ) : group.locales.en ? (
                     <button
-                      onClick={() => cloneLocale.mutate(group.locales.en!.id)}
-                      disabled={cloneLocale.isPending}
-                      className="inline-flex items-center gap-1 rounded-full bg-ora-gold/10 px-3 py-0.5 text-xs font-medium text-ora-gold-dark hover:bg-ora-gold/20 transition-colors"
+                      onClick={() => handleCloneAr(group.locales.en!.id)}
+                      disabled={cloningId === group.locales.en.id}
+                      className="inline-flex items-center gap-1 rounded-full bg-ora-gold/10 px-3 py-0.5 text-xs font-medium text-ora-gold-dark hover:bg-ora-gold/20 transition-colors disabled:opacity-50"
                     >
                       <Plus className="h-3 w-3 stroke-1" />
-                      Create AR
+                      {cloningId === group.locales.en.id ? 'Cloning…' : 'Create AR'}
                     </button>
                   ) : (
                     <span className="inline-block rounded-full bg-ora-sand/50 px-3 py-0.5 text-xs text-ora-muted">
@@ -181,6 +201,12 @@ export default function PageIndexPage() {
                     </span>
                   )}
                 </div>
+                </div>
+                {cloneError && cloneError.id === group.locales.en?.id && (
+                  <div className="border-t border-ora-error/20 bg-ora-error/5 px-4 py-2 text-xs text-ora-error">
+                    Couldn’t create AR version: {cloneError.message}
+                  </div>
+                )}
               </div>
             );
           })}

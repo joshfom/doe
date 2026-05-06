@@ -48,6 +48,14 @@ export interface HandoffState {
     newDate?: string;
     newTime?: string;
   };
+  /** A broker / staff registering a third-party client/lead on their behalf. */
+  pendingClientRegistration?: {
+    clientName?: string;
+    clientEmail?: string;
+    clientPhone?: string;
+    projectInterest?: string;
+    notes?: string;
+  };
   /** Short rolling summary of the conversation for admin panel + handover. */
   summary?: string;
   summaryUpdatedAt?: string;

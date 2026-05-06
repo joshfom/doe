@@ -1,13 +1,19 @@
 import { Elysia } from "elysia";
 import { eq, and, sql } from "drizzle-orm";
 import { authGuard } from "../auth";
-import { pages, revisions } from "../../schema";
+import { pages, revisions, approvalConfig } from "../../schema";
 import { siteSettings } from "../../schema";
 import { db } from "../../db";
 import type { Locale, PageNamespaceGroup, PageStatus } from "../../types";
 import { generateSlug, ensureUniqueSlug } from "../../utils/slug";
 import { logAudit } from "../../audit";
 import { checkPublicationGate } from "../../approval/gate";
+import {
+  getActiveApprovalRequest,
+  updatePendingData,
+  resetDecisions,
+  createApprovalRequestWithDraft,
+} from "../../approval/service";
 
 // ── Public routes (no auth) ──────────────────────────────────────────────────
 
@@ -111,7 +117,7 @@ const protectedPages = new Elysia({ name: "pages-protected" })
     return { data: created };
   })
 
-  // PUT /pages/:id — Update page + create revision
+  // PUT /pages/:id — Update page + create revision (or route to pending draft)
   .put("/pages/:id", async ({ params, body, userId, set }) => {
     const { id } = params;
     const { title, slug, data, metaTitle, metaDescription } = body as {
@@ -134,6 +140,74 @@ const protectedPages = new Elysia({ name: "pages-protected" })
       return { error: "Page not found" };
     }
 
+    // Check if approval is enabled for "pages" module
+    let approvalEnabled = false;
+    try {
+      const [config] = await db
+        .select()
+        .from(approvalConfig)
+        .where(eq(approvalConfig.contentModule, "pages"))
+        .limit(1);
+      approvalEnabled = !!config?.enabled;
+    } catch {
+      // Table doesn't exist or query failed — treat as disabled
+    }
+
+    if (approvalEnabled) {
+      // Route save to pending draft
+      const activeRequest = await getActiveApprovalRequest(db, id, "pages");
+
+      if (activeRequest) {
+        // Update existing request's pendingData and reset decisions
+        await updatePendingData(db, activeRequest.id, data);
+        await resetDecisions(db, activeRequest.id);
+
+        await logAudit(db, {
+          userId,
+          action: "update",
+          entityType: "page",
+          entityId: id,
+          summary: `Updated pending draft for page "${existing.title}"`,
+        });
+
+        await logAudit(db, {
+          userId,
+          action: "approval_decide",
+          entityType: "approval_request",
+          entityId: activeRequest.id,
+          summary: `Decisions reset for page "${existing.title}" — draft was re-edited, re-review required`,
+        });
+
+        return { data: existing, pendingDraft: true, approvalRequestId: activeRequest.id };
+      } else {
+        // Create new approval request with pendingData
+        const request = await createApprovalRequestWithDraft(db, id, "pages", userId, data);
+
+        // Set page status to pending_review
+        await db
+          .update(pages)
+          .set({ status: "pending_review", updatedAt: new Date() })
+          .where(eq(pages.id, id));
+
+        await logAudit(db, {
+          userId,
+          action: "approval_submit",
+          entityType: "page",
+          entityId: id,
+          summary: `Submitted page "${existing.title}" for approval with pending draft`,
+        });
+
+        const [updatedPage] = await db
+          .select()
+          .from(pages)
+          .where(eq(pages.id, id))
+          .limit(1);
+
+        return { data: updatedPage, pendingDraft: true, approvalRequestId: request.id };
+      }
+    }
+
+    // Approval disabled — existing behavior: save directly to pages.data + create revision
     // Create revision with PREVIOUS data before updating
     const [lastRevision] = await db
       .select({ revisionNumber: revisions.revisionNumber })
@@ -230,7 +304,7 @@ const protectedPages = new Elysia({ name: "pages-protected" })
     }
 
     // Check publication gate
-    const gateResult = await checkPublicationGate(db, id, "pages", userId);
+    const gateResult = await checkPublicationGate(db, id, "pages", userId, page.data);
 
     if (!gateResult.allowed) {
       set.status = 202;
@@ -308,68 +382,104 @@ const protectedPages = new Elysia({ name: "pages-protected" })
       return { error: "Page not found" };
     }
 
-    // Check if AR version already exists for this namespace
-    const [existingAr] = await db
+    // The clone target locale is always the *other* locale in the namespace,
+    // so EN → AR and AR → EN both work from the same button.
+    const targetLocale: Locale = source.locale === "ar" ? "en" : "ar";
+
+    // Refuse if the namespace already has a page in the target locale —
+    // this is the documented "already translated" case (the UI already
+    // hides the button in that situation; this is the server-side guard).
+    const [existingTarget] = await db
       .select()
       .from(pages)
       .where(
         and(
           eq(pages.namespace, source.namespace),
-          eq(pages.locale, "ar")
+          eq(pages.locale, targetLocale)
         )
       )
       .limit(1);
 
-    if (existingAr) {
+    if (existingTarget) {
       set.status = 409;
-      return { error: "AR locale version already exists for this namespace" };
+      return {
+        error: `${targetLocale.toUpperCase()} version already exists for this page`,
+        data: existingTarget,
+      };
     }
 
-    // Ensure the slug is unique within the AR locale
-    const existingArPages = await db
-      .select({ slug: pages.slug })
-      .from(pages)
-      .where(eq(pages.locale, "ar"));
-    const arSlug = ensureUniqueSlug(source.slug, existingArPages.map((p) => p.slug));
+    // Multilingual slug strategy:
+    //   /en/about  + /ar/about    ← preferred (same slug per locale)
+    //   /en/about  + /ar/about-2  ← fallback only if AR already used "about"
+    //                                in a *different* namespace.
+    //
+    // The DB has a unique index on (slug, locale), so cross-locale
+    // duplicates are allowed by design. We only suffix when there is
+    // a real collision inside the target locale, and we retry inside
+    // a small loop to absorb races between the SELECT below and the
+    // INSERT (a parallel clone request could grab the slug first).
+    const existingTargetSlugs = (
+      await db
+        .select({ slug: pages.slug })
+        .from(pages)
+        .where(eq(pages.locale, targetLocale))
+    ).map((p) => p.slug);
 
-    try {
-      const [cloned] = await db
-        .insert(pages)
-        .values({
-          title: source.title,
-          slug: arSlug,
-          locale: "ar",
-          namespace: source.namespace,
-          status: "draft",
-          isSystem: source.isSystem,
-          data: source.data ?? { root: { props: {} }, content: [] },
-          metaTitle: source.metaTitle,
-          metaDescription: source.metaDescription,
-          metaKeywords: source.metaKeywords,
-          ogImage: source.ogImage,
-          canonicalUrl: source.canonicalUrl,
-          robotsDirective: source.robotsDirective,
-        })
-        .returning();
+    const baseSlug = source.slug;
+    let attemptSlug = ensureUniqueSlug(baseSlug, existingTargetSlugs);
 
-      await logAudit(db, {
-        userId,
-        action: "create",
-        entityType: "page",
-        entityId: cloned.id,
-        summary: `Cloned page "${source.title}" to AR locale`,
-      });
+    const MAX_RETRIES = 5;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const [cloned] = await db
+          .insert(pages)
+          .values({
+            title: source.title,
+            slug: attemptSlug,
+            locale: targetLocale,
+            namespace: source.namespace,
+            status: "draft",
+            isSystem: source.isSystem,
+            data: source.data ?? { root: { props: {} }, content: [] },
+            metaTitle: source.metaTitle,
+            metaDescription: source.metaDescription,
+            metaKeywords: source.metaKeywords,
+            ogImage: source.ogImage,
+            canonicalUrl: source.canonicalUrl,
+            robotsDirective: source.robotsDirective,
+          })
+          .returning();
 
-      set.status = 201;
-      return { data: cloned };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("duplicate") || message.includes("unique")) {
-        set.status = 409;
-        return { error: "A page with this slug already exists in AR locale" };
+        await logAudit(db, {
+          userId,
+          action: "create",
+          entityType: "page",
+          entityId: cloned.id,
+          summary: `Cloned page "${source.title}" from ${source.locale.toUpperCase()} to ${targetLocale.toUpperCase()}`,
+        });
+
+        set.status = 201;
+        return { data: cloned };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const isUniqueViolation =
+          message.includes("duplicate") ||
+          message.includes("unique") ||
+          message.includes("pages_slug_locale_idx");
+
+        if (!isUniqueViolation) throw err;
+
+        // Another request grabbed the slug between our SELECT and INSERT.
+        // Bump the suffix and try again.
+        existingTargetSlugs.push(attemptSlug);
+        attemptSlug = ensureUniqueSlug(baseSlug, existingTargetSlugs);
       }
-      throw err;
     }
+
+    set.status = 409;
+    return {
+      error: `Could not allocate a unique ${targetLocale.toUpperCase()} slug for "${source.slug}" after ${MAX_RETRIES} attempts`,
+    };
   })
 
   // POST /pages/:id/set-home — Set page as home page
@@ -415,6 +525,38 @@ const protectedPages = new Elysia({ name: "pages-protected" })
     });
 
     return { data: { success: true, homePageId: id } };
+  })
+
+  // GET /pages/:id/pending-draft — Return pendingData from active approval request
+  .get("/pages/:id/pending-draft", async ({ params, set }) => {
+    const { id } = params;
+
+    const activeRequest = await getActiveApprovalRequest(db, id, "pages");
+
+    if (!activeRequest || !activeRequest.pendingData) {
+      set.status = 404;
+      return { error: "No pending draft" };
+    }
+
+    return { data: activeRequest.pendingData };
+  })
+
+  // GET /pages/:id/live-data — Return current pages.data regardless of approval status
+  .get("/pages/:id/live-data", async ({ params, set }) => {
+    const { id } = params;
+
+    const [page] = await db
+      .select()
+      .from(pages)
+      .where(eq(pages.id, id))
+      .limit(1);
+
+    if (!page) {
+      set.status = 404;
+      return { error: "Page not found" };
+    }
+
+    return { data: page.data };
   });
 
 // ── Read-only routes (no auth required) ──────────────────────────────────────
@@ -484,7 +626,11 @@ const readPages = new Elysia({ name: "pages-read" })
       return { error: "Page not found" };
     }
 
-    return { data: page };
+    // Check if there's an active pending approval request with pendingData
+    const activeRequest = await getActiveApprovalRequest(db, id, "pages");
+    const hasPendingDraft = !!(activeRequest && activeRequest.pendingData != null);
+
+    return { data: page, hasPendingDraft };
   });
 
 // ── Combine and export ───────────────────────────────────────────────────────

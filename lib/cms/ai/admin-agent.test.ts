@@ -101,6 +101,15 @@ describe("detectAdminIntent", () => {
     ["please cancel ORA-APT-ABC123", "cancel_appointment"],
     ["reschedule ORA-APT-ABC123 to tomorrow", "reschedule_appointment"],
     ["change status of ORA-000123 to closed", "change_ticket_status"],
+    ["how many tickets do i have today", "my_tickets"],
+    ["my open tickets", "my_tickets"],
+    ["tickets assigned to me", "my_tickets"],
+    ["do i have appointments today", "my_appointments"],
+    ["my appointments this week", "my_appointments"],
+    ["what is my most important ticket", "my_top_priority"],
+    ["my top priority ticket", "my_top_priority"],
+    ["what did the ai do today", "my_ai_actions"],
+    ["show me my ai actions", "my_ai_actions"],
     ["what's the weather", "unknown"],
   ];
 

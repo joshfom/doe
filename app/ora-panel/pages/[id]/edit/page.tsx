@@ -74,23 +74,55 @@ export default function PageEditorPage({
   const [saving, setSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
 
+  // Pending draft state
+  const [pendingDraftData, setPendingDraftData] = useState<PageData | null>(null);
+  const [loadingPendingDraft, setLoadingPendingDraft] = useState(false);
+  const [hasPendingDraft, setHasPendingDraft] = useState(false);
+
   // Ref to track the latest editor data for manual save and beforeunload
   const latestDataRef = useRef<Data | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingRef = useRef(false);
 
-  // Load page data from CMS API
+  // Load page data from CMS API, then check for pending draft
   useEffect(() => {
-    apiFetch<{ data: Record<string, unknown> }>(`/api/pages/${id}`)
-      .then((res) => {
+    let cancelled = false;
+
+    async function loadPageAndDraft() {
+      try {
+        const res = await apiFetch<{ data: Record<string, unknown> }>(`/api/pages/${id}`);
+        if (cancelled) return;
         setPage(res.data);
-      })
-      .catch(() => {
-        setError('Failed to load page');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+
+        // Check if page has a pending draft
+        const pageHasPendingDraft = !!(res.data as { hasPendingDraft?: boolean }).hasPendingDraft;
+        setHasPendingDraft(pageHasPendingDraft);
+
+        if (pageHasPendingDraft) {
+          setLoadingPendingDraft(true);
+          try {
+            const draftRes = await apiFetch<{ data: PageData }>(`/api/pages/${id}/pending-draft`);
+            if (cancelled) return;
+            setPendingDraftData(draftRes.data);
+          } catch {
+            // If pending draft fetch fails, fall back to page data
+            if (!cancelled) {
+              setPendingDraftData(null);
+              setHasPendingDraft(false);
+            }
+          } finally {
+            if (!cancelled) setLoadingPendingDraft(false);
+          }
+        }
+      } catch {
+        if (!cancelled) setError('Failed to load page');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadPageAndDraft();
+    return () => { cancelled = true; };
   }, [id]);
 
   // Save as draft (no publish)
@@ -186,13 +218,16 @@ export default function PageEditorPage({
   // indicator) don't hand Puck a fresh `data` reference and cause it to
   // re-mount mid-edit (which would lose focus / collapse open panels).
   // Must be above early returns to maintain consistent hook order.
+  // Use pending draft data if available, otherwise fall back to page data.
   const { data: pageData, removed: removedTypes } = useMemo(() => {
-    const raw = (page?.data as PageData) ?? { root: { props: {} }, content: [] };
+    const raw = pendingDraftData
+      ?? (page?.data as PageData)
+      ?? { root: { props: {} }, content: [] };
     return sanitizePageData(raw);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, pendingDraftData]);
 
-  if (loading) {
+  if (loading || loadingPendingDraft) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <p className="text-sm text-ora-muted">Loading editor…</p>
@@ -245,6 +280,17 @@ export default function PageEditorPage({
           Save Draft
         </button>
       </div>
+
+      {/* Pending draft banner */}
+      {hasPendingDraft && (
+        <div className="fixed top-12 left-2 z-[9999] flex items-center gap-2 bg-amber-500/90 px-4 py-1.5 text-xs text-white backdrop-blur-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>Changes are saved to pending draft — live page is unchanged</span>
+        </div>
+      )}
+
       {saving && (
         <div className="fixed top-4 right-4 z-[9999] bg-ora-charcoal px-4 py-2 text-sm text-white">
           Saving…

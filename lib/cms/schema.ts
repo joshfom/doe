@@ -564,11 +564,16 @@ export const approvalConfigApprovers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
   },
   (table) => [
     uniqueIndex("approval_config_approvers_unique_idx").on(
       table.configId,
       table.userId
+    ),
+    uniqueIndex("approval_config_approvers_position_idx").on(
+      table.configId,
+      table.position
     ),
   ]
 );
@@ -590,6 +595,8 @@ export const approvalRequests = pgTable(
     })
       .notNull()
       .default("pending"),
+    pendingData: jsonb("pending_data"),
+    currentStep: integer("current_step").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at"),
   },
@@ -618,12 +625,14 @@ export const approvalDecisions = pgTable(
       enum: ["approved", "rejected"],
     }).notNull(),
     comment: text("comment"),
+    chainStep: integer("chain_step"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("approval_decisions_unique_idx").on(
       table.requestId,
-      table.approverId
+      table.approverId,
+      table.chainStep
     ),
     index("approval_decisions_request_idx").on(table.requestId),
   ]
@@ -922,6 +931,10 @@ export const aiUnits = pgTable(
       .default("available"),
     constructionProgress: integer("construction_progress"),
     estimatedHandoverDate: date("estimated_handover_date"),
+    // Free-text cluster / sub-zone label within a project (e.g. "Views 3").
+    cluster: text("cluster"),
+    // Total contracted price of the unit in AED.
+    purchasePrice: numeric("purchase_price", { mode: "number" }),
     clientId: uuid("client_id").references(() => aiClients.id),
     tenantId: uuid("tenant_id").references(() => aiTenants.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -931,6 +944,70 @@ export const aiUnits = pgTable(
     index("ai_units_status_idx").on(table.status),
     index("ai_units_project_id_idx").on(table.projectId),
     index("ai_units_community_id_idx").on(table.communityId),
+  ]
+);
+
+// ── AI Unit Payment Plans ────────────────────────────────────────────────────
+// One row per (client, unit) representing the signed payment plan contract.
+// Used by the visitor-facing AI to answer payment questions for verified
+// clients. Tagged demo records are removed by `resetDemo()` via the linked
+// client / unit.
+export const aiUnitPaymentPlans = pgTable(
+  "ai_unit_payment_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => aiClients.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id")
+      .notNull()
+      .references(() => aiUnits.id, { onDelete: "cascade" }),
+    planName: text("plan_name").notNull(),
+    totalPrice: numeric("total_price", { mode: "number" }).notNull(),
+    bookingDate: date("booking_date").notNull(),
+    expectedHandoverDate: date("expected_handover_date"),
+    downPaymentPct: integer("down_payment_pct").notNull().default(10),
+    secondPaymentPct: integer("second_payment_pct").notNull().default(10),
+    handoverPct: integer("handover_pct").notNull().default(40),
+    postHandoverPct: integer("post_handover_pct").notNull().default(40),
+    postHandoverMonths: integer("post_handover_months").notNull().default(36),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("ai_unit_payment_plans_client_id_idx").on(table.clientId),
+    index("ai_unit_payment_plans_unit_id_idx").on(table.unitId),
+  ]
+);
+
+// ── AI Unit Installments ─────────────────────────────────────────────────────
+// Individual installment ledger entries belonging to a payment plan.
+export const aiUnitInstallments = pgTable(
+  "ai_unit_installments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => aiUnitPaymentPlans.id, { onDelete: "cascade" }),
+    installmentNumber: integer("installment_number").notNull(),
+    labelEn: text("label_en").notNull(),
+    labelAr: text("label_ar"),
+    dueDate: date("due_date").notNull(),
+    amountAed: numeric("amount_aed", { mode: "number" }).notNull(),
+    status: text("status", {
+      enum: ["paid", "upcoming", "overdue"],
+    })
+      .notNull()
+      .default("upcoming"),
+    paidAt: timestamp("paid_at"),
+    paymentReference: text("payment_reference"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("ai_unit_installments_plan_id_idx").on(table.planId),
+    index("ai_unit_installments_due_date_idx").on(table.dueDate),
   ]
 );
 
@@ -1209,6 +1286,46 @@ export const projects = pgTable(
     ),
     index("projects_status_idx").on(table.status),
     index("projects_community_id_idx").on(table.communityId),
+  ]
+);
+
+// ── Admin AI Chat Sessions ───────────────────────────────────────────────────
+// ChatGPT-style conversation history for the staff-facing copilot at
+// /ora-panel/ai. Each authenticated user owns a list of sessions; messages
+// belong to a single session. Visitor-side conversations are persisted in
+// `aiConversations` separately.
+export const adminChatSessions = pgTable(
+  "admin_chat_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("New chat"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_chat_sessions_user_id_idx").on(table.userId),
+    index("admin_chat_sessions_updated_at_idx").on(table.updatedAt),
+  ]
+);
+
+export const adminChatMessages = pgTable(
+  "admin_chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => adminChatSessions.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    pendingAction: jsonb("pending_action"),
+    executed: jsonb("executed"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_chat_messages_session_id_idx").on(table.sessionId),
   ]
 );
 

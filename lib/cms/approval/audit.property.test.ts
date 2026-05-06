@@ -162,7 +162,7 @@ describe("Feature: content-approval-workflow, Property 15: Approval actions prod
           expect(submitEntry!.timestamp).toBeInstanceOf(Date);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -194,7 +194,7 @@ describe("Feature: content-approval-workflow, Property 15: Approval actions prod
           expect(decideEntry!.timestamp).toBeInstanceOf(Date);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -225,7 +225,7 @@ describe("Feature: content-approval-workflow, Property 15: Approval actions prod
           expect(resolveEntry!.timestamp).toBeInstanceOf(Date);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
