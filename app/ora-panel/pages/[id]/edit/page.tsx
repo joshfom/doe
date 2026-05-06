@@ -173,6 +173,16 @@ export default function PageEditorPage({
     [id]
   );
 
+  // Memoize so transient parent re-renders (e.g. toggling the "Saved"
+  // indicator) don't hand Puck a fresh `data` reference and cause it to
+  // re-mount mid-edit (which would lose focus / collapse open panels).
+  // Must be above early returns to maintain consistent hook order.
+  const { data: pageData, removed: removedTypes } = useMemo(() => {
+    const raw = (page?.data as PageData) ?? { root: { props: {} }, content: [] };
+    return sanitizePageData(raw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -194,20 +204,6 @@ export default function PageEditorPage({
       </div>
     );
   }
-
-  const rawPageData = (page?.data as PageData) ?? {
-    root: { props: {} },
-    content: [],
-  };
-  // Memoize so transient parent re-renders (e.g. toggling the "Saved"
-  // indicator) don't hand Puck a fresh `data` reference and cause it to
-  // re-mount mid-edit (which would lose focus / collapse open panels).
-  const { data: pageData, removed: removedTypes } = useMemo(
-    () => sanitizePageData(rawPageData),
-    // We intentionally re-derive only when the loaded page changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page]
-  );
 
   const overrides = createOverrides(defaultTheme);
   const plugins = createEditorPlugins({
