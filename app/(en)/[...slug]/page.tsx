@@ -161,6 +161,10 @@ export default async function EnDynamicPage({ params, searchParams }: Props) {
     const isAuthenticated = !!sessionCookie?.value;
     const settings = await fetchSiteSettings();
     const projectUrl = `/${slug.join("/")}`;
+
+    // If the project has a custom landing page layout, render it via the page builder
+    const landingPageData = (project.project as Record<string, unknown>).landingPageData as Record<string, unknown> | null | undefined;
+
     return (
       <>
         <ProjectJsonLd
@@ -169,7 +173,11 @@ export default async function EnDynamicPage({ params, searchParams }: Props) {
           url={projectUrl}
           companyName={settings.company_name}
         />
-        <ProjectLanding data={project} locale="en" settings={settings} />
+        {landingPageData ? (
+          <PageRenderer data={landingPageData as any} />
+        ) : (
+          <ProjectLanding data={project} locale="en" settings={settings} />
+        )}
         {isAuthenticated && project.project.id && (
           <a
             href={`/ora-panel/projects/${project.project.id}`}

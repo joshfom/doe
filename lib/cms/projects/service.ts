@@ -188,6 +188,7 @@ export async function updateProject(
     "contractor",
     "architect",
     "seoMeta",
+    "landingPageData",
   ];
   for (const f of fields) {
     const v = input[f];

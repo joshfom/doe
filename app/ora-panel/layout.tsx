@@ -33,6 +33,7 @@ import {
   Cog,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
+import { SidebarTooltip } from '@/components/ui/sidebar-tooltip';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -163,7 +164,7 @@ export default function OraPanelLayout({
   }
 
   const sidebarWidth = collapsed ? 'w-16' : 'w-56';
-  const mainMargin = collapsed ? 'ml-16' : 'ml-56';
+  const mainMargin = 'ml-16'; // Always reserve collapsed width — sidebar expands as overlay
 
   const userPermissions = session?.permissions ?? [];
   const visibleNavItems = navItems.filter(
@@ -174,7 +175,7 @@ export default function OraPanelLayout({
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen">
         {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-30 ${sidebarWidth} border-r border-ora-sand bg-ora-white transition-all duration-200`}>
+        <aside className={`fixed inset-y-0 left-0 z-40 ${sidebarWidth} border-r border-ora-sand bg-ora-white transition-all duration-200 ${!collapsed ? 'shadow-xl' : ''}`}>
           <div className="flex h-full flex-col">
             {/* Logo + toggle */}
             <div className="flex items-center justify-between border-b border-ora-sand px-3 py-4">
@@ -201,7 +202,7 @@ export default function OraPanelLayout({
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 space-y-1 px-2 py-3">
+            <nav className="flex-1 space-y-1 px-2 py-3 overflow-y-auto">
               {visibleNavItems.map(({ href, label, icon: Icon }) => {
                 const isActive =
                   href === '/ora-panel'
@@ -209,33 +210,34 @@ export default function OraPanelLayout({
                     : pathname.startsWith(href);
 
                 return (
-                  <Link
-                    key={href}
-                    href={href}
-                    title={collapsed ? label : undefined}
-                    className={`flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-ora-cream font-medium text-ora-charcoal'
-                        : 'text-ora-charcoal-light hover:bg-ora-cream-light'
-                    } ${collapsed ? 'justify-center px-0' : ''}`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0 stroke-1" />
-                    {!collapsed && <span>{label}</span>}
-                  </Link>
+                  <SidebarTooltip key={href} label={label} show={collapsed}>
+                    <Link
+                      href={href}
+                      className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-ora-cream font-medium text-ora-charcoal'
+                          : 'text-ora-charcoal-light hover:bg-ora-cream-light'
+                      } ${collapsed ? 'justify-center px-0' : ''}`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0 stroke-1" />
+                      {!collapsed && <span>{label}</span>}
+                    </Link>
+                  </SidebarTooltip>
                 );
               })}
             </nav>
 
             {/* Logout */}
             <div className="border-t border-ora-sand px-2 py-3">
-              <button
-                onClick={handleLogout}
-                title={collapsed ? 'Logout' : undefined}
-                className={`flex w-full items-center gap-3 px-3 py-2.5 text-sm text-ora-charcoal-light hover:bg-ora-cream-light transition-colors ${collapsed ? 'justify-center px-0' : ''}`}
-              >
-                <LogOut className="h-4 w-4 shrink-0 stroke-1" />
-                {!collapsed && <span>Logout</span>}
-              </button>
+              <SidebarTooltip label="Logout" show={collapsed}>
+                <button
+                  onClick={handleLogout}
+                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-ora-charcoal-light hover:bg-ora-cream-light transition-colors ${collapsed ? 'justify-center px-0' : ''}`}
+                >
+                  <LogOut className="h-4 w-4 shrink-0 stroke-1" />
+                  {!collapsed && <span>Logout</span>}
+                </button>
+              </SidebarTooltip>
             </div>
           </div>
         </aside>

@@ -92,6 +92,13 @@
       "when": 1777613756692,
       "tag": "0012_exotic_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778045447080,
+      "tag": "0013_rich_silhouette",
+      "breakpoints": true
     }
   ]
 }

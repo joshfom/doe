@@ -659,6 +659,21 @@ export const tickets = pgTable(
         "construction_material_delivery",
         "vendor_access",
         "maintenance_request",
+        // Off-plan / pre-handover (Bayn is still under construction)
+        "site_visit_booking",
+        "brochure_request",
+        "payment_milestone",
+        "oqood_assistance",
+        "mortgage_noc",
+        "construction_progress_inquiry",
+        "snag_submission",
+        "handover_appointment",
+        "hot_works_permit",
+        "work_at_height_permit",
+        "lift_usage_booking",
+        "inspection_request",
+        // Sales / lead capture
+        "lead_inquiry",
       ],
     })
       .notNull()
@@ -748,7 +763,16 @@ export const ticketApprovals = pgTable(
       .notNull()
       .references(() => tickets.id, { onDelete: "cascade" }),
     scope: text("scope", {
-      enum: ["noc", "move_in", "vendor_access", "construction_material_delivery"],
+      enum: [
+        "noc",
+        "move_in",
+        "vendor_access",
+        "construction_material_delivery",
+        "hot_works_permit",
+        "work_at_height_permit",
+        "handover_appointment",
+        "mortgage_noc",
+      ],
     }).notNull(),
     status: text("status", {
       enum: ["pending", "approved", "rejected", "cancelled"],
@@ -1171,6 +1195,10 @@ export const projects = pgTable(
     contractor: text("contractor"),
     architect: text("architect"),
     seoMeta: jsonb("seo_meta"),
+    // Custom landing page layout (Puck PageData JSON). When present, the
+    // frontend renders this via the page builder instead of the auto-composed
+    // ProjectLanding component.
+    landingPageData: jsonb("landing_page_data"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

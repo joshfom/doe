@@ -16,11 +16,13 @@ import { imageFields, imageDefaults, imagePropsToCSS } from "./image-fields";
 import { animationFields, animationDefaults } from "./animation-fields";
 import { createCustomSelectField, createToggleField, createFreeInputField } from "./shared-field-controls";
 import { LocationMap as LocationMapRuntime } from "./components/LocationMap/LocationMap";
+import { ContactLocationsMap as ContactLocationsMapRuntime } from "./components/LocationMap/ContactLocationsMap";
 import { PinMapPicker } from "./components/LocationMap/PinMapPicker";
-import type { LocationMapPin, LocationMapCard } from "./components/LocationMap/types";
+import type { LocationMapPin, LocationMapCard, ContactLocationItem } from "./components/LocationMap/types";
 import { FeaturedProjectsRuntime } from "./components/project/FeaturedProjectsRuntime";
 import { FeaturedCommunitiesRuntime } from "./components/project/FeaturedCommunitiesRuntime";
 import { ProjectSectionRuntime, type ProjectSectionKind } from "./components/project/ProjectSectionRuntime";
+import { ImageCarouselRuntime } from "./components/ImageCarouselRuntime";
 import {
   Home, Phone, Mail, MapPin, Star, Heart, Check, ArrowRight,
   Building, Palmtree, Waves, Sun, Shield, Car, Bed, Bath,
@@ -3060,6 +3062,242 @@ const LocationMap: Config["components"][string] = {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT LOCATIONS MAP — Side-by-side address panel + Google Map
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ContactLocationsMap: Config["components"][string] = {
+  label: "Contact Locations Map",
+  fields: {
+    // ── Section / container ─────────────────────────────────────────────
+    containerMaxWidth: makeFreeInputField("Container Max Width", "px", ["100%", "1200px", "1400px", "1600px"], "Constrains the section. Use 100% for an edge-to-edge layout."),
+    containerPaddingX: makeFreeInputField("Container Padding X", "px", ["0px", "16px", "24px", "32px", "48px"]),
+    containerPaddingY: makeFreeInputField("Container Padding Y", "px", ["0px", "24px", "48px", "64px", "96px"]),
+    sectionBgColor: createCustomSelectField("Section Background", [{ label: "Transparent", value: "transparent" }, ...ORA_SOLID_BG_OPTIONS]),
+
+    // ── Panel (left/right card list) ─────────────────────────────────────
+    panelSide: createToggleField("Panel Side", [
+      { label: "Left", value: "left" },
+      { label: "Right", value: "right" },
+    ]),
+    panelWidth: makeFreeInputField("Panel Width", "px", ["340px", "380px", "420px", "460px", "520px"]),
+    panelBgColor: createCustomSelectField("Panel Background", ORA_SOLID_BG_OPTIONS),
+    panelPaddingX: makeFreeInputField("Panel Padding X", "px", ["16px", "24px", "32px", "40px", "48px"]),
+    panelPaddingY: makeFreeInputField("Panel Padding Y", "px", ["16px", "24px", "32px", "40px", "48px"]),
+    panelGap: makeFreeInputField("Spacing Between Locations", "px", ["12px", "16px", "20px", "24px", "32px"]),
+    showDividers: createToggleField("Show Dividers", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ]),
+    dividerColor: createCustomSelectField("Divider Color", ORA_SOLID_BG_OPTIONS),
+    stackBreakpoint: makeSliderField("Stack Below (width)", 480, 1280, "px", "Layout stacks (panel above map) below this viewport width."),
+
+    // ── Map ──────────────────────────────────────────────────────────────
+    apiKeyOverride: { type: "text", label: "API Key Override (optional)" },
+    centerLat: { type: "number", label: "Center Latitude" },
+    centerLng: { type: "number", label: "Center Longitude" },
+    zoom: makeSliderField("Zoom", 1, 20, ""),
+    mapHeight: makeFreeInputField("Map Height", "px", ["480px", "560px", "640px", "720px", "80vh"]),
+    mapStyleJson: { type: "textarea", label: "Map Style JSON (Snazzy Maps export)" },
+    mapId: { type: "text", label: "Cloud Map ID (optional)" },
+
+    // ── Locations list ───────────────────────────────────────────────────
+    locations: {
+      type: "array",
+      label: "Locations",
+      getItemSummary: (item: Record<string, unknown>, i?: number) =>
+        `${(i ?? 0) + 1}. ${(item.title as string) || "Location"}`,
+      defaultItemProps: {
+        title: "Sales Office",
+        badge: "",
+        address: "Street, City, Country.",
+        hours: "",
+        lat: DEFAULT_DUBAI_LAT,
+        lng: DEFAULT_DUBAI_LNG,
+        ctaLabel: "Get Direction",
+        ctaUrl: "",
+        isHighlight: "no",
+        pinIcon: "",
+        pinIconHighlight: "",
+      },
+      arrayFields: {
+        title: { type: "text", label: "Title", contentEditable: true },
+        badge: { type: "text", label: "Badge (e.g. COMING SOON)", contentEditable: true },
+        address: { type: "textarea", label: "Address (multi-line)" },
+        hours: { type: "textarea", label: "Hours / Secondary line" },
+        lat: { type: "number", label: "Latitude" },
+        lng: { type: "number", label: "Longitude" },
+        ctaLabel: { type: "text", label: "Button Label", contentEditable: true },
+        ctaUrl: { type: "text", label: "Button URL (Google Maps link)" },
+        isHighlight: createToggleField("Highlighted", [
+          { label: "No", value: "no" },
+          { label: "Yes", value: "yes" },
+        ], "Marks this as the active location (different title color + larger pin)."),
+        pinIcon: imageUploadField,
+        pinIconHighlight: imageUploadField,
+      },
+    },
+
+    // ── Per-location styling ─────────────────────────────────────────────
+    titleColor: createCustomSelectField("Title Color", ORA_TEXT_COLOR_OPTIONS),
+    highlightTitleColor: createCustomSelectField("Highlighted Title Color", ORA_TEXT_COLOR_OPTIONS),
+    badgeColor: createCustomSelectField("Badge Color", ORA_TEXT_COLOR_OPTIONS),
+    addressColor: createCustomSelectField("Address Color", ORA_TEXT_COLOR_OPTIONS),
+    hoursColor: createCustomSelectField("Hours Color", ORA_TEXT_COLOR_OPTIONS),
+
+    // ── Get Direction button ─────────────────────────────────────────────
+    ctaBgColor: createCustomSelectField("Button Background", ORA_SOLID_BG_OPTIONS),
+    ctaTextColor: createCustomSelectField("Button Text", ORA_TEXT_COLOR_OPTIONS),
+    ctaBorderColor: createCustomSelectField("Button Border", ORA_SOLID_BG_OPTIONS),
+    ctaIconImage: imageUploadField,
+
+    // ── Default pin icons ────────────────────────────────────────────────
+    defaultPinIcon: imageUploadField,
+    defaultPinIconHighlight: imageUploadField,
+    pinIconWidth: makeSliderField("Pin Width", 16, 96, "px"),
+    pinIconHeight: makeSliderField("Pin Height", 16, 96, "px"),
+
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    containerMaxWidth: "100%",
+    containerPaddingX: "0px",
+    containerPaddingY: "0px",
+    sectionBgColor: "transparent",
+
+    panelSide: "left",
+    panelWidth: "420px",
+    panelBgColor: "#FFFFFF",
+    panelPaddingX: "40px",
+    panelPaddingY: "40px",
+    panelGap: "24px",
+    showDividers: "yes",
+    dividerColor: "#E8E4DF",
+    stackBreakpoint: 900,
+
+    apiKeyOverride: "",
+    centerLat: DEFAULT_DUBAI_LAT,
+    centerLng: 55.2708,
+    zoom: 10,
+    mapHeight: "640px",
+    mapStyleJson: "",
+    mapId: "",
+
+    locations: [
+      {
+        title: "ORA Main Office",
+        badge: "",
+        address: "Offices 5, One Central, Sheikh Zayed Road, Dubai, United Arab Emirates.",
+        hours: "",
+        lat: 25.2218,
+        lng: 55.2754,
+        ctaLabel: "Get Direction",
+        ctaUrl: "https://maps.google.com/?q=One+Central+Dubai",
+        isHighlight: "yes",
+        pinIcon: "",
+        pinIconHighlight: "",
+      },
+      {
+        title: "Dubai Sales Office",
+        badge: "Coming Soon",
+        address: "804 Jumeirah Beach Road, Dubai, United Arab Emirates.",
+        hours: "Monday - Sunday: 10:00 AM - 7:00 PM",
+        lat: 25.2106,
+        lng: 55.2375,
+        ctaLabel: "Get Direction",
+        ctaUrl: "",
+        isHighlight: "no",
+        pinIcon: "",
+        pinIconHighlight: "",
+      },
+      {
+        title: "Abu Dhabi Sales Office",
+        badge: "Coming Soon",
+        address: "103 Al Qana, Walk at Bain Al Jessrain area, Block N, Abu Dhabi, United Arab Emirates.",
+        hours: "",
+        lat: 24.4288,
+        lng: 54.4862,
+        ctaLabel: "",
+        ctaUrl: "",
+        isHighlight: "no",
+        pinIcon: "",
+        pinIconHighlight: "",
+      },
+    ] as ContactLocationItem[],
+
+    titleColor: "#2C2C2C",
+    highlightTitleColor: "#11A6CC",
+    badgeColor: "#11A6CC",
+    addressColor: "#2C2C2C",
+    hoursColor: "#2C2C2C",
+
+    ctaBgColor: "#FFFFFF",
+    ctaTextColor: "#2C2C2C",
+    ctaBorderColor: "#2C2C2C",
+    ctaIconImage: "",
+
+    defaultPinIcon: "",
+    defaultPinIconHighlight: "",
+    pinIconWidth: 32,
+    pinIconHeight: 40,
+
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    return styledRender(
+      props,
+      React.createElement(ContactLocationsMapRuntime, {
+        containerMaxWidth: (props.containerMaxWidth as string) || "100%",
+        containerPaddingX: (props.containerPaddingX as string) || "0px",
+        containerPaddingY: (props.containerPaddingY as string) || "0px",
+        sectionBgColor: (props.sectionBgColor as string) || "transparent",
+        panelSide: ((props.panelSide as string) === "right" ? "right" : "left"),
+        panelWidth: (props.panelWidth as string) || "420px",
+        panelBgColor: (props.panelBgColor as string) || "#FFFFFF",
+        panelPaddingX: (props.panelPaddingX as string) || "40px",
+        panelPaddingY: (props.panelPaddingY as string) || "40px",
+        panelGap: (props.panelGap as string) || "24px",
+        showDividers: ((props.showDividers as string) === "no" ? "no" : "yes"),
+        dividerColor: (props.dividerColor as string) || "#E8E4DF",
+        stackBreakpoint: Number(props.stackBreakpoint) || 900,
+
+        apiKeyOverride: props.apiKeyOverride as string,
+        centerLat: Number(props.centerLat) || DEFAULT_DUBAI_LAT,
+        centerLng: Number(props.centerLng) || 55.2708,
+        zoom: Number(props.zoom) || 10,
+        mapHeight: (props.mapHeight as string) || "640px",
+        mapStyleJson: (props.mapStyleJson as string) || "",
+        mapId: (props.mapId as string) || "",
+
+        titleColor: (props.titleColor as string) || "#2C2C2C",
+        highlightTitleColor: (props.highlightTitleColor as string) || "#11A6CC",
+        badgeColor: (props.badgeColor as string) || "#11A6CC",
+        addressColor: (props.addressColor as string) || "#2C2C2C",
+        hoursColor: (props.hoursColor as string) || "#2C2C2C",
+
+        ctaBgColor: (props.ctaBgColor as string) || "#FFFFFF",
+        ctaTextColor: (props.ctaTextColor as string) || "#2C2C2C",
+        ctaBorderColor: (props.ctaBorderColor as string) || "#2C2C2C",
+        ctaIconImage: (props.ctaIconImage as string) || "",
+
+        defaultPinIcon: (props.defaultPinIcon as string) || "",
+        defaultPinIconHighlight: (props.defaultPinIconHighlight as string) || "",
+        pinIconWidth: Number(props.pinIconWidth) || 32,
+        pinIconHeight: Number(props.pinIconHeight) || 40,
+
+        locations: ((props.locations as ContactLocationItem[]) ?? []).map((l) => ({
+          ...l,
+          lat: Number(l.lat) || 0,
+          lng: Number(l.lng) || 0,
+        })),
+      }),
+    );
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FEATURED PROJECTS — pulls cards from /api/projects/public
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -3215,6 +3453,160 @@ const ProjectSection: Config["components"][string] = {
     }),
 };
 
+// ─── ImageCarousel ───────────────────────────────────────────────────────────
+// Full-width image carousel with autoplay, dots, and overlay support.
+// Designed for hero sections in project landing pages.
+
+const ImageCarousel: Config["components"][string] = {
+  label: "Image Carousel",
+  fields: {
+    images: {
+      type: "custom",
+      label: "Images",
+      render: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void; readOnly?: boolean }) => {
+        const items = (Array.isArray(value) ? value : []) as string[];
+
+        const addImage = () => {
+          const inp = document.createElement("input");
+          inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+          inp.onchange = async (ev) => {
+            const files = (ev.target as HTMLInputElement).files;
+            if (!files) return;
+            const newUrls: string[] = [];
+            for (const file of Array.from(files)) {
+              const form = new FormData();
+              form.append("file", file);
+              try {
+                const res = await fetch("/api/media", { method: "POST", body: form, credentials: "include" });
+                if (!res.ok) continue;
+                const data = await res.json();
+                const url = data.data?.storageUrl ?? data.data?.storage_url ?? "";
+                if (url) newUrls.push(url);
+              } catch { /* skip */ }
+            }
+            if (newUrls.length > 0) onChange([...items, ...newUrls]);
+          };
+          inp.click();
+        };
+
+        const addUrl = () => {
+          const url = prompt("Enter image URL:");
+          if (url?.trim()) onChange([...items, url.trim()]);
+        };
+
+        const removeAt = (idx: number) => {
+          onChange(items.filter((_, i) => i !== idx));
+        };
+
+        const moveUp = (idx: number) => {
+          if (idx === 0) return;
+          const next = [...items];
+          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+          onChange(next);
+        };
+
+        const moveDown = (idx: number) => {
+          if (idx >= items.length - 1) return;
+          const next = [...items];
+          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+          onChange(next);
+        };
+
+        return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+          items.map((url, i) =>
+            React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 4, background: "#F9F7F5", border: "1px solid #E8E4DF", padding: 4 } },
+              React.createElement("img", { src: url, alt: `Slide ${i + 1}`, style: { width: 48, height: 32, objectFit: "cover" } }),
+              React.createElement("span", { style: { flex: 1, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, url.split("/").pop()),
+              React.createElement("button", { type: "button", onClick: () => moveUp(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move up" }, "↑"),
+              React.createElement("button", { type: "button", onClick: () => moveDown(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move down" }, "↓"),
+              React.createElement("button", { type: "button", onClick: () => removeAt(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11, color: "#c00" }, title: "Remove" }, "✕"),
+            )
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 4 } },
+            React.createElement("button", {
+              type: "button", onClick: addImage,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "Upload Images"),
+            React.createElement("button", {
+              type: "button", onClick: addUrl,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "Add URL"),
+          ),
+        );
+      },
+    },
+    autoplay: createToggleField("Autoplay", [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }]),
+    interval: createCustomSelectField("Interval", [
+      { label: "3 seconds", value: "3000" },
+      { label: "4 seconds", value: "4000" },
+      { label: "5 seconds", value: "5000" },
+      { label: "7 seconds", value: "7000" },
+      { label: "10 seconds", value: "10000" },
+    ]),
+    showDots: createToggleField("Show Dots", [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }]),
+    showArrows: createToggleField("Show Arrows", [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }]),
+    height: createCustomSelectField("Height", [
+      { label: "Medium (400px)", value: "400px" },
+      { label: "Large (600px)", value: "600px" },
+      { label: "X-Large (800px)", value: "800px" },
+      { label: "Half screen (50vh)", value: "50vh" },
+      { label: "Two-thirds (66vh)", value: "66vh" },
+      { label: "Three-quarters (75vh)", value: "75vh" },
+      { label: "Full screen (100vh)", value: "100vh" },
+    ]),
+    objectFit: createCustomSelectField("Image Fit", [
+      { label: "Cover", value: "cover" },
+      { label: "Contain", value: "contain" },
+    ]),
+    overlayColor: makeColorField("Overlay Color", "#000000", "Semi-transparent overlay on images."),
+    overlayOpacity: createCustomSelectField("Overlay Opacity", [
+      { label: "None", value: "0" },
+      { label: "10%", value: "0.1" },
+      { label: "20%", value: "0.2" },
+      { label: "30%", value: "0.3" },
+      { label: "40%", value: "0.4" },
+      { label: "50%", value: "0.5" },
+      { label: "60%", value: "0.6" },
+    ]),
+    transition: createCustomSelectField("Transition", [
+      { label: "Fade", value: "fade" },
+      { label: "Slide", value: "slide" },
+    ]),
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    images: [],
+    autoplay: "yes",
+    interval: "5000",
+    showDots: "yes",
+    showArrows: "yes",
+    height: "75vh",
+    objectFit: "cover",
+    overlayColor: "#000000",
+    overlayOpacity: "0.3",
+    transition: "fade",
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    const images = (Array.isArray(props.images) ? props.images : []) as string[];
+    const autoplay = (props.autoplay as string) === "yes";
+    const interval = Number(props.interval) || 5000;
+    const showDots = (props.showDots as string) === "yes";
+    const showArrows = (props.showArrows as string) === "yes";
+    const height = (props.height as string) || "75vh";
+    const objectFit = (props.objectFit as string) || "cover";
+    const overlayColor = (props.overlayColor as string) || "#000000";
+    const overlayOpacity = Number(props.overlayOpacity) || 0;
+    const transition = (props.transition as string) || "fade";
+
+    // Use a simple state-based carousel via a wrapper component
+    return styledRender(props, React.createElement(ImageCarouselRuntime, {
+      images, autoplay, interval, showDots, showArrows, height, objectFit,
+      overlayColor, overlayOpacity, transition,
+    }));
+  },
+};
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUCK CONFIG
@@ -3227,14 +3619,15 @@ const ProjectSection: Config["components"][string] = {
 export const pageBuilderConfig: Config = {
   categories: {
     layout: { components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider"], title: "Layout", defaultExpanded: true },
-    basic: { components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon"], title: "Basic" },
-    interactive: { components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap"], title: "Interactive" },
+    basic: { components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel"], title: "Basic" },
+    interactive: { components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap"], title: "Interactive" },
     projects: { components: ["FeaturedProjects", "FeaturedCommunities", "ProjectSection"], title: "Projects" },
   },
   components: {
     Section, Container, Columns, Accordion, Spacer, Divider,
-    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon,
+    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel,
     FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap,
+    ContactLocationsMap,
     FeaturedProjects, FeaturedCommunities, ProjectSection,
   },
 };

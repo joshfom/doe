@@ -171,6 +171,10 @@ export default async function ArDynamicPage({ params, searchParams }: Props) {
     const sessionCookie = cookieStore.get("better-auth.session_token");
     const isAuthenticated = !!sessionCookie?.value;
     const settings = await fetchSiteSettings();
+
+    // If the project has a custom landing page layout, render it via the page builder
+    const landingPageData = (project.project as Record<string, unknown>).landingPageData as Record<string, unknown> | null | undefined;
+
     return (
       <>
         <ProjectJsonLd
@@ -179,7 +183,11 @@ export default async function ArDynamicPage({ params, searchParams }: Props) {
           url={`/${slug.join("/")}`}
           companyName={settings.company_name}
         />
-        <ProjectLanding data={project} locale="ar" settings={settings} />
+        {landingPageData ? (
+          <PageRenderer data={landingPageData as any} />
+        ) : (
+          <ProjectLanding data={project} locale="ar" settings={settings} />
+        )}
         {isAuthenticated && project.project.id && (
           <a
             href={`/ora-panel/projects/${project.project.id}`}

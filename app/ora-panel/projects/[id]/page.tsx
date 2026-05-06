@@ -183,6 +183,15 @@ export default function EditProjectPage({
       <h1 className="mb-6 text-2xl font-semibold text-ora-charcoal">{project.nameEn}</h1>
       <ViewLiveLinks slug={project.slug} settingsEntries={settingsEntries} />
 
+      <div className="mb-6">
+        <Link
+          href={`/ora-panel/projects/${id}/design`}
+          className="inline-flex h-10 items-center gap-2 border border-ora-gold bg-ora-gold/10 px-5 text-sm font-medium text-ora-charcoal hover:bg-ora-gold/20 transition-colors"
+        >
+          Design Landing Page
+        </Link>
+      </div>
+
       <form onSubmit={onSubmit} className="space-y-6">
         {error && (
           <div className="border border-ora-error/40 bg-ora-error/10 p-3 text-sm text-ora-error">
