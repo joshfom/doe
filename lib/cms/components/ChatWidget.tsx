@@ -22,7 +22,7 @@ interface Message {
 
 const i18n = {
   en: {
-    welcome: "Hi, I'm ORA AI — your virtual concierge. Ask me about communities, units, permits, or your account.",
+    welcome: "Hi, I'm ORA AI Companion — your virtual concierge. Ask me about communities, units, permits, or your account.",
     placeholder: 'Type your message…',
     title: 'ORA AI Assistant',
     close: 'Close chat',
@@ -39,7 +39,7 @@ const i18n = {
     ],
   },
   ar: {
-    welcome: 'أهلاً، أنا ORA AI — مساعدك الافتراضي. اسألني عن المجتمعات، الوحدات، التصاريح أو حسابك.',
+    welcome: 'أهلاً، أنا ORA AI Companion — مرافقك الافتراضي. اسألني عن المجتمعات، الوحدات، التصاريح أو حسابك.',
     placeholder: 'اكتب رسالتك…',
     title: 'مساعد ORA الذكي',
     close: 'إغلاق المحادثة',

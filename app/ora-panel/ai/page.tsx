@@ -125,7 +125,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    "Hi \u2014 I'm your platform copilot. Ask me for reports, look up records, or have me update bookings and tickets in bulk. Type \"help\" to see what I can do.",
+    "Hi \u2014 I'm your ORA AI Companion. Ask me for reports, look up records, or have me update bookings and tickets in bulk. Type \"help\" to see what I can do.",
 };
 
 export default function AdminChatPage() {

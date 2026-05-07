@@ -183,11 +183,21 @@ const protectedPages = new Elysia({ name: "pages-protected" })
         // Create new approval request with pendingData
         const request = await createApprovalRequestWithDraft(db, id, "pages", userId, data);
 
-        // Set page status to pending_review
-        await db
-          .update(pages)
-          .set({ status: "pending_review", updatedAt: new Date() })
-          .where(eq(pages.id, id));
+        // Only flip status to pending_review for draft pages. A page that's
+        // already published must stay published — its live pages.data is
+        // unchanged; the in-flight edits live separately on the approval
+        // request's pendingData and only commit when the chain approves.
+        if (existing.status !== "published") {
+          await db
+            .update(pages)
+            .set({ status: "pending_review", updatedAt: new Date() })
+            .where(eq(pages.id, id));
+        } else {
+          await db
+            .update(pages)
+            .set({ updatedAt: new Date() })
+            .where(eq(pages.id, id));
+        }
 
         await logAudit(db, {
           userId,
