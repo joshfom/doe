@@ -21,8 +21,6 @@ import {
   Settings,
   Shield,
   LogOut,
-  PanelLeftOpen,
-  PanelLeftClose,
   MapPin,
   Building2,
   BrainCircuit,
@@ -30,10 +28,8 @@ import {
   Users,
   CalendarDays,
   BarChart3,
-  Cog,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
-import { SidebarTooltip } from '@/components/ui/sidebar-tooltip';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -62,14 +58,13 @@ const navItems = [
   { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
   { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
   { href: '/ora-panel/audit', label: 'Audit', icon: Shield, permission: 'audit:read' },
-  { href: '/ora-panel/ai', label: 'AI Copilot', icon: BrainCircuit, permission: 'ai:conversations:read' },
+  { href: '/ora-panel/ai', label: 'My AI', icon: BrainCircuit, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/knowledge-base', label: 'AI Knowledge', icon: BrainCircuit, permission: 'ai:knowledge-base:manage' },
   { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
-  { href: '/ora-panel/ai/clients', label: 'AI Clients', icon: Users, permission: 'ai:clients:manage' },
-  { href: '/ora-panel/ai/appointments', label: 'AI Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
+  { href: '/ora-panel/ai/clients', label: 'People', icon: Users, permission: 'ai:clients:manage' },
+  { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
   { href: '/ora-panel/ai/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'ai:analytics:read' },
   { href: '/ora-panel/ai/audit', label: 'AI Audit', icon: Shield, permission: 'audit:read' },
-  { href: '/ora-panel/ai/settings', label: 'AI Settings', icon: Cog, permission: 'ai:config:manage' },
 ];
 
 /**
@@ -165,9 +160,6 @@ export default function OraPanelLayout({
     return null;
   }
 
-  const sidebarWidth = collapsed ? 'w-16' : 'w-56';
-  const mainMargin = 'ml-16'; // Always reserve collapsed width — sidebar expands as overlay
-
   const userPermissions = session?.permissions ?? [];
   const visibleNavItems = navItems.filter(
     (item) => item.permission === null || hasPermission(userPermissions, item.permission)
@@ -176,31 +168,32 @@ export default function OraPanelLayout({
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-40 ${sidebarWidth} border-r border-ora-sand bg-ora-white transition-all duration-200 ${!collapsed ? 'shadow-xl' : ''}`}>
+        {/* Sidebar — expands on hover, collapses on mouse leave */}
+        <aside
+          onMouseEnter={() => setCollapsed(false)}
+          onMouseLeave={() => setCollapsed(true)}
+          className={`fixed inset-y-0 left-0 z-40 ${collapsed ? 'w-16' : 'w-56'} bg-ora-charcoal transition-all duration-200 ${!collapsed ? 'shadow-xl' : ''}`}
+        >
           <div className="flex h-full flex-col">
-            {/* Logo + toggle */}
-            <div className="flex items-center justify-between border-b border-ora-sand px-3 py-4">
-              {!collapsed && (
+            {/* Logo */}
+            <div className="flex items-center border-b border-white/10 px-3 py-4">
+              {collapsed ? (
+                <Image
+                  src="/logo.svg"
+                  alt="ORA"
+                  width={24}
+                  height={24}
+                  className="mx-auto invert"
+                />
+              ) : (
                 <Image
                   src="/logo.svg"
                   alt="ORA"
                   width={60}
                   height={22}
-                  className="ml-1 opacity-80"
+                  className="ml-1 invert"
                 />
               )}
-              <button
-                onClick={() => setCollapsed(!collapsed)}
-                className={`flex h-8 w-8 items-center justify-center text-ora-charcoal-light hover:bg-ora-cream-light transition-colors ${collapsed ? 'mx-auto' : ''}`}
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="h-4 w-4 stroke-1" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4 stroke-1" />
-                )}
-              </button>
             </div>
 
             {/* Navigation */}
@@ -212,40 +205,37 @@ export default function OraPanelLayout({
                     : pathname.startsWith(href);
 
                 return (
-                  <SidebarTooltip key={href} label={label} show={collapsed}>
-                    <Link
-                      href={href}
-                      className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-ora-cream font-medium text-ora-charcoal'
-                          : 'text-ora-charcoal-light hover:bg-ora-cream-light'
-                      } ${collapsed ? 'justify-center px-0' : ''}`}
-                    >
-                      <Icon className="h-4 w-4 shrink-0 stroke-1" />
-                      {!collapsed && <span>{label}</span>}
-                    </Link>
-                  </SidebarTooltip>
+                  <Link
+                    key={href}
+                    href={href}
+                    className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-white/15 font-medium text-white'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    } ${collapsed ? 'justify-center px-0' : ''}`}
+                  >
+                    <Icon className="h-5 w-5 shrink-0 stroke-[1.5]" />
+                    {!collapsed && <span className="whitespace-nowrap">{label}</span>}
+                  </Link>
                 );
               })}
             </nav>
 
             {/* Logout */}
-            <div className="border-t border-ora-sand px-2 py-3">
-              <SidebarTooltip label="Logout" show={collapsed}>
-                <button
-                  onClick={handleLogout}
-                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-ora-charcoal-light hover:bg-ora-cream-light transition-colors ${collapsed ? 'justify-center px-0' : ''}`}
-                >
-                  <LogOut className="h-4 w-4 shrink-0 stroke-1" />
-                  {!collapsed && <span>Logout</span>}
-                </button>
-              </SidebarTooltip>
+            <div className="border-t border-white/10 px-2 py-3">
+              <button
+                onClick={handleLogout}
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors ${collapsed ? 'justify-center px-0' : ''}`}
+              >
+                <LogOut className="h-5 w-5 shrink-0 stroke-[1.5]" />
+                {!collapsed && <span>Logout</span>}
+              </button>
             </div>
           </div>
         </aside>
 
         {/* Main content */}
-        <main className={`${mainMargin} flex-1 bg-ora-cream-light p-8 min-h-screen transition-all duration-200`}>
+        <main className="ml-16 flex-1 bg-ora-cream-light p-8 min-h-screen transition-all duration-200">
           {children}
         </main>
       </div>

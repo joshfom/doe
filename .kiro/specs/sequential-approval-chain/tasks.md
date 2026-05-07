@@ -42,7 +42,7 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
 - [x] 3. Checkpoint — Verify schema and position utilities
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Modify approval service for sequential flow
+- [x] 4. Modify approval service for sequential flow
   - [x] 4.1 Modify `submitDecision` in `lib/cms/approval/service.ts` for sequential step advancement
     - Insert decision with `chainStep: request.currentStep`
     - On rejection: set status to "rejected", clear pendingData, revert page to draft (existing behavior preserved)
@@ -89,67 +89,67 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
     - Generate chains of various lengths, reject at random steps, verify status = "rejected", pendingData = null, page status = "draft"
     - **Validates: Requirements 5.1, 5.2, 5.4**
 
-  - [-] 4.10 Write property test for rejection reason validation (Property 8)
+  - [x] 4.10 Write property test for rejection reason validation (Property 8)
     - **Property 8: Rejection reason validation**
     - Generate whitespace-only strings and valid non-whitespace strings, verify rejection/acceptance behavior
     - **Validates: Requirements 5.5**
 
-  - [ ] 4.11 Write property test for re-edit reset (Property 9)
+  - [x] 4.11 Write property test for re-edit reset (Property 9)
     - **Property 9: Re-edit resets all decisions and step**
     - Generate requests with 1–5 existing decisions at various steps, trigger re-edit, verify all decisions deleted and `currentStep = 1`
     - **Validates: Requirements 7.1, 7.2**
 
-  - [ ] 4.12 Write property test for employee authorization (Property 10)
+  - [x] 4.12 Write property test for employee authorization (Property 10)
     - **Property 10: Employee authorization**
     - Generate users with various `userType` values, verify only employees can submit decisions and their ID is recorded
     - **Validates: Requirements 4.1, 4.5, 8.3**
 
-- [ ] 5. Checkpoint — Verify service logic and property tests
+- [x] 5. Checkpoint — Verify service logic and property tests
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Notification service for step-based notifications
-  - [ ] 6.1 Add `notifyApproverAtStep` function in `lib/cms/approval/notifications.ts`
+- [x] 6. Notification service for step-based notifications
+  - [x] 6.1 Add `notifyApproverAtStep` function in `lib/cms/approval/notifications.ts`
     - Look up the approver at the given chain position for the content module
     - Send notification email with content title, submitter name, and step context ("Step X of Y")
     - Catch and log notification failures without blocking the approval workflow
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ] 6.2 Integrate `notifyApproverAtStep` into `submitDecision` and `createApprovalRequestWithDraft`
+  - [x] 6.2 Integrate `notifyApproverAtStep` into `submitDecision` and `createApprovalRequestWithDraft`
     - Call `notifyApproverAtStep` when request is created (notify step 1 approver)
     - Call `notifyApproverAtStep` when step advances (notify next step approver)
     - Call `notifyApproverAtStep` in `resetDecisions` flow (notify step 1 approver after re-edit)
     - _Requirements: 3.1, 3.2, 7.3_
 
-- [ ] 7. Modify approval API routes
-  - [ ] 7.1 Update `GET /approvals/content/:module/:contentId` response in `lib/cms/api/routes/approvals.ts`
+- [x] 7. Modify approval API routes
+  - [x] 7.1 Update `GET /approvals/content/:module/:contentId` response in `lib/cms/api/routes/approvals.ts`
     - Include `currentStep`, `totalSteps`, `chain` (ordered approvers), and decisions with `chainStep` in response
     - _Requirements: 8.2, 8.4_
 
-  - [ ] 7.2 Update approval config API to persist positions
+  - [x] 7.2 Update approval config API to persist positions
     - Modify `PUT /api/approval-config` to accept and persist `position` for each approver
     - Validate positions are contiguous 1-based integers; normalize if non-contiguous
     - Return approvers sorted by position in `GET /api/approval-config`
     - _Requirements: 1.4, 8.1_
 
-  - [ ] 7.3 Write property test for configuration round-trip (Property 2)
+  - [x] 7.3 Write property test for configuration round-trip (Property 2)
     - **Property 2: Configuration position round-trip**
     - Generate random ordered approver lists, save via API, read back, verify identical order and positions
     - **Validates: Requirements 1.4, 8.1**
 
-  - [ ] 7.4 Write property test for API response completeness (Property 11)
+  - [x] 7.4 Write property test for API response completeness (Property 11)
     - **Property 11: API chain progress response completeness**
     - Generate requests at various chain positions with various decision histories, verify response shape includes `currentStep`, `totalSteps`, `chain` array of correct length sorted by position, and `decisions` array with `chainStep` fields
     - **Validates: Requirements 8.2, 8.4**
 
-- [ ] 8. Checkpoint — Verify API routes and integration
+- [x] 8. Checkpoint — Verify API routes and integration
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Settings UI with drag-and-drop reordering
-  - [ ] 9.1 Install `@dnd-kit/core` and `@dnd-kit/sortable` packages
+- [x] 9. Settings UI with drag-and-drop reordering
+  - [x] 9.1 Install `@dnd-kit/core` and `@dnd-kit/sortable` packages
     - Add exact versions to dependencies in `package.json`
     - _Requirements: 1.2_
 
-  - [ ] 9.2 Create `OrderedApproverList` component with drag-and-drop
+  - [x] 9.2 Create `OrderedApproverList` component with drag-and-drop
     - Create component at appropriate location under the settings UI
     - Display approvers as vertical ordered list with visible position numbers (1, 2, 3, ...)
     - Add drag handles on each approver card
@@ -159,12 +159,12 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
     - On add: call `appendApprover` and update local state
     - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
 
-  - [ ] 9.3 Integrate `OrderedApproverList` into `ContentApprovalSection` in settings page
+  - [x] 9.3 Integrate `OrderedApproverList` into `ContentApprovalSection` in settings page
     - Replace existing approver picker with the new ordered list component
     - Wire `handleSaveModule` to send ordered approvers with positions to the API
     - _Requirements: 1.2, 1.4_
 
-  - [ ] 9.4 Write unit tests for Settings UI drag-and-drop behavior
+  - [x] 9.4 Write unit tests for Settings UI drag-and-drop behavior
     - Test that position numbers render correctly
     - Test that drag-and-drop reorder updates local state
     - Test that remove from middle re-numbers remaining approvers
@@ -172,7 +172,7 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
     - _Requirements: 1.1, 1.2, 1.6, 1.7_
 
 - [ ] 10. Approval Chain Stepper component (flowchart progress UI)
-  - [ ] 10.1 Create `ApprovalChainStepper` component at `lib/cms/components/ApprovalChainStepper.tsx`
+  - [x] 10.1 Create `ApprovalChainStepper` component at `lib/cms/components/ApprovalChainStepper.tsx`
     - Accept props: `chain`, `decisions`, `currentStep`, `totalSteps`, `requestStatus`
     - Render vertical flowchart/stepper with each approver's name, position, and status
     - Visual states: completed (green checkmark), active (highlighted/pulsing), future (greyed out), rejected (red X), skipped (greyed with strikethrough)
@@ -180,17 +180,17 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
     - For rejected step: show rejection reason and rejecting employee name
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 10.2 Integrate `ApprovalChainStepper` into page detail view (`app/ora-panel/pages/[id]/page.tsx`)
+  - [-] 10.2 Integrate `ApprovalChainStepper` into page detail view (`app/ora-panel/pages/[id]/page.tsx`)
     - Fetch chain progress data from `GET /approvals/content/pages/:contentId`
     - Render the stepper component showing current chain state
     - Show "Step X of Y — Nominally: [Approver Name]" format for active step
     - _Requirements: 6.1, 6.2, 4.2, 4.4_
 
-  - [ ] 10.3 Add re-edit warning in page editor when pending approval exists
+  - [x] 10.3 Add re-edit warning in page editor when pending approval exists
     - Display warning message indicating that saving changes will reset all approval progress and restart the chain from step 1
     - _Requirements: 7.4_
 
-  - [ ] 10.4 Write unit tests for `ApprovalChainStepper` visual states
+  - [x] 10.4 Write unit tests for `ApprovalChainStepper` visual states
     - Test completed steps show green checkmark with approver name and timestamp
     - Test active step shows highlighted state with nominal approver
     - Test future steps show greyed out state
@@ -198,7 +198,7 @@ Transform the existing flat approval model into a sequential, step-by-step "chai
     - Test skipped steps after rejection show greyed with strikethrough
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 11. Final checkpoint — Full integration verification
+- [x] 11. Final checkpoint — Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

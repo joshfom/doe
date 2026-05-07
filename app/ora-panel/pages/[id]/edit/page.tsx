@@ -12,6 +12,7 @@ import { createEditorPlugins } from '@/lib/page-builder/components/plugins';
 import { defaultTheme } from '@/lib/page-builder/theme';
 import type { PageData, ComponentInstance } from '@/lib/page-builder/types';
 import { apiFetch } from '@/lib/cms/hooks/api';
+import { useContentApprovalStatus } from '@/lib/cms/hooks';
 
 /**
  * Strip components whose `type` is no longer registered (legacy ORA blocks,
@@ -78,6 +79,10 @@ export default function PageEditorPage({
   const [pendingDraftData, setPendingDraftData] = useState<PageData | null>(null);
   const [loadingPendingDraft, setLoadingPendingDraft] = useState(false);
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
+
+  // Approval status — used to show re-edit warning
+  const { data: approvalStatus } = useContentApprovalStatus('pages', id);
+  const hasPendingApproval = approvalStatus?.request?.status === 'pending';
 
   // Ref to track the latest editor data for manual save and beforeunload
   const latestDataRef = useRef<Data | null>(null);
@@ -288,6 +293,16 @@ export default function PageEditorPage({
             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
           <span>Changes are saved to pending draft — live page is unchanged</span>
+        </div>
+      )}
+
+      {/* Re-edit warning: approval progress will be reset */}
+      {hasPendingApproval && (
+        <div className="fixed top-12 left-2 z-[9999] flex items-center gap-2 bg-red-600/90 px-4 py-1.5 text-xs text-white backdrop-blur-sm" style={{ top: hasPendingDraft ? '4.5rem' : '3rem' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>Saving changes will reset all approval progress and restart the chain from step 1</span>
         </div>
       )}
 

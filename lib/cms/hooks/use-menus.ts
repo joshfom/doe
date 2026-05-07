@@ -286,7 +286,7 @@ export function useUpdateMenuItem() {
   });
 }
 
-/** Delete menu item mutation */
+/** Delete menu item mutation with optimistic removal (children promoted to parent) */
 export function useDeleteMenuItem() {
   const qc = useQueryClient();
 
@@ -296,6 +296,52 @@ export function useDeleteMenuItem() {
         `/api/menus/${menuId}/items/${itemId}`,
         { method: "DELETE" }
       ),
+
+    onMutate: async ({ menuId, itemId }) => {
+      await qc.cancelQueries({ queryKey: menuKeys.detail(menuId) });
+      const previous = qc.getQueryData<MenuWithItems>(
+        menuKeys.detail(menuId)
+      );
+
+      if (previous) {
+        // Remove the target item; promote its children up to its parent level
+        // (matches API behaviour: children inherit the deleted item's parentId).
+        const removeAndPromote = (
+          items: MenuItemTree[]
+        ): MenuItemTree[] => {
+          const out: MenuItemTree[] = [];
+          for (const item of items) {
+            if (item.id === itemId) {
+              for (const child of item.children) {
+                out.push({ ...child, parentId: item.parentId });
+              }
+              continue;
+            }
+            out.push({
+              ...item,
+              children: removeAndPromote(item.children),
+            });
+          }
+          return out;
+        };
+
+        qc.setQueryData<MenuWithItems>(menuKeys.detail(menuId), {
+          ...previous,
+          items: removeAndPromote(previous.items),
+        });
+      }
+
+      return { previous };
+    },
+
+    onError: (_err, variables, context) => {
+      if (context?.previous) {
+        qc.setQueryData(
+          menuKeys.detail(variables.menuId),
+          context.previous
+        );
+      }
+    },
 
     onSettled: (_data, _err, variables) => {
       qc.invalidateQueries({ queryKey: menuKeys.detail(variables.menuId) });
@@ -324,6 +370,50 @@ export function useReorderMenuItems() {
       const previous = qc.getQueryData<MenuWithItems>(
         menuKeys.detail(variables.menuId)
       );
+
+      if (previous) {
+        // Build a flat lookup of all items in the existing tree, then
+        // rebuild the tree from the reorder spec (id, parentId, position).
+        const flat = new Map<string, MenuItemTree>();
+        const collect = (items: MenuItemTree[]) => {
+          for (const item of items) {
+            flat.set(item.id, item);
+            if (item.children?.length) collect(item.children);
+          }
+        };
+        collect(previous.items);
+
+        const byParent = new Map<string | null, ReorderItem[]>();
+        for (const ri of variables.items) {
+          const key = ri.parentId ?? null;
+          if (!byParent.has(key)) byParent.set(key, []);
+          byParent.get(key)!.push(ri);
+        }
+        for (const arr of byParent.values()) {
+          arr.sort((a, b) => a.position - b.position);
+        }
+
+        const build = (parentId: string | null): MenuItemTree[] => {
+          const kids = byParent.get(parentId) ?? [];
+          return kids
+            .map((ri) => {
+              const original = flat.get(ri.id);
+              if (!original) return null;
+              return {
+                ...original,
+                parentId: ri.parentId,
+                position: ri.position,
+                children: build(ri.id),
+              } as MenuItemTree;
+            })
+            .filter((x): x is MenuItemTree => x !== null);
+        };
+
+        qc.setQueryData<MenuWithItems>(menuKeys.detail(variables.menuId), {
+          ...previous,
+          items: build(null),
+        });
+      }
 
       return { previous };
     },

@@ -15,6 +15,7 @@ import {
   usePendingDraft,
 } from '@/lib/cms/hooks';
 import { ApprovalActions } from '@/lib/cms/components/ApprovalActions';
+import { ApprovalChainStepper } from '@/lib/cms/components/ApprovalChainStepper';
 import {
   PenLine,
   Globe,
@@ -27,6 +28,8 @@ import {
   Search,
   FileText,
   Settings,
+  ClipboardCheck,
+  X,
 } from 'lucide-react';
 
 export default function PageDetailPage({
@@ -48,6 +51,7 @@ export default function PageDetailPage({
   const { data: approvalStatus } = useContentApprovalStatus('pages', id);
   const { data: pendingDraftData } = usePendingDraft(id);
   const hasPendingDraft = pendingDraftData !== undefined;
+  const [approvalSheetOpen, setApprovalSheetOpen] = useState(false);
 
   // Editable fields
   const [title, setTitle] = useState('');
@@ -208,33 +212,93 @@ export default function PageDetailPage({
       {/* Approval Actions */}
       {approvalStatus?.request && (
         <div className="mb-6">
-          <ApprovalActions contentId={id} contentModule="pages" />
+          <button
+            onClick={() => setApprovalSheetOpen(true)}
+            className="inline-flex h-10 items-center gap-2 border border-ora-sand bg-ora-white px-5 text-sm text-ora-charcoal hover:bg-ora-cream-light transition-colors"
+          >
+            <ClipboardCheck className="h-4 w-4 stroke-1" />
+            Approval Chain
+            <span className={`ml-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              approvalStatus.request.status === 'pending'
+                ? 'bg-ora-warning/10 text-ora-warning'
+                : approvalStatus.request.status === 'approved'
+                  ? 'bg-ora-success/10 text-ora-success'
+                  : 'bg-ora-error/10 text-ora-error'
+            }`}>
+              {approvalStatus.request.status === 'pending'
+                ? `Step ${approvalStatus.currentStep ?? 1} of ${approvalStatus.totalSteps ?? 1}`
+                : approvalStatus.request.status}
+            </span>
+          </button>
         </div>
       )}
 
-      {/* Preview Links — shown when a pending draft exists */}
-      {hasPendingDraft && (
-        <div className="mb-6 flex items-center gap-3 border border-ora-sand/60 bg-ora-cream-light p-4">
-          <span className="text-sm font-medium text-ora-charcoal">Pending draft available:</span>
-          <a
-            href={`/ora-panel/pages/${id}/preview-pending`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 bg-ora-gold px-4 py-2 text-sm text-ora-white hover:bg-ora-gold-dark transition-colors"
-          >
-            <Eye className="h-3.5 w-3.5 stroke-1" />
-            Preview Pending
-          </a>
-          <a
-            href={`/ora-panel/pages/${id}/preview-live`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 border border-ora-sand bg-ora-cream px-4 py-2 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors"
-          >
-            <Globe className="h-3.5 w-3.5 stroke-1" />
-            View Current Live
-          </a>
-        </div>
+      {/* Approval Sheet — slides in from right at 50% width */}
+      {approvalSheetOpen && approvalStatus?.request && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+            onClick={() => setApprovalSheetOpen(false)}
+          />
+          {/* Sheet */}
+          <div className="fixed inset-y-0 right-0 z-50 w-1/2 min-w-[400px] max-w-[700px] bg-ora-white shadow-2xl border-l border-ora-sand overflow-y-auto animate-in slide-in-from-right duration-200">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ora-sand bg-ora-white px-6 py-4">
+              <h2 className="text-lg font-semibold text-ora-charcoal">Approval Chain</h2>
+              <button
+                onClick={() => setApprovalSheetOpen(false)}
+                className="flex h-8 w-8 items-center justify-center text-ora-muted hover:text-ora-charcoal transition-colors"
+              >
+                <X className="h-5 w-5 stroke-1" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Approval Actions (approve/reject buttons) */}
+              <ApprovalActions contentId={id} contentModule="pages" />
+
+              {/* Chain Stepper with approve-on-behalf */}
+              {approvalStatus.chain && approvalStatus.chain.length > 0 && (
+                <div className="border border-ora-sand/60 bg-ora-white p-5">
+                  <h3 className="mb-4 text-sm font-semibold text-ora-charcoal">Chain Progress</h3>
+                  <ApprovalChainStepper
+                    chain={approvalStatus.chain}
+                    decisions={approvalStatus.decisions ?? []}
+                    currentStep={approvalStatus.currentStep ?? 1}
+                    totalSteps={approvalStatus.totalSteps ?? 1}
+                    requestStatus={approvalStatus.request.status as 'pending' | 'approved' | 'rejected'}
+                    requestId={approvalStatus.request.id}
+                  />
+                </div>
+              )}
+
+              {/* Preview Links */}
+              {hasPendingDraft && (
+                <div className="flex items-center gap-3 border border-ora-sand/60 bg-ora-cream-light p-4">
+                  <span className="text-sm font-medium text-ora-charcoal">Pending draft:</span>
+                  <a
+                    href={`/ora-panel/pages/${id}/preview-pending`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-ora-gold px-4 py-2 text-sm text-ora-white hover:bg-ora-gold-dark transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5 stroke-1" />
+                    Preview
+                  </a>
+                  <a
+                    href={`/ora-panel/pages/${id}/preview-live`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 border border-ora-sand bg-ora-cream px-4 py-2 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors"
+                  >
+                    <Globe className="h-3.5 w-3.5 stroke-1" />
+                    View Live
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Tabs */}

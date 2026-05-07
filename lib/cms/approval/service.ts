@@ -12,7 +12,7 @@ import {
   revisions,
 } from "../schema";
 import { logAudit } from "../audit";
-import { notifySubmitter } from "./notifications";
+import { notifySubmitter, notifyApproverAtStep } from "./notifications";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -229,6 +229,14 @@ export async function submitDecision(
         summary: `Approved ${request.contentModule} content ${request.contentId} at step ${request.currentStep}/${totalSteps}, advancing to step ${nextStep}`,
       });
 
+      // Notify the next approver in the chain (fire-and-forget)
+      notifyApproverAtStep(
+        tx as unknown as Database,
+        request.contentModule as ContentModule,
+        nextStep,
+        request
+      ).catch(() => {});
+
       return { ...request, currentStep: nextStep };
     }
   });
@@ -289,9 +297,10 @@ export async function getPendingForApprover(
     .innerJoin(users, eq(approvalRequests.submitterId, users.id))
     .where(eq(approvalRequests.status, "pending"));
 
-  // Filter: show pages to any employee, other modules only to assigned approvers
+  // Filter: for demo mode, show ALL pending requests to any employee
+  // (Later this will be restricted to assigned approvers per module)
   const filtered = pendingRequests.filter((r) => {
-    if (r.contentModule === "pages" && isEmployee) return true;
+    if (isEmployee) return true;
     return moduleNames.includes(r.contentModule as ContentModule);
   });
 
@@ -494,6 +503,7 @@ export async function updatePendingData(
 /**
  * Delete all existing approval decisions for a request (for re-review after re-edit).
  * Also resets currentStep to 1 so the chain restarts from the beginning.
+ * Notifies the step 1 approver that re-review is needed.
  */
 export async function resetDecisions(
   db: Database,
@@ -506,6 +516,18 @@ export async function resetDecisions(
     .update(approvalRequests)
     .set({ currentStep: 1 })
     .where(eq(approvalRequests.id, requestId));
+
+  // Fetch the request to get contentModule and other details for notification
+  const [request] = await db
+    .select()
+    .from(approvalRequests)
+    .where(eq(approvalRequests.id, requestId))
+    .limit(1);
+
+  if (request) {
+    // Notify the step 1 approver that re-review is needed (fire-and-forget)
+    notifyApproverAtStep(db, request.contentModule as ContentModule, 1, request).catch(() => {});
+  }
 }
 
 /**
@@ -530,6 +552,9 @@ export async function createApprovalRequestWithDraft(
       currentStep: 1,
     })
     .returning();
+
+  // Notify the first approver in the chain (fire-and-forget)
+  notifyApproverAtStep(db, contentModule, 1, request).catch(() => {});
 
   return request;
 }
