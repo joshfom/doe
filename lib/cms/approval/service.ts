@@ -117,8 +117,22 @@ export async function submitDecision(
         .set({ status: "rejected", resolvedAt: now, pendingData: null })
         .where(eq(approvalRequests.id, approvalRequestId));
 
-      // Revert content to draft
-      await updateContentStatus(tx, request.contentId, request.contentModule, "draft");
+      // Revert content to draft — but only if it wasn't already published.
+      // A rejection of edits to a published page must NOT take the live
+      // page down; the live pages.data is untouched and should keep
+      // serving. We just discard the pending draft.
+      if (request.contentModule === "pages") {
+        const [currentPage] = await tx
+          .select({ status: pages.status })
+          .from(pages)
+          .where(eq(pages.id, request.contentId))
+          .limit(1);
+        if (currentPage && currentPage.status !== "published") {
+          await updateContentStatus(tx, request.contentId, request.contentModule, "draft");
+        }
+      } else {
+        await updateContentStatus(tx, request.contentId, request.contentModule, "draft");
+      }
 
       // Log audit
       await logAudit(tx as unknown as Database, {
@@ -444,8 +458,21 @@ export async function autoResolvePendingRequests(
       .set({ status: "rejected", resolvedAt: now })
       .where(eq(approvalRequests.id, req.id));
 
-    // Revert content to draft
-    await updateContentStatus(db, req.contentId, contentModule, "draft");
+    // Revert content to draft — but never knock a published page off-line.
+    // For pages module, keep "published" status untouched; only flip
+    // pending_review/draft items to draft.
+    if (contentModule === "pages") {
+      const [currentPage] = await db
+        .select({ status: pages.status })
+        .from(pages)
+        .where(eq(pages.id, req.contentId))
+        .limit(1);
+      if (currentPage && currentPage.status !== "published") {
+        await updateContentStatus(db, req.contentId, contentModule, "draft");
+      }
+    } else {
+      await updateContentStatus(db, req.contentId, contentModule, "draft");
+    }
 
     // Log audit
     await logAudit(db, {

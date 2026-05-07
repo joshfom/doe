@@ -209,32 +209,42 @@ export default function PageDetailPage({
         </div>
       </div>
 
-      {/* Approval Actions */}
-      {approvalStatus?.request && (
+      {/* Approval handle — visible whenever there's an approval request OR
+          the page is in pending_review status. Opens the sheet where the
+          reviewer can preview the pending draft and approve / reject. */}
+      {(approvalStatus?.request || isPendingReview) && (
         <div className="mb-6">
           <button
             onClick={() => setApprovalSheetOpen(true)}
-            className="inline-flex h-10 items-center gap-2 border border-ora-sand bg-ora-white px-5 text-sm text-ora-charcoal hover:bg-ora-cream-light transition-colors"
+            className={`inline-flex h-10 items-center gap-2 px-5 text-sm transition-colors ${
+              isPendingReview
+                ? 'bg-ora-gold text-ora-white hover:bg-ora-gold-dark'
+                : 'border border-ora-sand bg-ora-white text-ora-charcoal hover:bg-ora-cream-light'
+            }`}
           >
             <ClipboardCheck className="h-4 w-4 stroke-1" />
-            Approval Chain
-            <span className={`ml-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              approvalStatus.request.status === 'pending'
-                ? 'bg-ora-warning/10 text-ora-warning'
-                : approvalStatus.request.status === 'approved'
-                  ? 'bg-ora-success/10 text-ora-success'
-                  : 'bg-ora-error/10 text-ora-error'
-            }`}>
-              {approvalStatus.request.status === 'pending'
-                ? `Step ${approvalStatus.currentStep ?? 1} of ${approvalStatus.totalSteps ?? 1}`
-                : approvalStatus.request.status}
-            </span>
+            {isPendingReview ? 'Review & Publish' : 'Approval Chain'}
+            {approvalStatus?.request && (
+              <span
+                className={`ml-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  approvalStatus.request.status === 'pending'
+                    ? 'bg-ora-white/20 text-ora-white'
+                    : approvalStatus.request.status === 'approved'
+                      ? 'bg-ora-success/10 text-ora-success'
+                      : 'bg-ora-error/10 text-ora-error'
+                }`}
+              >
+                {approvalStatus.request.status === 'pending'
+                  ? `Step ${approvalStatus.currentStep ?? 1} of ${approvalStatus.totalSteps ?? 1}`
+                  : approvalStatus.request.status}
+              </span>
+            )}
           </button>
         </div>
       )}
 
       {/* Approval Sheet — slides in from right at 50% width */}
-      {approvalSheetOpen && approvalStatus?.request && (
+      {approvalSheetOpen && (approvalStatus?.request || isPendingReview) && (
         <>
           {/* Backdrop */}
           <div
@@ -258,7 +268,7 @@ export default function PageDetailPage({
               <ApprovalActions contentId={id} contentModule="pages" />
 
               {/* Chain Stepper with approve-on-behalf */}
-              {approvalStatus.chain && approvalStatus.chain.length > 0 && (
+              {approvalStatus?.chain && approvalStatus.chain.length > 0 && approvalStatus.request ? (
                 <div className="border border-ora-sand/60 bg-ora-white p-5">
                   <h3 className="mb-4 text-sm font-semibold text-ora-charcoal">Chain Progress</h3>
                   <ApprovalChainStepper
@@ -270,7 +280,14 @@ export default function PageDetailPage({
                     requestId={approvalStatus.request.id}
                   />
                 </div>
-              )}
+              ) : isPendingReview ? (
+                <div className="border border-ora-sand/60 bg-ora-cream-light p-5 text-sm text-ora-charcoal-light">
+                  This page is marked as pending review but has no active
+                  approval request. Use the Publish button above to push the
+                  current draft live, or edit the page to resubmit it for
+                  review.
+                </div>
+              ) : null}
 
               {/* Preview Links */}
               {hasPendingDraft && (

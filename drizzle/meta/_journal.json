@@ -134,6 +134,13 @@
       "when": 1778067552673,
       "tag": "0018_ambiguous_tana_nile",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778800000000,
+      "tag": "0019_approval_chain_columns",
+      "breakpoints": true
     }
   ]
 }

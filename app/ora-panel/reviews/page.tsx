@@ -1,10 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePendingApprovals } from '@/lib/cms/hooks';
-import { ClipboardCheck, Eye, Globe, Users } from 'lucide-react';
+import { ClipboardCheck, Eye, Globe, Users, CheckCircle } from 'lucide-react';
 import type { ContentModule } from '@/lib/cms/types';
-import { useContentApprovalStatus } from '@/lib/cms/hooks/use-approvals';
+import {
+  useContentApprovalStatus,
+  useSubmitDecision,
+} from '@/lib/cms/hooks/use-approvals';
 
 const MODULE_LABELS: Record<ContentModule, string> = {
   pages: 'Pages',
@@ -52,6 +56,64 @@ function ChainStepBadge({ contentId, contentModule }: { contentId: string; conte
         <span className="text-ora-muted">— {currentApprover.userName}</span>
       )}
     </span>
+  );
+}
+
+/**
+ * Quick "Approve & Publish" button — sequentially submits an approve
+ * decision for every remaining step in the chain so the page commits
+ * straight to published. Uses the same demo-on-behalf flow as
+ * ApprovalChainStepper.
+ */
+function QuickApproveButton({
+  contentId,
+  contentModule,
+}: {
+  contentId: string;
+  contentModule: ContentModule;
+}) {
+  const { data } = useContentApprovalStatus(contentModule, contentId);
+  const submitDecision = useSubmitDecision();
+  const [busy, setBusy] = useState(false);
+
+  if (!data || !data.request || data.request.status !== 'pending') return null;
+
+  const requestId = data.request.id;
+  const currentStep = (data as { currentStep?: number }).currentStep ?? 1;
+  const totalSteps = (data as { totalSteps?: number }).totalSteps ?? 1;
+  const chain = (data as { chain?: { userName: string; position: number }[] }).chain ?? [];
+  const remaining = chain
+    .filter((c) => c.position >= currentStep)
+    .sort((a, b) => a.position - b.position);
+
+  const handleClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      for (const step of remaining) {
+        await submitDecision.mutateAsync({
+          id: requestId,
+          decision: 'approved',
+          comment: `Approved on behalf of ${step.userName} (demo)`,
+        });
+      }
+    } catch {
+      // toast handles errors
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={busy}
+      title={`Approves all ${totalSteps} step(s) and publishes the page`}
+      className="inline-flex h-9 items-center gap-1.5 bg-ora-success px-4 text-sm text-ora-white hover:bg-ora-success/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      <CheckCircle className="h-3.5 w-3.5 stroke-1" />
+      {busy ? 'Approving…' : 'Approve & Publish'}
+    </button>
   );
 }
 
@@ -136,6 +198,10 @@ export default function ReviewDashboardPage() {
                     <Globe className="h-3.5 w-3.5 stroke-1" />
                     View Live
                   </a>
+                  <QuickApproveButton
+                    contentId={item.contentId}
+                    contentModule={item.contentModule}
+                  />
                 </div>
               )}
 
