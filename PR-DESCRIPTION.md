@@ -24,6 +24,21 @@ Adds the admin AI copilot (reports, agentic actions, audit log) and a sequential
 - Updated `ApprovalActions` UI + `use-approvals` hook
 - Expanded approval gate, service, audit, notifications, dashboard logic
 - Property-based test suite (15+ new test files) covering invariants
+- New `ApprovalChainStepper` component with vertical flowchart visualization
+- New `OrderedApproverList` component for configuring chain order
+
+### Demo Approve-on-Behalf (presentation aid)
+- `ApprovalChainStepper` renders an **"Approve on behalf of {name}"** button
+  under every approver in the chain that doesn't yet have a decision —
+  including future (gray) steps and steps in already-resolved requests.
+- Clicking any approver sequentially submits decisions for every
+  intervening step from `currentStep` up to (and including) the clicked
+  step, triggering the existing publish/commit logic on the final approval.
+- New endpoint `POST /api/approvals/:id/demo-reopen` flips a resolved
+  request back to `pending` and resumes `currentStep` past existing
+  decisions, so a presenter can re-run the full chain end-to-end on the
+  same content item.
+- New `useDemoReopenApproval()` React Query mutation hook.
 
 ### Page Draft / Pending Preview
 - New routes: `/ora-panel/pages/[id]/preview-live` and `/preview-pending`
@@ -80,6 +95,7 @@ bun run db:migrate
 
 ## Commits
 
+- `cd0c04c` feat(approval): demo approve-on-behalf for any approver in chain
 - `ca005a2` feat: sequential approval chain + draft/pending preview + AI audit
 - `e7de863` fix: publish page error toast — send empty body + handle approval 202
 - `836abdd` fix: clone-locale ensures unique slug and copies all SEO fields
