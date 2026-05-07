@@ -3,6 +3,7 @@ import type { Database } from "../db";
 import type { ChatMessage } from "./gateway";
 import { generateEmbedding, generateCompletion } from "./gateway";
 import type { IdentityResult } from "./identity";
+import type { ClientPaymentPlanSummary } from "./actions";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,13 @@ export interface RAGContext {
   retrievedDocuments: RetrievedDocument[];
   conversationHistory: ChatMessage[];
   identityContext: IdentityResult | null;
+  /**
+   * Optional payment plan summaries for the verified client. Injected into
+   * the prompt so the LLM can answer free-form payment questions ("when is
+   * my next payment?", "how much have I paid?", "am I overdue?") without
+   * hallucinating numbers.
+   */
+  paymentContext?: ClientPaymentPlanSummary[];
   language: "en" | "ar";
   currentQuery: string;
   otpVerified?: boolean;
@@ -31,6 +39,7 @@ export interface QueryInput {
   language: "en" | "ar";
   conversationHistory?: ChatMessage[];
   identityContext?: IdentityResult | null;
+  paymentContext?: ClientPaymentPlanSummary[];
   topK?: number;
   threshold?: number;
   otpVerified?: boolean;
@@ -163,7 +172,16 @@ export function buildPrompt(context: RAGContext): string {
       "- If multiple accounts match the same email, say so honestly and ask one disambiguating question " +
       "(e.g. unit number or project name) \u2014 do not guess.\n" +
       "- VERIFICATION (OTP) is only required when answering personal / contract / payment / unit-specific questions. " +
-      "It is NEVER required just to identify someone as a visitor or to send public marketing material."
+      "It is NEVER required just to identify someone as a visitor or to send public marketing material.\n" +
+      "- THIRD-PARTY CONTACT INFO: when a user pastes a line like 'John Moore, john@x.com' or 'Sara Mendes, +971…', " +
+      "this is almost always a CLIENT they want to register, a friend they're booking on behalf of, or someone " +
+      "they want to refer \u2014 NOT the user's own identity. Do NOT greet the user by that name. Do NOT overwrite the " +
+      "name you already know for them. Ask: 'Got it \u2014 is that for you, or are you registering / booking on someone " +
+      "else's behalf?' before doing anything with the details.\n" +
+      "- BROKER / AGENT REGISTERING A CLIENT: if a user (especially a broker) says 'register a client', 'add a lead', " +
+      "'register my client', the deterministic agent will ask for the client's name + email + phone in one line and " +
+      "open a lead ticket on the broker's behalf. Until those are provided, do NOT invent a confirmation, do NOT say " +
+      "'I've registered them', and do NOT ask for the broker's own details again."
   );
   parts.push(
     "REASONING CHECKLIST (run silently before every reply):\n" +
@@ -248,7 +266,15 @@ export function buildPrompt(context: RAGContext): string {
       "- If the user has not yet provided an explicit date AND time, you MUST ask for them. Do not " +
       "invent times. Do not assume tomorrow, do not assume 5 PM, do not assume any default.\n" +
       "- Once a booking has actually been executed, you will see a system message confirming it. " +
-      "Until then, treat the booking as not yet placed."
+      "Until then, treat the booking as not yet placed.\n" +
+      "- A 'site visit' means the user wants to physically visit the project site (sales gallery, " +
+      "show unit, or construction tour). Off-plan projects are still under construction \u2014 do NOT ask " +
+      "for a unit number, the area of the home (kitchen, bathroom, bedroom, etc.), or an issue " +
+      "description / severity for a site visit. Those are MAINTENANCE questions and only apply to " +
+      "handed-over units with a real defect to report. For a site visit you only need: name, email, " +
+      "phone, and a date + time within working hours.\n" +
+      "- Office hours are Monday\u2013Friday 09:00\u201319:00. We are closed on Saturday and Sunday \u2014 never " +
+      "say we are closed on Friday."
   );
   parts.push(
     "ANTI-HALLUCINATION RULES:\n" +
@@ -325,6 +351,79 @@ export function buildPrompt(context: RAGContext): string {
     }
   }
 
+  // Payment context — only present when verified client asks about payments.
+  if (
+    context.paymentContext &&
+    context.paymentContext.length > 0 &&
+    context.otpVerified
+  ) {
+    parts.push("");
+    parts.push("--- Payment Context ---");
+    parts.push(
+      `Today's date is ${new Date().toISOString().slice(0, 10)}. ` +
+        "All amounts are in AED. Use these exact figures when answering — do NOT round, " +
+        "estimate, or invent numbers. If the user asks about a date or amount not listed, " +
+        "say you'll check with the sales team rather than guess."
+    );
+    for (const plan of context.paymentContext) {
+      parts.push("");
+      parts.push(
+        `Unit: ${plan.projectName} ${plan.unitNumber}` +
+          (plan.cluster ? ` (cluster: ${plan.cluster})` : "")
+      );
+      parts.push(
+        `Plan: ${plan.planName} — total ${plan.totalPrice.toLocaleString("en-US")} AED, ` +
+          `booking ${plan.bookingDate}` +
+          (plan.expectedHandoverDate ? `, handover ${plan.expectedHandoverDate}` : "")
+      );
+      parts.push(
+        `Structure: ${plan.downPaymentPct}% / ${plan.secondPaymentPct}% / ${plan.handoverPct}% / ` +
+          `${plan.postHandoverPct}% over ${plan.postHandoverMonths} post-handover months`
+      );
+      parts.push(
+        `Paid to date: ${plan.totalPaid.toLocaleString("en-US")} AED across ` +
+          `${plan.paidCount} installment(s). Remaining: ${plan.totalRemaining.toLocaleString("en-US")} AED ` +
+          `across ${plan.upcomingCount + plan.overdueCount} installment(s) ` +
+          `(${plan.overdueCount} overdue, ${plan.upcomingCount} upcoming).`
+      );
+      if (plan.nextDue) {
+        parts.push(
+          `Next due: ${plan.nextDue.labelEn} — ${plan.nextDue.amountAed.toLocaleString("en-US")} AED ` +
+            `on ${plan.nextDue.dueDate} (status: ${plan.nextDue.status}).`
+        );
+      } else {
+        parts.push("Next due: none — plan fully paid.");
+      }
+      if (plan.overdueInstallments.length > 0) {
+        parts.push("Overdue installments:");
+        for (const it of plan.overdueInstallments) {
+          parts.push(
+            `  - #${it.installmentNumber} ${it.labelEn}: ${it.amountAed.toLocaleString("en-US")} AED, due ${it.dueDate}`
+          );
+        }
+      }
+      // Show only the first ~6 installments inline to keep prompt size sane;
+      // the totals above already give the AI everything for high-level Q&A.
+      const preview = plan.installments.slice(0, 6);
+      parts.push("Schedule (first entries):");
+      for (const it of preview) {
+        const paidNote =
+          it.status === "paid" && it.paidAt
+            ? ` — paid ${it.paidAt.toISOString().slice(0, 10)}`
+            : "";
+        parts.push(
+          `  - #${it.installmentNumber} ${it.labelEn}: ${it.amountAed.toLocaleString("en-US")} AED, ` +
+            `due ${it.dueDate} [${it.status}]${paidNote}`
+        );
+      }
+      if (plan.installments.length > preview.length) {
+        parts.push(
+          `  …and ${plan.installments.length - preview.length} further post-handover installment(s).`
+        );
+      }
+    }
+  }
+
   // Retrieved documents
   if (context.retrievedDocuments.length > 0) {
     parts.push("");
@@ -385,6 +484,7 @@ export async function processQuery(
     retrievedDocuments,
     conversationHistory: input.conversationHistory ?? [],
     identityContext: input.identityContext ?? null,
+    paymentContext: input.paymentContext,
     language: input.language,
     currentQuery: input.query,
     otpVerified: input.otpVerified ?? false,

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePendingApprovals } from '@/lib/cms/hooks';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, Eye, Globe, Users } from 'lucide-react';
 import type { ContentModule } from '@/lib/cms/types';
+import { useContentApprovalStatus } from '@/lib/cms/hooks/use-approvals';
 
 const MODULE_LABELS: Record<ContentModule, string> = {
   pages: 'Pages',
@@ -31,6 +32,29 @@ function contentDetailHref(contentId: string, contentModule: ContentModule): str
   }
 }
 
+/** Small inline component to show chain step info for a pending item */
+function ChainStepBadge({ contentId, contentModule }: { contentId: string; contentModule: ContentModule }) {
+  const { data } = useContentApprovalStatus(contentModule, contentId);
+  if (!data || !data.request) return null;
+
+  const currentStep = (data as { currentStep?: number }).currentStep ?? 1;
+  const totalSteps = (data as { totalSteps?: number }).totalSteps ?? 1;
+  const chain = (data as { chain?: { userName: string; position: number }[] }).chain ?? [];
+  const currentApprover = chain.find((c) => c.position === currentStep);
+
+  if (totalSteps <= 1) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-ora-charcoal-light">
+      <Users className="h-3 w-3 stroke-1" />
+      Step {currentStep} of {totalSteps}
+      {currentApprover && (
+        <span className="text-ora-muted">— {currentApprover.userName}</span>
+      )}
+    </span>
+  );
+}
+
 export default function ReviewDashboardPage() {
   const { data: pending, isLoading } = usePendingApprovals();
 
@@ -39,7 +63,7 @@ export default function ReviewDashboardPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-ora-charcoal">Reviews</h1>
         <p className="mt-1 text-sm text-ora-charcoal-light">
-          Content awaiting your approval
+          All content pending approval
         </p>
       </div>
 
@@ -81,6 +105,8 @@ export default function ReviewDashboardPage() {
                   <span>by {item.submitterName}</span>
                   <span>·</span>
                   <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                  <span>·</span>
+                  <ChainStepBadge contentId={item.contentId} contentModule={item.contentModule} />
                 </div>
               </div>
 
@@ -89,6 +115,29 @@ export default function ReviewDashboardPage() {
                   {item.status}
                 </span>
               </div>
+
+              {item.contentModule === 'pages' && (
+                <div className="flex shrink-0 items-center gap-2">
+                  <a
+                    href={`/ora-panel/pages/${item.contentId}/preview-pending`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 bg-ora-gold px-4 text-sm text-ora-white hover:bg-ora-gold-dark transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5 stroke-1" />
+                    Preview Pending
+                  </a>
+                  <a
+                    href={`/ora-panel/pages/${item.contentId}/preview-live`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 border border-ora-sand bg-ora-cream px-4 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors"
+                  >
+                    <Globe className="h-3.5 w-3.5 stroke-1" />
+                    View Live
+                  </a>
+                </div>
+              )}
 
               <Link
                 href={contentDetailHref(item.contentId, item.contentModule)}

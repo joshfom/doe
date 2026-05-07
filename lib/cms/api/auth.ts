@@ -14,6 +14,24 @@ export const SESSION_COOKIE_NAME = "ora_session";
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
+ * Cookie attributes shared by every endpoint that writes the session cookie.
+ *
+ * - `secure` is enabled in production so HTTPS-only deployments (Vercel,
+ *   Cloudflare, etc.) actually persist + send the cookie on subsequent
+ *   requests. Without it, some browsers (notably Safari/ITP) will accept
+ *   the cookie but treat it as transient and silently drop it on POST
+ *   navigations, producing 401s on actions like clone-locale that work
+ *   fine over local HTTP.
+ * - `sameSite: "lax"` is sufficient because admin + API share an origin.
+ */
+const SESSION_COOKIE_BASE = {
+  httpOnly: true,
+  path: "/",
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+};
+
+/**
  * Validate a session token against the database.
  * Returns the userId if valid, null otherwise.
  */
@@ -158,10 +176,8 @@ export const authPlugin = new Elysia({ name: "auth" })
     });
 
     cookie[SESSION_COOKIE_NAME].set({
+      ...SESSION_COOKIE_BASE,
       value: token,
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
       maxAge: SESSION_MAX_AGE_MS / 1000,
     });
 
@@ -198,9 +214,8 @@ export const authPlugin = new Elysia({ name: "auth" })
     }
 
     cookie[SESSION_COOKIE_NAME].set({
+      ...SESSION_COOKIE_BASE,
       value: "",
-      httpOnly: true,
-      path: "/",
       maxAge: 0,
     });
 
@@ -270,10 +285,8 @@ export const authPlugin = new Elysia({ name: "auth" })
     });
 
     cookie[SESSION_COOKIE_NAME].set({
+      ...SESSION_COOKIE_BASE,
       value: token,
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
       maxAge: SESSION_MAX_AGE_MS / 1000,
     });
 

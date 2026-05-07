@@ -11,6 +11,7 @@ import {
 } from "../schema";
 import { logAudit } from "../audit";
 import { notifyApprovers } from "./notifications";
+import { createApprovalRequestWithDraft } from "./service";
 
 export interface GateResult {
   allowed: boolean;
@@ -24,12 +25,16 @@ export interface GateResult {
  * If approval is disabled for the module, returns { allowed: true }.
  * If enabled, creates an approval request, sets content to pending_review,
  * notifies approvers, logs to audit, and returns { allowed: false }.
+ *
+ * When `data` is provided, it is stored as `pendingData` on the approval request
+ * so that the live content remains unchanged until approval is granted.
  */
 export async function checkPublicationGate(
   db: Database,
   contentId: string,
   contentModule: ContentModule,
-  submitterId: string
+  submitterId: string,
+  data?: unknown
 ): Promise<GateResult> {
   // Look up approval config for this module
   // Gracefully handle missing tables (e.g., migrations not yet run)
@@ -51,16 +56,21 @@ export async function checkPublicationGate(
     return { allowed: true };
   }
 
-  // Create approval request record
-  const [request] = await db
-    .insert(approvalRequests)
-    .values({
-      contentId,
-      contentModule,
-      submitterId,
-      status: "pending",
-    })
-    .returning();
+  // Create approval request record — store pendingData if provided
+  let request;
+  if (data !== undefined) {
+    request = await createApprovalRequestWithDraft(db, contentId, contentModule, submitterId, data);
+  } else {
+    [request] = await db
+      .insert(approvalRequests)
+      .values({
+        contentId,
+        contentModule,
+        submitterId,
+        status: "pending",
+      })
+      .returning();
+  }
 
   // Set content status to pending_review
   if (contentModule === "pages") {

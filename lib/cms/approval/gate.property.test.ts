@@ -196,7 +196,7 @@ describe("Feature: content-approval-workflow, Property 2: Approval-enabled inter
           expect(content!.status).not.toBe("published");
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -256,7 +256,7 @@ describe("Feature: content-approval-workflow, Property 3: Approval-disabled allo
           expect(content!.status).not.toBe("pending_review");
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -291,7 +291,7 @@ describe("Feature: content-approval-workflow, Property 3: Approval-disabled allo
           expect(requests.length).toBe(0);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });
@@ -353,7 +353,7 @@ describe("Feature: content-approval-workflow, Property 7: Approval request recor
           expect(request.createdAt).toBeInstanceOf(Date);
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

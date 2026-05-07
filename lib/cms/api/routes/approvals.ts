@@ -62,10 +62,38 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       .orderBy(sql`${approvalRequests.createdAt} desc`)
       .limit(1);
 
+    // Shape the response per the ApprovalProgressResponse interface
+    const shapedRequest = request
+      ? {
+          id: request.id,
+          status: request.status as "pending" | "approved" | "rejected",
+          currentStep: request.currentStep,
+          createdAt: request.createdAt.toISOString(),
+          resolvedAt: request.resolvedAt?.toISOString() ?? null,
+        }
+      : null;
+
+    const shapedDecisions = progress.decisions.map((d) => ({
+      id: d.id,
+      approverId: d.approverId,
+      approverName: d.approverName,
+      decision: d.decision as "approved" | "rejected",
+      comment: d.comment,
+      chainStep: d.chainStep ?? 0,
+      createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : d.createdAt,
+    }));
+
     return {
       data: {
-        request: request ?? null,
-        ...progress,
+        request: shapedRequest,
+        currentStep: progress.currentStep,
+        totalSteps: progress.totalSteps,
+        chain: progress.chain.map((c) => ({
+          userId: c.userId,
+          userName: c.userName,
+          position: c.position,
+        })),
+        decisions: shapedDecisions,
       },
     };
   })
@@ -127,6 +155,14 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       return { error: "Decision must be 'approved' or 'rejected'" };
     }
 
+    // Enforce mandatory non-empty, non-whitespace rejection reason
+    if (decision === "rejected") {
+      if (!comment || comment.trim().length === 0) {
+        set.status = 400;
+        return { error: "Rejection reason is required" };
+      }
+    }
+
     // Fetch the request
     const [request] = await db
       .select()
@@ -145,32 +181,47 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       return { error: "This approval request has already been resolved" };
     }
 
-    // Verify user is an assigned approver for this module
-    const approverConfig = await db
-      .select({ configId: approvalConfig.id })
-      .from(approvalConfig)
-      .where(eq(approvalConfig.contentModule, request.contentModule))
-      .limit(1);
+    // Authorization check — relaxed for "pages" module (any employee can decide)
+    if (request.contentModule === "pages") {
+      // For pages module: allow any employee to submit decisions
+      const [user] = await db
+        .select({ userType: users.userType })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
 
-    if (approverConfig.length === 0) {
-      set.status = 403;
-      return { error: "No approval configuration found for this module" };
-    }
+      if (!user || user.userType !== "employee") {
+        set.status = 403;
+        return { error: "Only employees can submit decisions" };
+      }
+    } else {
+      // For other modules: verify user is an assigned approver
+      const approverConfig = await db
+        .select({ configId: approvalConfig.id })
+        .from(approvalConfig)
+        .where(eq(approvalConfig.contentModule, request.contentModule))
+        .limit(1);
 
-    const [isApprover] = await db
-      .select({ id: approvalConfigApprovers.id })
-      .from(approvalConfigApprovers)
-      .where(
-        and(
-          eq(approvalConfigApprovers.configId, approverConfig[0].configId),
-          eq(approvalConfigApprovers.userId, userId)
+      if (approverConfig.length === 0) {
+        set.status = 403;
+        return { error: "No approval configuration found for this module" };
+      }
+
+      const [isApprover] = await db
+        .select({ id: approvalConfigApprovers.id })
+        .from(approvalConfigApprovers)
+        .where(
+          and(
+            eq(approvalConfigApprovers.configId, approverConfig[0].configId),
+            eq(approvalConfigApprovers.userId, userId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!isApprover) {
-      set.status = 403;
-      return { error: "You are not an assigned approver for this module" };
+      if (!isApprover) {
+        set.status = 403;
+        return { error: "You are not an assigned approver for this module" };
+      }
     }
 
     // Submit the decision — catch unique constraint violation for duplicate
@@ -191,4 +242,48 @@ export const approvalRoutes = new Elysia({ name: "approvals" })
       }
       throw err;
     }
+  })
+
+  // POST /approvals/:id/demo-reopen — DEMO ONLY: reset a resolved request back
+  // to pending with currentStep advanced past any existing decisions, so the
+  // presenter can re-run the chain to publish from any approver in the UI.
+  .post("/approvals/:id/demo-reopen", async ({ params, userId, set }) => {
+    const { id } = params;
+
+    const [request] = await db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, id))
+      .limit(1);
+
+    if (!request) {
+      set.status = 404;
+      return { error: "Approval request not found" };
+    }
+
+    // Only employees can use the demo reopen affordance
+    const [user] = await db
+      .select({ userType: users.userType })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user || user.userType !== "employee") {
+      set.status = 403;
+      return { error: "Only employees can reopen approval requests" };
+    }
+
+    // Determine the next step to resume from: count existing decisions + 1
+    const [{ count: decisionCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(approvalDecisions)
+      .where(eq(approvalDecisions.requestId, id));
+
+    const nextStep = (decisionCount ?? 0) + 1;
+
+    await db
+      .update(approvalRequests)
+      .set({ status: "pending", resolvedAt: null, currentStep: nextStep })
+      .where(eq(approvalRequests.id, id));
+
+    return { data: { id, status: "pending", currentStep: nextStep } };
   });

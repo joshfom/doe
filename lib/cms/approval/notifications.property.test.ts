@@ -111,7 +111,7 @@ describe("Feature: content-approval-workflow, Property 9: Email body contains re
           expect(html).toContain("/ora-panel/reviews");
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

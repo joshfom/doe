@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, asc } from "drizzle-orm";
 import { authGuard } from "../auth";
 import { approvalConfig, approvalConfigApprovers, users } from "../../schema";
 import { db } from "../../db";
@@ -22,7 +22,7 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
   .get("/approval-config", async () => {
     const configs = await db.select().from(approvalConfig);
 
-    // Fetch approvers for each config
+    // Fetch approvers for each config, sorted by position
     const result = await Promise.all(
       configs.map(async (config) => {
         const approvers = await db
@@ -31,10 +31,12 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
             userId: approvalConfigApprovers.userId,
             userName: users.name,
             userEmail: users.email,
+            position: approvalConfigApprovers.position,
           })
           .from(approvalConfigApprovers)
           .innerJoin(users, eq(approvalConfigApprovers.userId, users.id))
-          .where(eq(approvalConfigApprovers.configId, config.id));
+          .where(eq(approvalConfigApprovers.configId, config.id))
+          .orderBy(asc(approvalConfigApprovers.position));
 
         return {
           ...config,
@@ -49,9 +51,10 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
   // PUT /approval-config/:module — update toggle + approvers for a module
   .put("/approval-config/:module", async ({ params, body, set }) => {
     const { module: moduleName } = params;
-    const { enabled, approverIds } = body as {
+    const { enabled, approverIds, approvers } = body as {
       enabled?: boolean;
       approverIds?: string[];
+      approvers?: { userId: string; position: number }[];
     };
 
     // Validate module against ContentModule enum
@@ -62,21 +65,48 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
 
     const contentModule = moduleName as ContentModule;
 
+    // Determine the effective approver list — prefer `approvers` (with positions) over legacy `approverIds`
+    let effectiveApprovers: { userId: string; position: number }[] | undefined;
+
+    if (approvers && approvers.length > 0) {
+      // Validate: check for duplicate positions
+      const positions = approvers.map((a) => a.position);
+      const uniquePositions = new Set(positions);
+      if (uniquePositions.size !== positions.length) {
+        set.status = 400;
+        return { error: "Positions must be unique and contiguous" };
+      }
+
+      // Normalize positions: sort by provided position, then assign contiguous 1-based integers
+      const sorted = [...approvers].sort((a, b) => a.position - b.position);
+      effectiveApprovers = sorted.map((a, idx) => ({
+        userId: a.userId,
+        position: idx + 1,
+      }));
+    } else if (approverIds && approverIds.length > 0) {
+      // Legacy format: assign positions based on array order
+      effectiveApprovers = approverIds.map((userId, idx) => ({
+        userId,
+        position: idx + 1,
+      }));
+    }
+
     // Validate non-empty approver list when enabling
-    if (enabled === true && (!approverIds || approverIds.length === 0)) {
+    if (enabled === true && (!effectiveApprovers || effectiveApprovers.length === 0)) {
       set.status = 400;
       return { error: "At least one approver is required when enabling approval" };
     }
 
     // Validate approver user IDs exist in users table
-    if (approverIds && approverIds.length > 0) {
+    if (effectiveApprovers && effectiveApprovers.length > 0) {
+      const userIds = effectiveApprovers.map((a) => a.userId);
       const existingUsers = await db
         .select({ id: users.id })
         .from(users)
-        .where(inArray(users.id, approverIds));
+        .where(inArray(users.id, userIds));
 
       const existingIds = new Set(existingUsers.map((u) => u.id));
-      const invalidIds = approverIds.filter((id) => !existingIds.has(id));
+      const invalidIds = userIds.filter((id) => !existingIds.has(id));
 
       if (invalidIds.length > 0) {
         set.status = 400;
@@ -114,18 +144,19 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
     }
 
     // Update approvers if provided
-    if (approverIds) {
+    if (effectiveApprovers) {
       // Remove existing approvers
       await db
         .delete(approvalConfigApprovers)
         .where(eq(approvalConfigApprovers.configId, configId));
 
-      // Insert new approvers
-      if (approverIds.length > 0) {
+      // Insert new approvers with positions
+      if (effectiveApprovers.length > 0) {
         await db.insert(approvalConfigApprovers).values(
-          approverIds.map((userId) => ({
+          effectiveApprovers.map((a) => ({
             configId,
-            userId,
+            userId: a.userId,
+            position: a.position,
           }))
         );
       }
@@ -139,23 +170,25 @@ export const approvalConfigRoutes = new Elysia({ name: "approval-config" })
       await autoResolvePendingRequests(db, contentModule);
     }
 
-    // Return updated config with approvers
+    // Return updated config with approvers sorted by position
     const [updatedConfig] = await db
       .select()
       .from(approvalConfig)
       .where(eq(approvalConfig.id, configId))
       .limit(1);
 
-    const approvers = await db
+    const returnedApprovers = await db
       .select({
         id: approvalConfigApprovers.id,
         userId: approvalConfigApprovers.userId,
         userName: users.name,
         userEmail: users.email,
+        position: approvalConfigApprovers.position,
       })
       .from(approvalConfigApprovers)
       .innerJoin(users, eq(approvalConfigApprovers.userId, users.id))
-      .where(eq(approvalConfigApprovers.configId, configId));
+      .where(eq(approvalConfigApprovers.configId, configId))
+      .orderBy(asc(approvalConfigApprovers.position));
 
-    return { data: { ...updatedConfig, approvers } };
+    return { data: { ...updatedConfig, approvers: returnedApprovers } };
   });

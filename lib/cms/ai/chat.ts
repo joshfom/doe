@@ -11,8 +11,8 @@ import { detectLanguage } from "./language";
 import { isWithinScope, loadScopeConfig } from "./scope";
 import { processQuery } from "./rag";
 import type { QueryResult } from "./rag";
-import { bookAppointment, lookupClientAccount } from "./actions";
-import type { AccountSummary } from "./actions";
+import { bookAppointment, lookupClientAccount, lookupClientPayments } from "./actions";
+import type { AccountSummary, ClientPaymentPlanSummary } from "./actions";
 import type { ChatMessage } from "./gateway";
 import { handleOtpGate } from "./otp";
 import type { OtpVerificationState } from "./otp";
@@ -43,6 +43,28 @@ export interface ChatResponse {
 
 const BOOKING_KEYWORDS = ["book", "appointment", "schedule", "meeting"];
 const ACCOUNT_KEYWORDS = ["my account", "my unit", "my status"];
+const PAYMENT_KEYWORDS = [
+  "payment",
+  "installment",
+  "instalment",
+  "due",
+  "invoice",
+  "paid",
+  "balance",
+  "remaining",
+  "down payment",
+  "handover payment",
+  "overdue",
+  "دفعة",
+  "دفعات",
+  "قسط",
+  "أقساط",
+  "مدفوع",
+  "مستحق",
+  "متأخرة",
+  "الرصيد",
+  "الفاتورة",
+];
 const CAPABILITIES_KEYWORDS = [
   "what can you do",
   "what are your capabilities",
@@ -63,6 +85,11 @@ function detectBookingIntent(message: string): boolean {
 function detectAccountIntent(message: string): boolean {
   const lower = message.toLowerCase();
   return ACCOUNT_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function detectPaymentIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  return PAYMENT_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 function detectCapabilitiesIntent(message: string): boolean {
@@ -576,6 +603,7 @@ async function handleChatMessageInner(
   // ── Step 6: Detect action intents and augment context ────────────────────
   let actionPerformed: string | undefined;
   let accountContext: AccountSummary | undefined;
+  let paymentContext: ClientPaymentPlanSummary[] | undefined;
 
   // Fast-path: capabilities question — no need to call the LLM.
   if (detectCapabilitiesIntent(input.message)) {
@@ -617,6 +645,23 @@ async function handleChatMessageInner(
       : "account_lookup";
   }
 
+  // Payment lookup: only for verified clients asking about payments. The
+  // OTP gate above ensures payment questions cannot reach this point unless
+  // the user has already verified their identity.
+  if (
+    detectPaymentIntent(input.message) &&
+    identity.type === "client" &&
+    identity.clientId &&
+    otpVerificationState === "verified"
+  ) {
+    paymentContext = await lookupClientPayments(db, identity.clientId);
+    if (paymentContext.length > 0) {
+      actionPerformed = actionPerformed
+        ? `${actionPerformed},payment_lookup`
+        : "payment_lookup";
+    }
+  }
+
   // ── Step 7: Process query through RAG pipeline ───────────────────────────
   // Build identity context with account data if available
   const identityContext: IdentityResult = accountContext
@@ -631,6 +676,7 @@ async function handleChatMessageInner(
     language,
     conversationHistory,
     identityContext,
+    paymentContext,
     otpVerified: otpVerificationState === "verified",
   });
 

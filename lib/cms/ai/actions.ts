@@ -1,6 +1,13 @@
-import { eq, and, sql, count } from "drizzle-orm";
+import { eq, and, sql, count, asc } from "drizzle-orm";
 import type { Database } from "../db";
-import { aiAppointments, aiClients, aiTenants, aiUnits } from "../schema";
+import {
+  aiAppointments,
+  aiClients,
+  aiTenants,
+  aiUnitInstallments,
+  aiUnitPaymentPlans,
+  aiUnits,
+} from "../schema";
 import { logAudit } from "../audit";
 import type { IdentityResult, UnitRecord } from "./identity";
 import type { AppointmentType, AppointmentStatus } from "../types";
@@ -33,6 +40,42 @@ export interface AppointmentResult {
 export interface TimeSlot {
   date: string;
   time: string;
+}
+
+export interface PaymentInstallment {
+  id: string;
+  installmentNumber: number;
+  labelEn: string;
+  labelAr: string | null;
+  dueDate: string;
+  amountAed: number;
+  status: "paid" | "upcoming" | "overdue";
+  paidAt: Date | null;
+  paymentReference: string | null;
+}
+
+export interface ClientPaymentPlanSummary {
+  unitId: string;
+  unitNumber: string;
+  projectName: string;
+  cluster: string | null;
+  planName: string;
+  totalPrice: number;
+  bookingDate: string;
+  expectedHandoverDate: string | null;
+  downPaymentPct: number;
+  secondPaymentPct: number;
+  handoverPct: number;
+  postHandoverPct: number;
+  postHandoverMonths: number;
+  totalPaid: number;
+  totalRemaining: number;
+  paidCount: number;
+  upcomingCount: number;
+  overdueCount: number;
+  nextDue: PaymentInstallment | null;
+  overdueInstallments: PaymentInstallment[];
+  installments: PaymentInstallment[];
 }
 
 export interface AccountSummary {
@@ -463,4 +506,131 @@ export async function lookupClientAccount(
   }
 
   return { type: "visitor", units: [] };
+}
+
+// ── lookupClientPayments ─────────────────────────────────────────────────────
+
+/**
+ * Retrieve all payment plans (one per owned unit) for a client, with the
+ * installment ledger and derived totals: paid amount, remaining amount,
+ * overdue count, and next due installment.
+ *
+ * Installment status stored on the row is the source of truth for `paid`,
+ * but `upcoming` rows whose `dueDate` is in the past relative to *today*
+ * are reclassified as `overdue` on the fly so the AI never reports a stale
+ * status if the seeder hasn't been refreshed for a while.
+ */
+export async function lookupClientPayments(
+  db: Database,
+  clientId: string
+): Promise<ClientPaymentPlanSummary[]> {
+  const planRows = await db
+    .select({
+      id: aiUnitPaymentPlans.id,
+      unitId: aiUnitPaymentPlans.unitId,
+      planName: aiUnitPaymentPlans.planName,
+      totalPrice: aiUnitPaymentPlans.totalPrice,
+      bookingDate: aiUnitPaymentPlans.bookingDate,
+      expectedHandoverDate: aiUnitPaymentPlans.expectedHandoverDate,
+      downPaymentPct: aiUnitPaymentPlans.downPaymentPct,
+      secondPaymentPct: aiUnitPaymentPlans.secondPaymentPct,
+      handoverPct: aiUnitPaymentPlans.handoverPct,
+      postHandoverPct: aiUnitPaymentPlans.postHandoverPct,
+      postHandoverMonths: aiUnitPaymentPlans.postHandoverMonths,
+      unitNumber: aiUnits.unitNumber,
+      projectName: aiUnits.projectName,
+      cluster: aiUnits.cluster,
+    })
+    .from(aiUnitPaymentPlans)
+    .leftJoin(aiUnits, eq(aiUnits.id, aiUnitPaymentPlans.unitId))
+    .where(eq(aiUnitPaymentPlans.clientId, clientId));
+
+  if (planRows.length === 0) return [];
+
+  const todayMs = Date.now();
+  const summaries: ClientPaymentPlanSummary[] = [];
+
+  for (const plan of planRows) {
+    const rows = await db
+      .select({
+        id: aiUnitInstallments.id,
+        installmentNumber: aiUnitInstallments.installmentNumber,
+        labelEn: aiUnitInstallments.labelEn,
+        labelAr: aiUnitInstallments.labelAr,
+        dueDate: aiUnitInstallments.dueDate,
+        amountAed: aiUnitInstallments.amountAed,
+        status: aiUnitInstallments.status,
+        paidAt: aiUnitInstallments.paidAt,
+        paymentReference: aiUnitInstallments.paymentReference,
+      })
+      .from(aiUnitInstallments)
+      .where(eq(aiUnitInstallments.planId, plan.id))
+      .orderBy(asc(aiUnitInstallments.installmentNumber));
+
+    const installments: PaymentInstallment[] = rows.map((r) => {
+      const dueMs = new Date(`${r.dueDate}T00:00:00Z`).getTime();
+      let status: PaymentInstallment["status"] = r.status as PaymentInstallment["status"];
+      if (status === "upcoming" && dueMs < todayMs) status = "overdue";
+      return {
+        id: r.id,
+        installmentNumber: r.installmentNumber,
+        labelEn: r.labelEn,
+        labelAr: r.labelAr,
+        dueDate: r.dueDate,
+        amountAed: r.amountAed,
+        status,
+        paidAt: r.paidAt,
+        paymentReference: r.paymentReference,
+      };
+    });
+
+    let totalPaid = 0;
+    let totalRemaining = 0;
+    let paidCount = 0;
+    let upcomingCount = 0;
+    const overdueInstallments: PaymentInstallment[] = [];
+
+    for (const it of installments) {
+      if (it.status === "paid") {
+        totalPaid += it.amountAed;
+        paidCount += 1;
+      } else {
+        totalRemaining += it.amountAed;
+        if (it.status === "overdue") overdueInstallments.push(it);
+        else upcomingCount += 1;
+      }
+    }
+
+    // Next due = earliest non-paid installment (overdue first, then upcoming).
+    const nextDue =
+      installments.find((it) => it.status === "overdue") ??
+      installments.find((it) => it.status === "upcoming") ??
+      null;
+
+    summaries.push({
+      unitId: plan.unitId,
+      unitNumber: plan.unitNumber ?? "",
+      projectName: plan.projectName ?? "",
+      cluster: plan.cluster,
+      planName: plan.planName,
+      totalPrice: plan.totalPrice,
+      bookingDate: plan.bookingDate,
+      expectedHandoverDate: plan.expectedHandoverDate,
+      downPaymentPct: plan.downPaymentPct,
+      secondPaymentPct: plan.secondPaymentPct,
+      handoverPct: plan.handoverPct,
+      postHandoverPct: plan.postHandoverPct,
+      postHandoverMonths: plan.postHandoverMonths,
+      totalPaid: Math.round(totalPaid * 100) / 100,
+      totalRemaining: Math.round(totalRemaining * 100) / 100,
+      paidCount,
+      upcomingCount,
+      overdueCount: overdueInstallments.length,
+      nextDue,
+      overdueInstallments,
+      installments,
+    });
+  }
+
+  return summaries;
 }
