@@ -23,6 +23,7 @@ import { FeaturedProjectsRuntime } from "./components/project/FeaturedProjectsRu
 import { FeaturedCommunitiesRuntime } from "./components/project/FeaturedCommunitiesRuntime";
 import { ProjectSectionRuntime, type ProjectSectionKind } from "./components/project/ProjectSectionRuntime";
 import { ImageCarouselRuntime } from "./components/ImageCarouselRuntime";
+import { ExperienceLauncherRuntime, type LauncherStyle } from "./components/ExperienceLauncherRuntime";
 import {
   Home, Phone, Mail, MapPin, Star, Heart, Check, ArrowRight,
   Building, Palmtree, Waves, Sun, Shield, Car, Bed, Bath,
@@ -3608,6 +3609,119 @@ const ImageCarousel: Config["components"][string] = {
 };
 
 
+// ─── Experience Launcher (iframe dialog) ─────────────────────────────────────
+// Renders a styled CTA that opens a full-viewport dialog containing an iframe
+// pointing at an external interactive experience (3D walkthrough, masterplan,
+// etc.). The embedded app owns its own navigation — we don't try to observe or
+// drive it across origins.
+
+const ExperienceLauncher: Config["components"][string] = {
+  label: "3D Experience Launcher",
+  fields: {
+    // ── Content ────────────────────────────────────────────────────────────
+    buttonLabel: { type: "text", label: "Button Label", contentEditable: true },
+    subtitle: { type: "text", label: "Subtitle (optional)" },
+    posterImage: imageUploadField,
+
+    // ── Target ─────────────────────────────────────────────────────────────
+    iframeUrl: { type: "text", label: "Iframe URL" },
+    iframeTitle: { type: "text", label: "Dialog Title" },
+
+    // ── Dialog size ────────────────────────────────────────────────────────
+    dialogWidthPct: makeSliderField(
+      "Dialog Width (%)",
+      50,
+      100,
+      "%",
+      "Viewport width of the dialog. 95 matches the reference design.",
+    ),
+    dialogHeightPct: makeSliderField(
+      "Dialog Height (%)",
+      50,
+      100,
+      "%",
+      "Viewport height of the dialog.",
+    ),
+
+    // ── Button styling ─────────────────────────────────────────────────────
+    launcherStyle: {
+      type: "radio",
+      label: "Button Style",
+      options: [
+        { label: "3D Tilt", value: "3d-tilt" },
+        { label: "Glass", value: "glass" },
+        { label: "Flat", value: "flat" },
+      ],
+    },
+    accentColor: makeColorField("Accent Color", "#2C2C2C", "Button background tint."),
+    textColor: makeColorField("Text Color", "#FFFFFF"),
+    cornerRadius: makeSliderField("Corner Radius", 0, 32, "px"),
+
+    // ── Layout ─────────────────────────────────────────────────────────────
+    fullWidth: {
+      type: "radio",
+      label: "Full Width",
+      options: [
+        { label: "No", value: "no" },
+        { label: "Yes", value: "yes" },
+      ],
+    },
+    alignment: {
+      type: "radio",
+      label: "Alignment",
+      options: [
+        { label: "Left", value: "left" },
+        { label: "Center", value: "center" },
+        { label: "Right", value: "right" },
+      ],
+    },
+
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    buttonLabel: "Start Experience",
+    subtitle: "Explore in 3D",
+    posterImage: "",
+    iframeUrl: "https://baynsalestool.ora-uae.com/home",
+    iframeTitle: "Bayn · 3D Experience",
+    dialogWidthPct: "95",
+    dialogHeightPct: "95",
+    launcherStyle: "3d-tilt",
+    accentColor: "#2C2C2C",
+    textColor: "#FFFFFF",
+    cornerRadius: "4",
+    fullWidth: "no",
+    alignment: "left",
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const widthPct = Number(props.dialogWidthPct);
+    const heightPct = Number(props.dialogHeightPct);
+    const corner = Number(props.cornerRadius);
+    return styledRender(
+      props,
+      React.createElement(ExperienceLauncherRuntime, {
+        buttonLabel: (props.buttonLabel as string) || "Start Experience",
+        subtitle: (props.subtitle as string) || undefined,
+        posterImage: (props.posterImage as string) || undefined,
+        iframeUrl: (props.iframeUrl as string) || "",
+        iframeTitle: (props.iframeTitle as string) || "3D Experience",
+        dialogWidthPct: Number.isFinite(widthPct) ? widthPct : 95,
+        dialogHeightPct: Number.isFinite(heightPct) ? heightPct : 95,
+        style: ((props.launcherStyle as string) || "3d-tilt") as LauncherStyle,
+        accentColor: (props.accentColor as string) || "#2C2C2C",
+        textColor: (props.textColor as string) || "#FFFFFF",
+        cornerRadius: Number.isFinite(corner) ? corner : 4,
+        fullWidth: (props.fullWidth as string) === "yes",
+        alignment: ((props.alignment as string) || "left") as "left" | "center" | "right",
+      }),
+    );
+  },
+};
+
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUCK CONFIG
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3622,6 +3736,7 @@ export const pageBuilderConfig: Config = {
     basic: { components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel"], title: "Basic" },
     interactive: { components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap"], title: "Interactive" },
     projects: { components: ["FeaturedProjects", "FeaturedCommunities", "ProjectSection"], title: "Projects" },
+    experiences: { components: ["ExperienceLauncher"], title: "Experiences" },
   },
   components: {
     Section, Container, Columns, Accordion, Spacer, Divider,
@@ -3629,5 +3744,6 @@ export const pageBuilderConfig: Config = {
     FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap,
     ContactLocationsMap,
     FeaturedProjects, FeaturedCommunities, ProjectSection,
+    ExperienceLauncher,
   },
 };
