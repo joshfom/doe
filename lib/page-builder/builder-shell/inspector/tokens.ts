@@ -32,3 +32,6 @@ export const ORA_THEME = {
   white: "#FFFFFF",
   danger: "#B0413E",
 } as const;
+
+/** Symmetric horizontal padding (px) for the canvas frame. */
+export const ORA_FRAME_PADDING = 60;

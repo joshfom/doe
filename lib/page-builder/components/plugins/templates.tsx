@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { usePuck } from "@puckeditor/core";
+import { usePuckStore } from "../../use-puck-store";
 import type { Plugin, Data } from "@puckeditor/core";
 import { LayoutTemplate, Save } from "lucide-react";
 import {
@@ -19,8 +19,8 @@ import type { ComponentInstance, PageData } from "../../types";
 
 // ─── Insert helpers ──────────────────────────────────────────────────────────
 
-// Map a layout component type → the zone name we should drop new content into.
-// Components not in this map have no DropZone and templates can only be inserted
+// Map a layout component type → the slot field name we should drop new content into.
+// Components not in this map have no slot and templates can only be inserted
 // **next to** them (in the parent zone), never inside them.
 const PRIMARY_ZONE: Record<string, string> = {
   Section: "section-content",
@@ -100,7 +100,9 @@ function collectDescendantZones(
 // ─── Templates Panel ─────────────────────────────────────────────────────────
 
 function TemplatesPanel() {
-  const { dispatch, selectedItem, getSelectorForId } = usePuck();
+  const dispatch = usePuckStore((s) => s.dispatch);
+  const selectedItem = usePuckStore((s) => s.selectedItem);
+  const getSelectorForId = usePuckStore((s) => s.getSelectorForId);
   const userTemplatesQuery = useComponentTemplates();
   const deleteMut = useDeleteComponentTemplate();
   const [tab, setTab] = useState<"builtin" | "saved">("builtin");
@@ -262,7 +264,8 @@ function TemplatesPanel() {
 // ─── Save-as-Template Panel ──────────────────────────────────────────────────
 
 function SaveAsTemplatePanel() {
-  const { selectedItem, appState } = usePuck();
+  const selectedItem = usePuckStore((s) => s.selectedItem);
+  const appState = usePuckStore((s) => s.appState);
   const saveMut = useSaveComponentTemplate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

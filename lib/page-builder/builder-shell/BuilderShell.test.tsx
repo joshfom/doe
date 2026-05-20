@@ -22,6 +22,15 @@ window.matchMedia ??= ((query: string) => ({
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 
+// Mock InlineRichtextController to avoid tiptap extension resolution issues.
+vi.mock("./InlineRichtextController", () => ({
+  InlineRichtextController: () => null,
+  useActiveRichtextEditor: () => null,
+  InlineRichtextContext: {
+    Provider: ({ children }: { children: React.ReactNode }) => children,
+  },
+}));
+
 const { BuilderShell } = await import("./BuilderShell");
 import type { DocumentRecord } from "./types";
 
@@ -72,11 +81,14 @@ describe("BuilderShell", () => {
       />,
     );
 
+    // Historical: ComponentsDrawer was replaced by ComponentPalette + OutlineTree in the BuilderShell.
+    // The shell now mounts ComponentPalette (left) and
+    // ConfigurationPanel (right). The top bar, canvas, and status bar are unchanged.
     expect(screen.getByTestId("ora-topbar")).toBeTruthy();
     expect(screen.getByTestId("ora-canvas")).toBeTruthy();
-    expect(screen.getByTestId("ora-inspector")).toBeTruthy();
+    expect(screen.getByTestId("ora-configuration-panel")).toBeTruthy();
     expect(screen.getByTestId("ora-statusbar")).toBeTruthy();
-    expect(screen.getByTestId("ora-left-rail")).toBeTruthy();
+    expect(screen.getByTestId("ora-component-palette")).toBeTruthy();
 
     // Puck default chrome should be absent.
     expect(container.querySelector("[class*='PuckLayout-header']")).toBeNull();

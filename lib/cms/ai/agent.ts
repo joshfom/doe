@@ -39,6 +39,9 @@ import {
   type HandoffState,
 } from "./handoff-state";
 import type { TicketRequestType } from "../types";
+import { getPostHogServer } from "@/lib/analytics/posthog-server";
+import { hashIdentifier } from "@/lib/analytics/hash-identifier";
+import type { AttributionData } from "@/lib/analytics/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,8 @@ export interface AgentInput {
   identity: IdentityResult;
   language: "en" | "ar";
   contact: ConversationContact;
+  /** Attribution data from the ora_attribution cookie, for event enrichment. */
+  attribution?: AttributionData | null;
 }
 
 // ── Field extraction ─────────────────────────────────────────────────────────
@@ -800,6 +805,39 @@ ${transcript}`;
       input.language === "ar"
         ? `ممتاز ${input.contact.name}! سجّلت اهتمامك تحت المرجع ${leadReference}${projectInterest ? ` (${projectInterest})` : ""} وسيتواصل معك أحد مستشاري المبيعات قريباً.${emailSent ? ` أرسلت لك التفاصيل على ${input.contact.email}.` : ""}`
         : `Lovely, ${input.contact.name}! I've registered your interest as ${leadReference}${projectInterest ? ` for ${projectInterest}` : ""} and a sales advisor will reach out shortly.${emailSent ? ` I've also sent the details to ${input.contact.email}.` : ""}`;
+
+    // Task 19.3: Capture ai_lead_qualified event
+    try {
+      const posthog = getPostHogServer();
+      if (posthog) {
+        const attribution = input.attribution;
+        posthog.capture({
+          distinctId: input.contact.email ? hashIdentifier(input.contact.email) : input.conversationId,
+          event: "ai_lead_qualified",
+          properties: {
+            conversationId: input.conversationId,
+            leadReference,
+            ticketNumber,
+            projectInterest,
+            ...(attribution?.first_touch && {
+              first_touch_source: attribution.first_touch.utm_source,
+              first_touch_medium: attribution.first_touch.utm_medium,
+              first_touch_campaign: attribution.first_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch && {
+              last_touch_source: attribution.last_touch.utm_source,
+              last_touch_medium: attribution.last_touch.utm_medium,
+              last_touch_campaign: attribution.last_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch?.utm_campaign && {
+              utm_campaign: attribution.last_touch.utm_campaign,
+            }),
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[agent] ai_lead_qualified capture failed", err);
+    }
 
     return {
       handled: true,
@@ -1690,6 +1728,41 @@ async function executeConfirmPending(
             ? `The confirmation is on its way to ${target.email}.`
             : `Our team will confirm and email the details to ${target.email}.`);
 
+    // Task 19.3: Capture ai_viewing_booked event
+    try {
+      const posthog = getPostHogServer();
+      if (posthog) {
+        const attribution = input.attribution;
+        posthog.capture({
+          distinctId: targetEmail ? hashIdentifier(targetEmail) : input.conversationId,
+          event: "ai_viewing_booked",
+          properties: {
+            conversationId: input.conversationId,
+            referenceNumber: appt.referenceNumber,
+            ticketNumber,
+            scheduledDate: pb.scheduledDate,
+            scheduledTime: pb.scheduledTime,
+            appointmentType: pb.appointmentType,
+            ...(attribution?.first_touch && {
+              first_touch_source: attribution.first_touch.utm_source,
+              first_touch_medium: attribution.first_touch.utm_medium,
+              first_touch_campaign: attribution.first_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch && {
+              last_touch_source: attribution.last_touch.utm_source,
+              last_touch_medium: attribution.last_touch.utm_medium,
+              last_touch_campaign: attribution.last_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch?.utm_campaign && {
+              utm_campaign: attribution.last_touch.utm_campaign,
+            }),
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[agent] ai_viewing_booked capture failed", err);
+    }
+
     return {
       handled: true,
       response,
@@ -2112,6 +2185,40 @@ async function executeRequestHandover(
       .where(eq(aiConversations.id, input.conversationId));
   } catch (err) {
     console.error("[agent] handover status update failed", err);
+  }
+
+  // Task 19.2: Capture ai_handoff_to_human event
+  try {
+    const posthog = getPostHogServer();
+    if (posthog) {
+      const attribution = input.attribution;
+      const messageCount = input.history.filter((m) => m.role === "user").length + 1;
+      posthog.capture({
+        distinctId: input.contact.email ? hashIdentifier(input.contact.email) : input.conversationId,
+        event: "ai_handoff_to_human",
+        properties: {
+          conversationId: input.conversationId,
+          messageCount,
+          intent: "request_handover",
+          reason: "user_requested",
+          ...(attribution?.first_touch && {
+            first_touch_source: attribution.first_touch.utm_source,
+            first_touch_medium: attribution.first_touch.utm_medium,
+            first_touch_campaign: attribution.first_touch.utm_campaign,
+          }),
+          ...(attribution?.last_touch && {
+            last_touch_source: attribution.last_touch.utm_source,
+            last_touch_medium: attribution.last_touch.utm_medium,
+            last_touch_campaign: attribution.last_touch.utm_campaign,
+          }),
+          ...(attribution?.last_touch?.utm_campaign && {
+            utm_campaign: attribution.last_touch.utm_campaign,
+          }),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[agent] ai_handoff_to_human capture failed", err);
   }
 
   const response =

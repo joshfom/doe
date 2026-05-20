@@ -5,6 +5,11 @@ import { formDefinitions, formSubmissions } from "../../schema";
 import { db } from "../../db";
 import { logAudit } from "../../audit";
 import type { FormFieldConfig } from "../../types";
+import { readAttributionFromRequest } from "@/lib/analytics/attribution";
+import { readConsentFromRequest } from "@/lib/analytics/consent-state";
+import { getPostHogServer } from "@/lib/analytics/posthog-server";
+import { hashIdentifier } from "@/lib/analytics/hash-identifier";
+import { sendConversion } from "@/lib/analytics/capi";
 
 // ── Helper: fire-and-forget push to external endpoint ────────────────────────
 
@@ -52,7 +57,7 @@ const publicForms = new Elysia({ name: "forms-public" })
   })
 
   // POST /submissions — Submit form data (public, no auth)
-  .post("/submissions", async ({ body, set }) => {
+  .post("/submissions", async ({ body, set, cookie }) => {
     const { formId, data, sourcePageSlug, sourceLocale } = body as {
       formId?: string;
       data?: Record<string, unknown>;
@@ -100,6 +105,22 @@ const publicForms = new Elysia({ name: "forms-public" })
       return { error: "Validation failed", details: errors };
     }
 
+    // Read attribution and consent from cookies
+    const cookieAdapter = {
+      get(name: string) {
+        const c = (cookie as Record<string, { value: string | undefined }>)[name];
+        if (c && c.value) return { value: c.value };
+        return undefined;
+      },
+    };
+    const consent = readConsentFromRequest(cookieAdapter);
+    const attribution = readAttributionFromRequest(cookieAdapter);
+
+    // Only persist attribution if marketing consent is granted
+    const hasMarketingConsent = consent?.marketing === true;
+    const firstTouch = hasMarketingConsent && attribution ? attribution.first_touch : null;
+    const lastTouch = hasMarketingConsent && attribution ? attribution.last_touch : null;
+
     // Store submission
     const [submission] = await db
       .insert(formSubmissions)
@@ -108,8 +129,48 @@ const publicForms = new Elysia({ name: "forms-public" })
         data,
         sourcePageSlug: sourcePageSlug ?? null,
         sourceLocale: sourceLocale ?? null,
+        firstTouchAttribution: firstTouch,
+        lastTouchAttribution: lastTouch,
       })
       .returning();
+
+    // Fire PostHog server-side event if attribution is available
+    if (hasMarketingConsent && attribution) {
+      const posthog = getPostHogServer();
+      if (posthog) {
+        const email = (data.email as string) ?? submission.id;
+        posthog.capture({
+          distinctId: email ? hashIdentifier(email) : submission.id,
+          event: "lead_qualified",
+          properties: {
+            submission_id: submission.id,
+            form_id: formId,
+            source_page: sourcePageSlug ?? undefined,
+            first_touch_source: attribution.first_touch.utm_source,
+            first_touch_medium: attribution.first_touch.utm_medium,
+            first_touch_campaign: attribution.first_touch.utm_campaign,
+            last_touch_source: attribution.last_touch.utm_source,
+            last_touch_medium: attribution.last_touch.utm_medium,
+            last_touch_campaign: attribution.last_touch.utm_campaign,
+          },
+        });
+      }
+    }
+
+    // Fire CAPI conversion event (fire-and-forget)
+    sendConversion(
+      {
+        event: "lead_qualified",
+        email: (data.email as string) ?? undefined,
+        phone: (data.phone as string) ?? undefined,
+        attribution: attribution ?? undefined,
+        conversionValue: undefined,
+        currency: "AED",
+      },
+      consent
+    ).catch((err) => {
+      console.error("[forms] CAPI sendConversion failed:", err);
+    });
 
     // Fire-and-forget: push to Salesforce / webhook if configured
     if (form.salesforceEndpoint) {

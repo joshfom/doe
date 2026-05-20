@@ -52,6 +52,14 @@ const spacingBorderDefaults = {
  * and rewrite the keys of `zones` so they continue to point at the new IDs.
  *
  * Zone keys follow Puck's convention `<componentId>:<zoneName>`.
+ *
+ * This function:
+ *   1. Deep-clones the entire component tree (no shared references)
+ *   2. Generates fresh UUIDs for every `props.id` in the tree
+ *   3. Updates zone keys that reference old IDs to use the new IDs
+ *
+ * The result is a completely independent copy — editing the returned tree
+ * will never mutate the original input.
  */
 export function regenerateIds(tree: {
   content: ComponentInstance[];
@@ -62,26 +70,40 @@ export function regenerateIds(tree: {
 } {
   const idMap = new Map<string, string>();
 
-  const cloneItems = (items: ComponentInstance[]): ComponentInstance[] =>
-    items.map((item) => {
-      const oldId = item.props.id;
-      const newId = generateId();
-      if (oldId) idMap.set(oldId, newId);
-      return {
-        type: item.type,
-        props: { ...item.props, id: newId },
-      };
-    });
+  /** Deep-clone a component instance with a fresh ID. */
+  const cloneItem = (item: ComponentInstance): ComponentInstance => {
+    const oldId = item.props.id;
+    const newId = generateId();
+    if (oldId) idMap.set(oldId, newId);
+    // Deep-clone props to ensure no shared references with the source
+    const clonedProps = JSON.parse(JSON.stringify(item.props));
+    clonedProps.id = newId;
+    return { type: item.type, props: clonedProps };
+  };
 
+  const cloneItems = (items: ComponentInstance[]): ComponentInstance[] =>
+    items.map(cloneItem);
+
+  // Phase 1: Clone all content items and all zone items, building the full idMap.
   const newContent = cloneItems(tree.content);
 
-  const newZones: Record<string, ComponentInstance[]> = {};
+  const clonedZoneEntries: Array<[string, ComponentInstance[]]> = [];
   if (tree.zones) {
     for (const [zoneKey, items] of Object.entries(tree.zones)) {
-      const [oldOwnerId, zoneName] = zoneKey.split(":");
-      const newOwnerId = idMap.get(oldOwnerId) ?? oldOwnerId;
-      newZones[`${newOwnerId}:${zoneName}`] = cloneItems(items);
+      clonedZoneEntries.push([zoneKey, cloneItems(items)]);
     }
+  }
+
+  // Phase 2: Remap zone keys using the now-complete idMap.
+  // All items (content + zone items) have been processed, so idMap contains
+  // every old→new mapping needed to rewrite zone keys correctly.
+  const newZones: Record<string, ComponentInstance[]> = {};
+  for (const [zoneKey, clonedItems] of clonedZoneEntries) {
+    const colonIdx = zoneKey.indexOf(":");
+    const oldOwnerId = zoneKey.slice(0, colonIdx);
+    const zoneName = zoneKey.slice(colonIdx + 1);
+    const newOwnerId = idMap.get(oldOwnerId) ?? oldOwnerId;
+    newZones[`${newOwnerId}:${zoneName}`] = clonedItems;
   }
 
   return { content: newContent, zones: newZones };
@@ -262,7 +284,6 @@ function buttonBlock(
       url: link,
       _icon: { name: "", position: "right", size: "16", gap: "8px" },
       _typography: {
-        fontFamily: "inherit",
         fontWeight: "600",
         fontSize: "14px",
         letterSpacing: "0.05em",
@@ -406,7 +427,6 @@ function quoteContentPanel(): ComponentInstance[] {
     borderRadius: "999",
     _icon: { name: "download", position: "right", size: "16", gap: "10px" },
     _typography: {
-      fontFamily: "'Montserrat', sans-serif",
       fontWeight: "500",
       fontSize: "14px",
       letterSpacing: "0",
@@ -516,7 +536,6 @@ export const starterHeroTemplate: ComponentTemplate = {
     const heading = headingBlock("Why Bayn", {
       level: "h1",
       textAlign: "center",
-      fontFamily: "'Montserrat', sans-serif",
       fontWeight: "300",
       fontSize: "84",
       lineHeight: "1.05",
@@ -530,7 +549,6 @@ export const starterHeroTemplate: ComponentTemplate = {
       "The UAE is one of the fastest-growing economies in the world",
       {
         textAlign: "center",
-        fontFamily: "'Montserrat', sans-serif",
         fontWeight: "300",
         fontSize: "34",
         lineHeight: "1.35",
@@ -556,7 +574,6 @@ export const starterHeroTemplate: ComponentTemplate = {
         arrowColor: "#FFFFFF",
         textColor: "#FFFFFF",
         _typography: {
-          fontFamily: "'Montserrat', sans-serif",
           fontWeight: "400",
           fontSize: "11px",
           letterSpacing: "0.1em",
@@ -635,7 +652,6 @@ export const contentImageTemplate: ComponentTemplate = {
       _icon: { name: "download", position: "right", size: "16", gap: "10px" },
       borderRadius: "999",
       _typography: {
-        fontFamily: "'Montserrat', sans-serif",
         fontWeight: "500",
         fontSize: "14px",
         letterSpacing: "0",

@@ -19,6 +19,10 @@ const Video = pageBuilderConfig.components.Video;
 const Button = pageBuilderConfig.components.Button;
 const AccordionGroup = pageBuilderConfig.components.AccordionGroup;
 const StatsGrid = pageBuilderConfig.components.StatsGrid;
+const Heading = pageBuilderConfig.components.Heading;
+const InlineLink = pageBuilderConfig.components.InlineLink;
+const Quote = pageBuilderConfig.components.Quote;
+const FilterTabs = pageBuilderConfig.components.FilterTabs;
 
 /**
  * Feature: atomic-component-architecture — Unit tests for Section refactor
@@ -535,4 +539,70 @@ describe("LocationMap registration", () => {
       expect(container.textContent?.toLowerCase()).toContain("api key");
     }
   });
+});
+
+
+/**
+ * Feature: branded-font-enforcement — No fontFamily field in block configs
+ *
+ * Validates: Requirements 2.5
+ */
+
+describe("Configuration panel exposes no fontFamily field", () => {
+  /**
+   * Recursively collects all field keys and labels from a fields object,
+   * including nested objectFields and arrayFields.
+   */
+  function collectFieldKeysAndLabels(
+    fields: Record<string, unknown>,
+    result: { keys: string[]; labels: string[] } = { keys: [], labels: [] },
+  ): { keys: string[]; labels: string[] } {
+    for (const [key, value] of Object.entries(fields)) {
+      result.keys.push(key);
+      if (value && typeof value === "object") {
+        const field = value as Record<string, unknown>;
+        if (typeof field.label === "string") {
+          result.labels.push(field.label);
+        }
+        // Recurse into objectFields (e.g. _typography objectFields)
+        if (field.objectFields && typeof field.objectFields === "object") {
+          collectFieldKeysAndLabels(field.objectFields as Record<string, unknown>, result);
+        }
+        // Recurse into arrayFields (e.g. items arrayFields)
+        if (field.arrayFields && typeof field.arrayFields === "object") {
+          collectFieldKeysAndLabels(field.arrayFields as Record<string, unknown>, result);
+        }
+      }
+    }
+    return result;
+  }
+
+  const blocksToCheck = [
+    { name: "Button", component: Button },
+    { name: "StatsGrid", component: StatsGrid },
+    { name: "Heading", component: Heading },
+    { name: "Text", component: Text },
+    { name: "InlineLink", component: InlineLink },
+    { name: "Quote", component: Quote },
+    { name: "AccordionGroup", component: AccordionGroup },
+    { name: "FilterTabs", component: FilterTabs },
+  ];
+
+  it.each(blocksToCheck)(
+    "$name fields do not contain a fontFamily key",
+    ({ component }) => {
+      const fields = (component.fields ?? {}) as Record<string, unknown>;
+      const { keys } = collectFieldKeysAndLabels(fields);
+      expect(keys).not.toContain("fontFamily");
+    },
+  );
+
+  it.each(blocksToCheck)(
+    '$name fields do not contain a "Font Family" label',
+    ({ component }) => {
+      const fields = (component.fields ?? {}) as Record<string, unknown>;
+      const { labels } = collectFieldKeysAndLabels(fields);
+      expect(labels).not.toContain("Font Family");
+    },
+  );
 });

@@ -301,6 +301,8 @@ export const formSubmissions = pgTable("form_submissions", {
   data: jsonb("data").notNull(),
   sourcePageSlug: text("source_page_slug"),
   sourceLocale: text("source_locale"),
+  firstTouchAttribution: jsonb("first_touch_attribution"),
+  lastTouchAttribution: jsonb("last_touch_attribution"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -706,6 +708,8 @@ export const tickets = pgTable(
     assigneeId: uuid("assignee_id").references(() => users.id),
     createdBy: uuid("created_by").references(() => users.id),
     externalCrmId: text("external_crm_id"),
+    firstTouchAttribution: jsonb("first_touch_attribution"),
+    lastTouchAttribution: jsonb("last_touch_attribution"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at"),
@@ -1329,3 +1333,110 @@ export const adminChatMessages = pgTable(
   ]
 );
 
+// ── Marketing Spend ──────────────────────────────────────────────────────────
+export const marketingSpend = pgTable(
+  "marketing_spend",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    date: date("date").notNull(),
+    channel: text("channel").notNull(),
+    campaignId: text("campaign_id").notNull(),
+    adSetId: text("ad_set_id"),
+    adId: text("ad_id"),
+    spend: numeric("spend", { precision: 12, scale: 2 }).notNull(),
+    impressions: integer("impressions").notNull().default(0),
+    clicks: integer("clicks").notNull().default(0),
+    currency: text("currency").notNull().default("AED"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("marketing_spend_upsert_idx").on(
+      table.date,
+      table.channel,
+      table.campaignId,
+      table.adSetId,
+      table.adId
+    ),
+    index("marketing_spend_date_channel_idx").on(table.date, table.channel),
+  ]
+);
+
+// ── UTM Links ────────────────────────────────────────────────────────────────
+export const utmLinks = pgTable(
+  "utm_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    destinationUrl: text("destination_url").notNull(),
+    utmSource: text("utm_source").notNull(),
+    utmMedium: text("utm_medium").notNull(),
+    utmCampaign: text("utm_campaign").notNull(),
+    utmTerm: text("utm_term"),
+    utmContent: text("utm_content"),
+    taggedUrl: text("tagged_url").notNull(),
+    project: text("project"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("utm_links_project_idx").on(table.project),
+    index("utm_links_created_at_idx").on(table.createdAt),
+  ]
+);
+
+// ── Ad Spend Ingestion Log ───────────────────────────────────────────────────
+export const adSpendIngestionLog = pgTable("ad_spend_ingestion_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runAt: timestamp("run_at").defaultNow().notNull(),
+  recordsUpserted: jsonb("records_upserted").notNull().default({}),
+  skippedPlatforms: text("skipped_platforms").array().default([]),
+  errors: jsonb("errors"),
+});
+
+// ── DSAR Deletion Retry Queue ────────────────────────────────────────────────
+// Tracks PostHog person-delete API calls that failed and need retry.
+export const dsarDeletionQueue = pgTable(
+  "dsar_deletion_queue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    identifier: text("identifier").notNull(),
+    posthogDistinctId: text("posthog_distinct_id").notNull(),
+    status: text("status", {
+      enum: ["pending", "completed", "failed"],
+    })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lastError: text("last_error"),
+    nextRetryAt: timestamp("next_retry_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("dsar_deletion_queue_status_idx").on(table.status),
+    index("dsar_deletion_queue_next_retry_idx").on(table.nextRetryAt),
+  ]
+);
+
+
+// ── Custom Events ────────────────────────────────────────────────────────────
+// Admin-managed events that extend the locked EVENT_VOCABULARY at runtime.
+// These appear alongside the core vocabulary in the page builder's tracking
+// dropdown. The core vocabulary remains the canonical set; custom events
+// fill the gap where teams need bespoke tracking without a code change.
+export const customEvents = pgTable(
+  "custom_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    description: text("description"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("custom_events_name_idx").on(table.name),
+    index("custom_events_active_idx").on(table.isActive),
+  ]
+);

@@ -37,6 +37,18 @@ export {
   settingsKeys,
 } from "./use-settings";
 
+// Feature flag hooks
+export {
+  useFeatureFlag,
+  useFeatureFlags,
+  parseFeatureFlag,
+  resolveFeatureFlag,
+  resolveFeatureFlags,
+  FEATURE_FLAGS,
+  FEATURE_FLAG_DEFAULT,
+  type FeatureFlag,
+} from "./use-feature-flags";
+
 // Audit hooks
 export { useAuditLog, auditKeys } from "./use-audit";
 

@@ -1,0 +1,704 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`lifeAtBaynTemplate > snapshot stability > materialised template (with ids stripped) matches snapshot 1`] = `
+{
+  "content": [
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "hero",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=2200&q=80",
+        "bgMediaType": "image",
+        "bgMode": "solid",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "center",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#1A1A1A",
+        "gradientTo": "#2C2C2C",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "80vh",
+        "section-content": [],
+        "sectionId": "hero",
+        "textColor": "#FFFFFF",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "image+text",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "beachfront",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "heading+full-width-image",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F2EDE3",
+        "gradientTo": "#E8E4DF",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "wellbeing",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "text+image",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "recreation",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "image+text",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "nature",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+  ],
+  "root": {
+    "props": {
+      "title": "Life at Bayn",
+    },
+  },
+  "zones": {
+    "<uuid>:column-0": [
+      {
+        "props": {
+          "_animation": {
+            "delay": "0",
+            "duration": "0.5",
+            "entrance": "none",
+            "hover": "none",
+          },
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "alignment": "center",
+          "alt": "Green spaces at Bayn",
+          "aspectRatio": {
+            "desktop": "4 / 5",
+            "mobile": "16 / 9",
+          },
+          "filter": "none",
+          "hoverEffect": "none",
+          "id": "<uuid>",
+          "imgBorderRadius": "0",
+          "imgHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "imgWidth": {
+            "desktop": "100%",
+            "mobile": "100%",
+          },
+          "maxWidth": "100%",
+          "objectFit": "cover",
+          "opacity": "1",
+          "shadow": "none",
+          "src": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80",
+          "xAlign": "50%",
+          "yAlign": "50%",
+        },
+        "type": "Image",
+      },
+    ],
+    "<uuid>:column-1": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#1A1A1A",
+          "fontSize": {
+            "desktop": 40,
+            "mobile": 28,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "700",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "level": "h2",
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "text": "Connect with nature",
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Heading",
+      },
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#4A4A4A",
+          "content": "Lush green spaces, landscaped gardens, and waterfront promenades invite you to slow down and enjoy the natural beauty surrounding Bayn.",
+          "fontSize": {
+            "desktop": 18,
+            "mobile": 16,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "400",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Text",
+      },
+    ],
+    "<uuid>:container-content": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "column-0": [],
+          "column-1": [],
+          "column-2": [],
+          "column-3": [],
+          "column-4": [],
+          "column-5": [],
+          "columnGap": {
+            "desktop": "32px",
+            "mobile": "0px",
+          },
+          "columnList": [
+            {
+              "align": "flex-start",
+              "justify": "stretch",
+              "marginY": "0",
+              "paddingX": "0",
+              "paddingY": "0",
+              "width": "1fr",
+            },
+            {
+              "align": "flex-start",
+              "justify": "stretch",
+              "marginY": "0",
+              "paddingX": "0",
+              "paddingY": "0",
+              "width": "1fr",
+            },
+          ],
+          "gap": "md",
+          "id": "<uuid>",
+          "rowGap": {
+            "desktop": "32px",
+            "mobile": "24px",
+          },
+        },
+        "type": "Columns",
+      },
+    ],
+    "<uuid>:section-content": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "bgColor": "transparent",
+          "bgMode": "solid",
+          "container-content": [],
+          "contentAlign": "center",
+          "gradientDirection": "to bottom",
+          "gradientFrom": "#F9F7F5",
+          "gradientTo": "#EBE7E2",
+          "id": "<uuid>",
+          "maxWidth": "1200",
+          "textColor": "auto",
+        },
+        "type": "Container",
+      },
+    ],
+  },
+}
+`;

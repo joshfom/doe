@@ -1,6 +1,9 @@
 import { eq, desc } from "drizzle-orm";
 import type { Database } from "../db";
 import { aiConversations, aiMessages } from "../schema";
+import { getPostHogServer } from "@/lib/analytics/posthog-server";
+import { hashIdentifier } from "@/lib/analytics/hash-identifier";
+import type { AttributionData } from "@/lib/analytics/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,11 +87,18 @@ export function detectHandoffNeed(messages: Message[]): boolean {
  * 1. Loads the last 10 messages to build a handoff summary
  * 2. Updates the conversation status to "handed_off" with a summary
  * 3. Inserts a system message notifying the user of the transfer
+ * 4. Captures `ai_handoff_to_human` event in PostHog
  */
 export async function initiateHandoff(
   db: Database,
   conversationId: string,
-  reason: string
+  reason: string,
+  options?: {
+    traceId?: string;
+    intent?: string;
+    distinctId?: string;
+    attribution?: AttributionData | null;
+  }
 ): Promise<void> {
   // Load recent messages to build the handoff summary
   const recentMessages = await db
@@ -139,4 +149,39 @@ export async function initiateHandoff(
     content:
       "This conversation has been transferred to a human agent. Someone from our team will follow up with you shortly.",
   });
+
+  // Task 19.2: Capture ai_handoff_to_human event
+  try {
+    const posthog = getPostHogServer();
+    if (posthog) {
+      const messageCount = recentMessages.length;
+      const attribution = options?.attribution;
+      posthog.capture({
+        distinctId: options?.distinctId ? hashIdentifier(options.distinctId) : conversationId,
+        event: "ai_handoff_to_human",
+        properties: {
+          conversationId,
+          ...(options?.traceId && { traceId: options.traceId }),
+          messageCount,
+          ...(options?.intent && { intent: options.intent }),
+          reason,
+          ...(attribution?.first_touch && {
+            first_touch_source: attribution.first_touch.utm_source,
+            first_touch_medium: attribution.first_touch.utm_medium,
+            first_touch_campaign: attribution.first_touch.utm_campaign,
+          }),
+          ...(attribution?.last_touch && {
+            last_touch_source: attribution.last_touch.utm_source,
+            last_touch_medium: attribution.last_touch.utm_medium,
+            last_touch_campaign: attribution.last_touch.utm_campaign,
+          }),
+          ...(attribution?.last_touch?.utm_campaign && {
+            utm_campaign: attribution.last_touch.utm_campaign,
+          }),
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[handoff] ai_handoff_to_human capture failed", err);
+  }
 }

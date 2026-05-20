@@ -25,8 +25,17 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// Mock InlineRichtextController to avoid tiptap extension resolution issues.
+vi.mock("./builder-shell/InlineRichtextController", () => ({
+  InlineRichtextController: () => null,
+  useActiveRichtextEditor: () => null,
+  InlineRichtextContext: {
+    Provider: ({ children }: { children: React.ReactNode }) => children,
+  },
+}));
+
 // Dynamic imports after polyfill is in place
-const { PageEditor } = await import("./components/PageEditor");
+const { BuilderShell } = await import("./builder-shell");
 const { PageRenderer } = await import("./components/PageRenderer");
 const { InMemoryDataStore } = await import("./data-store");
 const { InMemoryPageMetaStore, createPageManager } = await import("./page-manager");
@@ -89,14 +98,14 @@ const updatedPageData: PageData = {
   ],
 };
 
-// ─── Test: PageEditor mounts without errors ──────────────────────────────────
+// ─── Test: BuilderShell mounts without errors ────────────────────────────────
+// (Replaces the former PageEditor integration test — PageEditor has been deleted.)
 
-describe("PageEditor integration", () => {
+describe("BuilderShell integration", () => {
   it("mounts without errors with valid config and data", () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+    const onPublish = vi.fn().mockResolvedValue({ ok: true });
 
-    // PageEditor wraps Puck which has complex internal requirements.
-    // We verify it renders without throwing a fatal error.
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -104,14 +113,34 @@ describe("PageEditor integration", () => {
       React.createElement(
         QueryClientProvider,
         { client: queryClient },
-        React.createElement(PageEditor, {
-          initialData: validPageData,
+        React.createElement(BuilderShell, {
+          config: {
+            components: {
+              Heading: {
+                fields: { text: { type: "text" } },
+                defaultProps: { text: "Hello" },
+                render: ({ text }: { text?: string }) =>
+                  React.createElement("h1", null, text),
+              },
+            },
+          } as never,
+          document: {
+            id: "test-page-1",
+            title: "Integration Test Page",
+            slug: "integration-test",
+            mode: "page",
+            status: "draft" as const,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            pageData: validPageData as never,
+          },
           onSave,
+          onPublish,
         })
       )
     );
 
-    // The editor should produce some DOM output
+    // The shell should produce some DOM output
     expect(container.innerHTML.length).toBeGreaterThan(0);
 
     unmount();

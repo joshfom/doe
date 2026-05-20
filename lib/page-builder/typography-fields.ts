@@ -20,30 +20,26 @@ import {
 // TYPOGRAPHY FIELD DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-
-// ─── fontFamily ──────────────────────────────────────────────────────────────
-
-export const fontFamilyField = {
-  ...createCustomSelectField("Font Family", [
-    { label: "Inherit", value: "inherit" },
-    { label: "Poppins", value: "var(--font-poppins), Poppins, sans-serif" },
-    { label: "Geist Sans", value: "Geist Sans, sans-serif" },
-    { label: "Georgia", value: "Georgia, serif" },
-    { label: "Times New Roman", value: "Times New Roman, serif" },
-    { label: "Arial", value: "Arial, sans-serif" },
-    { label: "system-ui", value: "system-ui, sans-serif" },
-  ], "Reusable custom dropdown for all typography fields."),
-};
+// NOTE: fontFamily is intentionally not configurable. URW Geometric is the sole
+// brand typeface and is applied via CSS inheritance from the canvas/renderer
+// root. Legacy `fontFamily` prop values stored in page JSON are silently
+// ignored by `typographyPropsToCSS` (see below) for backwards compatibility.
+// See spec: branded-font-enforcement (Requirements 2.1, 2.2, 3.1, 7.2-7.4).
 
 // ─── fontWeight ──────────────────────────────────────────────────────────────
 
 export const fontWeightField = {
   ...createCustomSelectField("Font Weight", [
+    { label: "Thin (100)", value: "100" },
+    { label: "ExtraLight (200)", value: "200" },
     { label: "Light (300)", value: "300" },
     { label: "Regular (400)", value: "400" },
     { label: "Medium (500)", value: "500" },
-    { label: "Semibold (600)", value: "600" },
+    { label: "SemiBold (600)", value: "600" },
     { label: "Bold (700)", value: "700" },
+    { label: "ExtraBold (800)", value: "800" },
+    { label: "Black (900)", value: "900" },
+    { label: "Heavy (950)", value: "950" },
   ]),
 };
 
@@ -118,7 +114,6 @@ export const colorField = {
 
 /** All typography fields as a flat object to spread into component fields. */
 export const typographyFields = {
-  fontFamily: fontFamilyField,
   fontWeight: fontWeightField,
   fontSize: fontSizeField,
   textAlign: textAlignField,
@@ -132,7 +127,6 @@ export const typographyFields = {
 
 /** Default values for all typography fields. */
 export const typographyDefaultsHeading = {
-  fontFamily: "inherit",
   fontWeight: "700",
   fontSize: "32",
   textAlign: "left",
@@ -145,7 +139,6 @@ export const typographyDefaultsHeading = {
 };
 
 export const typographyDefaultsText = {
-  fontFamily: "inherit",
   fontWeight: "400",
   fontSize: "16",
   textAlign: "left",
@@ -160,18 +153,30 @@ export const typographyDefaultsText = {
 /**
  * Converts typography prop values into a CSSProperties object
  * that can be spread onto an element's style prop.
+ *
+ * NOTE: Any `fontFamily` key in `props` is intentionally ignored. URW Geometric
+ * is enforced via CSS inheritance from the canvas/renderer root, and we never
+ * emit an inline `font-family` style regardless of what legacy page JSON
+ * contains. See spec: branded-font-enforcement.
  */
 export function typographyPropsToCSS(props: Record<string, unknown>): CSSProperties {
   const css: CSSProperties = {};
 
-  const fontFamily = props.fontFamily as string;
-  if (fontFamily && fontFamily !== "inherit") css.fontFamily = fontFamily;
+  // fontFamily is intentionally not read or written here. See note above.
 
   const fontWeight = Number(props.fontWeight);
   if (fontWeight) css.fontWeight = fontWeight;
 
   const fontSize = props.fontSize as string;
-  if (fontSize && fontSize !== "auto") css.fontSize = normalizeLength(fontSize, "px");
+  if (fontSize && fontSize !== "auto") {
+    const numericSize = Number(fontSize);
+    if (!Number.isNaN(numericSize) && numericSize >= 8 && numericSize <= 200) {
+      css.fontSize = normalizeLength(fontSize, "px");
+    }
+    // Invalid (non-numeric or out-of-range) font sizes are silently ignored.
+    // The field UI retains the previous valid value; typographyPropsToCSS
+    // simply omits fontSize from the output for invalid inputs.
+  }
 
   const textAlign = props.textAlign as string;
   if (textAlign) css.textAlign = textAlign as CSSProperties["textAlign"];

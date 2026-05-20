@@ -1,10 +1,11 @@
-import type { PageData, ComponentInstance } from "../types";
+import type { PageData } from "../types";
 import { validatePageData } from "../schema";
 import {
-  componentTemplates,
-  instantiate,
-  type ComponentTemplate,
-} from "./component-templates";
+  oraProjectPageTemplate,
+  whyBaynTemplate,
+  lifeAtBaynTemplate,
+  aboutOraTemplate,
+} from "./ora";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -22,51 +23,18 @@ export interface TemplateRegistry {
   register(template: PageTemplate): void;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Built-in Page Templates ─────────────────────────────────────────────────
 
-function tpl(id: string): ComponentTemplate {
-  const t = componentTemplates.find((c) => c.id === id);
-  if (!t) throw new Error(`Built-in template "${id}" not found`);
-  return t;
-}
-
-/**
- * Compose a page from a list of built-in component template IDs by
- * materialising each one and concatenating their content + zones.
- */
-function composePage(
-  rootProps: Record<string, unknown>,
-  templateIds: string[]
-): PageData {
-  const content: ComponentInstance[] = [];
-  const zones: Record<string, ComponentInstance[]> = {};
-
-  for (const id of templateIds) {
-    const inst = instantiate(tpl(id));
-    content.push(...inst.content);
-    Object.assign(zones, inst.zones);
-  }
-
-  return { root: { props: rootProps }, content, zones };
-}
-
-// ─── Built-in Page Templates (reset) ─────────────────────────────────────────
-
-function makeStarterHeroPage(): PageTemplate {
-  return {
-    id: "starter-hero-page",
-    name: "Starter Hero Page",
-    description: "Initial rebuild template: full-screen hero with centered title/subtitle and scroll indicator.",
-    thumbnailId: "tpl-starter-hero",
-    data: composePage({ title: "Why Bayn" }, ["tpl-starter-hero"]),
-  };
+function builtInPageTemplates(): PageTemplate[] {
+  return [
+    oraProjectPageTemplate(),
+    whyBaynTemplate(),
+    lifeAtBaynTemplate(),
+    aboutOraTemplate(),
+  ];
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
-
-function builtInPageTemplates(): PageTemplate[] {
-  return [makeStarterHeroPage()];
-}
 
 export function createTemplateRegistry(): TemplateRegistry {
   const templates: PageTemplate[] = [];
@@ -76,6 +44,12 @@ export function createTemplateRegistry(): TemplateRegistry {
   }
 
   function register(template: PageTemplate): void {
+    if (templates.some((t) => t.id === template.id)) {
+      throw new Error(
+        `Template with id "${template.id}" already exists in the registry (attempted to register "${template.name}")`
+      );
+    }
+
     const validation = validatePageData(template.data);
     if (!validation.success) {
       const msgs = (validation.errors ?? [])

@@ -59,7 +59,10 @@ describe("headlessOverrides", () => {
     }
   });
 
-  it("returns null for chrome slot keys", () => {
+  it("returns an empty fragment for chrome slot keys", () => {
+    // `componentItem` is intentionally NOT in this list — it now wraps each
+    // rendered block with insertion-button affordances (Task 8.1, Reqs 4.1
+    // through 4.3). Its behaviour is asserted separately below.
     const chromeKeys = [
       "header",
       "headerActions",
@@ -67,7 +70,6 @@ describe("headlessOverrides", () => {
       "fields",
       "fieldLabel",
       "components",
-      "componentItem",
       "drawer",
       "drawerItem",
       "outline",
@@ -76,8 +78,29 @@ describe("headlessOverrides", () => {
     for (const key of chromeKeys) {
       const fn = headlessOverrides[key];
       expect(typeof fn).toBe("function");
+      // The placeholder renders an empty fragment, which produces no visible
+      // DOM when mounted. We assert the returned element type is a fragment
+      // rather than a concrete component, which is the property that keeps
+      // Puck's default chrome from leaking through.
       // @ts-expect-error — exercising the render function with a permissive arg
-      expect(fn?.({ children: <span /> })).toBeNull();
+      const result = fn?.({ children: <span /> });
+      expect(React.isValidElement(result)).toBe(true);
+      expect((result as React.ReactElement).type).toBe(React.Fragment);
     }
+  });
+
+  it("uses the insertion-button override for componentItem", () => {
+    // The override should be a function (the InsertionButtonLayer entry
+    // point) rather than the null-rendering placeholder.
+    expect(typeof headlessOverrides.componentItem).toBe("function");
+    // When invoked without positional metadata (no `index`/`zone`), the
+    // override degrades to an identity wrapper that renders the children
+    // unchanged so we never accidentally hide canvas content.
+    // @ts-expect-error — exercising the render function with a permissive arg
+    const result = headlessOverrides.componentItem?.({
+      children: <span data-testid="passthrough" />,
+      name: "Heading",
+    });
+    expect(result).not.toBeNull();
   });
 });

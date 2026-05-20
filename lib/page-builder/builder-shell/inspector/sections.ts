@@ -60,7 +60,24 @@ const CONTENT_PATTERNS = [
 
 export type InspectorSection = "Content" | "Style" | "Layout" | "Advanced";
 
+/**
+ * Field names that always belong to the "Configurations" tab regardless of
+ * pattern matches. Use a leading underscore to denote internal/system fields.
+ *
+ * `_tracking` would otherwise match the `/tracking/i` style pattern (intended
+ * for CSS letter-tracking), but it carries analytics tracking config and
+ * belongs in Configurations alongside `_animation` and `_visibility`.
+ */
+const CONFIGURATION_FIELDS = new Set<string>([
+  "_animation",
+  "_tracking",
+  "_analytics",
+  "_visibility",
+  "_replayUnmask",
+]);
+
 export function classifyField(name: string): InspectorSection {
+  if (CONFIGURATION_FIELDS.has(name)) return "Advanced";
   if (STYLE_PATTERNS.some((re) => re.test(name))) return "Style";
   if (LAYOUT_PATTERNS.some((re) => re.test(name))) return "Layout";
   if (CONTENT_PATTERNS.some((re) => re.test(name))) return "Content";

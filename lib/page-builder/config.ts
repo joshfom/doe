@@ -1,7 +1,6 @@
 "use client";
 
 import type { Config } from "@puckeditor/core";
-import { DropZone } from "@puckeditor/core";
 import { motion } from "framer-motion";
 import React from "react";
 import { stylePropsToCSS } from "./style-fields";
@@ -14,7 +13,13 @@ import {
 } from "./typography-fields";
 import { imageFields, imageDefaults, imagePropsToCSS } from "./image-fields";
 import { animationFields, animationDefaults } from "./animation-fields";
+import { trackingFields, trackingDefaults } from "@/lib/analytics/tracking-fields";
 import { createCustomSelectField, createToggleField, createFreeInputField } from "./shared-field-controls";
+import { EVENT_VOCABULARY } from "@/lib/analytics/events";
+import type { PageAnalyticsConfig } from "@/lib/analytics/types";
+import { resolveBreakpointValue, type BreakpointValue } from "./breakpoints";
+import { withBreakpointResolution } from "./with-breakpoint-resolution";
+import { validateResponsiveDefaults } from "./responsive-defaults";
 import { LocationMap as LocationMapRuntime } from "./components/LocationMap/LocationMap";
 import { ContactLocationsMap as ContactLocationsMapRuntime } from "./components/LocationMap/ContactLocationsMap";
 import { PinMapPicker } from "./components/LocationMap/PinMapPicker";
@@ -23,6 +28,9 @@ import { FeaturedProjectsRuntime } from "./components/project/FeaturedProjectsRu
 import { FeaturedCommunitiesRuntime } from "./components/project/FeaturedCommunitiesRuntime";
 import { ProjectSectionRuntime, type ProjectSectionKind } from "./components/project/ProjectSectionRuntime";
 import { ImageCarouselRuntime } from "./components/ImageCarouselRuntime";
+import { GalleryRuntime } from "./components/GalleryRuntime";
+import type { GalleryImage } from "./components/GalleryRuntime";
+import { MediaLibraryPicker } from "./components/MediaLibraryPicker";
 import { ExperienceLauncherRuntime, type LauncherStyle } from "./components/ExperienceLauncherRuntime";
 import {
   Home, Phone, Mail, MapPin, Star, Heart, Check, ArrowRight,
@@ -242,7 +250,7 @@ const RICH_TEXT_EMBEDDED_STYLES = `
 }
 `;
 
-function sanitizeRichTextHtml(html: string): string {
+export function sanitizeRichTextHtml(html: string): string {
   // Rich text originates from the editor, but sanitize before innerHTML render.
   if (typeof window === "undefined" || typeof DOMParser === "undefined") {
     return html;
@@ -364,8 +372,9 @@ const imageUploadField = {
   label: "Image",
   render: ({ value, onChange, readOnly }: { value: unknown; onChange: (v: string) => void; readOnly?: boolean }) => {
     const currentSrc = (value as string) || "";
-    const [mode, setMode] = React.useState<"upload" | "url">("upload");
+    const [mode, setMode] = React.useState<"upload" | "url" | "library">("upload");
     const [urlInput, setUrlInput] = React.useState("");
+    const [showLibrary, setShowLibrary] = React.useState(false);
 
     const uploadFile = async (file: File) => {
       const form = new FormData();
@@ -394,6 +403,14 @@ const imageUploadField = {
       }
     };
 
+    const modeButtonStyle = (isActive: boolean) => ({
+      flex: 1, height: 30, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer" as const,
+      background: isActive ? "#2C2C2C" : "#F9F7F5",
+      color: isActive ? "#FFF" : "#6B6B6B",
+      fontWeight: isActive ? 600 : 400,
+      marginLeft: isActive ? 0 : -1,
+    });
+
     if (currentSrc) {
       return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
         React.createElement("div", {
@@ -407,26 +424,20 @@ const imageUploadField = {
             "aria-label": "Remove image",
           }, "✕"),
         ),
-        // Replace controls: Upload vs URL toggle
+        // Replace controls: Upload / Library / URL
         !readOnly && React.createElement("div", { style: { display: "flex", gap: 0 } },
           React.createElement("button", {
-            type: "button",
-            onClick: triggerUpload,
-            style: {
-              flex: 1, height: 28, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
-              background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400,
-            },
-          }, "Replace (Upload)"),
+            type: "button", onClick: triggerUpload,
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer", background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400 },
+          }, "Upload"),
           React.createElement("button", {
-            type: "button",
-            onClick: () => setMode("url"),
-            style: {
-              flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
-              background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
-              color: mode === "url" ? "#FFF" : "#6B6B6B",
-              fontWeight: mode === "url" ? 600 : 400,
-            },
-          }, "Replace (URL)"),
+            type: "button", onClick: () => setShowLibrary(true),
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer", background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400 },
+          }, "Library"),
+          React.createElement("button", {
+            type: "button", onClick: () => setMode("url"),
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer", background: mode === "url" ? "#2C2C2C" : "#F9F7F5", color: mode === "url" ? "#FFF" : "#6B6B6B", fontWeight: mode === "url" ? 600 : 400 },
+          }, "URL"),
         ),
         // URL input row (shown when mode is "url")
         !readOnly && mode === "url" && React.createElement("div", { style: { display: "flex", gap: 4 } },
@@ -444,31 +455,29 @@ const imageUploadField = {
             style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
           }, "Apply"),
         ),
+        // Media Library Picker
+        showLibrary && React.createElement(MediaLibraryPicker, {
+          multiple: false,
+          onSelect: (urls: string[]) => { if (urls[0]) onChange(urls[0]); setShowLibrary(false); },
+          onClose: () => setShowLibrary(false),
+        }),
       );
     }
 
     return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-      // Mode toggle: Upload vs URL
+      // Mode toggle: Upload / Library / URL
       React.createElement("div", { style: { display: "flex", gap: 0 } },
         React.createElement("button", {
-          type: "button",
-          onClick: () => setMode("upload"),
-          style: {
-            flex: 1, height: 30, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
-            background: mode === "upload" ? "#2C2C2C" : "#F9F7F5",
-            color: mode === "upload" ? "#FFF" : "#6B6B6B",
-            fontWeight: mode === "upload" ? 600 : 400,
-          },
+          type: "button", onClick: () => setMode("upload"),
+          style: modeButtonStyle(mode === "upload"),
         }, "Upload"),
         React.createElement("button", {
-          type: "button",
-          onClick: () => setMode("url"),
-          style: {
-            flex: 1, height: 30, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
-            background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
-            color: mode === "url" ? "#FFF" : "#6B6B6B",
-            fontWeight: mode === "url" ? 600 : 400,
-          },
+          type: "button", onClick: () => { setMode("library"); setShowLibrary(true); },
+          style: { ...modeButtonStyle(mode === "library"), borderLeft: "none" },
+        }, "Library"),
+        React.createElement("button", {
+          type: "button", onClick: () => setMode("url"),
+          style: { ...modeButtonStyle(mode === "url"), borderLeft: "none" },
         }, "URL"),
       ),
       mode === "url"
@@ -487,7 +496,8 @@ const imageUploadField = {
               style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
             }, "Apply"),
           )
-        : React.createElement("div", {
+        : mode === "upload"
+        ? React.createElement("div", {
             onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
             onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
             onClick: triggerUpload,
@@ -495,22 +505,30 @@ const imageUploadField = {
           },
             React.createElement("div", { style: { fontSize: 20, marginBottom: 4 } }, "📁"),
             React.createElement("div", null, "Drop image or click to upload"),
-          ),
+          )
+        : null,
+      // Media Library Picker
+      showLibrary && React.createElement(MediaLibraryPicker, {
+        multiple: false,
+        onSelect: (urls: string[]) => { if (urls[0]) onChange(urls[0]); setShowLibrary(false); setMode("upload"); },
+        onClose: () => { setShowLibrary(false); setMode("upload"); },
+      }),
     );
   },
 };
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LAYOUT COMPONENTS — Containers with DropZones for nesting
+// LAYOUT COMPONENTS — Containers with slot fields for nesting
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Section ─────────────────────────────────────────────────────────────────
-// The primary container. Has background color/image/opacity, contains a DropZone.
+// The primary container. Has background color/image/opacity, contains a slot.
 
 const Section: Config["components"][string] = {
   label: "Section",
   fields: {
+    "section-content": { type: "slot", disallow: ["Section"] },
     sectionId: createFreeInputField("Section ID", "", [], "Anchor target for links (example: hero or features).", "hero"),
     bgMode: createToggleField("Background Mode", [
       { label: "Solid", value: "solid" },
@@ -561,7 +579,7 @@ const Section: Config["components"][string] = {
     bgVideoSound: createToggleField("Video Sound", [{ label: "Off", value: "off" }, { label: "On", value: "on" }], "Background videos default to muted."),
     bgVideoControls: createToggleField("Video Controls", [{ label: "Hidden", value: "no" }, { label: "Visible", value: "yes" }]),
     bgVideoFit: createCustomSelectField("Video Fit", [{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]),
-    bgVideoPoster: imageUploadField,
+    bgVideoPoster: { ...imageUploadField, label: "Poster Image (shown until video loads)" },
     bgOpacity: createCustomSelectField("Background Opacity", [
       { label: "100%", value: "1" }, { label: "90%", value: "0.9" }, { label: "75%", value: "0.75" },
       { label: "50%", value: "0.5" }, { label: "25%", value: "0.25" }, { label: "10%", value: "0.1" },
@@ -578,6 +596,7 @@ const Section: Config["components"][string] = {
     ...animationFields,
   },
   defaultProps: {
+    "section-content": [],
     sectionId: "",
     bgMode: "solid",
     bgMediaType: "image",
@@ -672,7 +691,9 @@ const Section: Config["components"][string] = {
     const direction = (gradientDirection as string) || "to bottom";
     const gradientValue = `linear-gradient(${direction}, ${from}, ${to})`;
     const img = mediaType === "image" ? ((bgImage as string) || "") : "";
-    const videoPoster = mediaType === "video" ? ((bgVideoPoster as string) || "") : "";
+    // Poster: use dedicated bgVideoPoster, fall back to bgImage so switching
+    // from image→video mode keeps the image as a placeholder until video loads.
+    const videoPoster = mediaType === "video" ? ((bgVideoPoster as string) || (bgImage as string) || "") : "";
     const videoResolved = mediaType === "video"
       ? resolveVideoSource((bgVideoUrl as string) || "", {
         autoplay: (bgVideoAutoplay as string) !== "no",
@@ -725,9 +746,14 @@ const Section: Config["components"][string] = {
     const alignContentValue: React.CSSProperties["alignContent"] =
       alignRaw === "center" ? "center" : alignRaw === "flex-end" ? "end" : "start";
 
-    // Video poster state management: show poster until video fires "playing" event
+    // Video poster state management: show poster until video fires "playing" event.
+    // For embeds (iframe), onLoad fires before the video is visible, so we add a
+    // short delay to let the player buffer and start rendering.
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
     const [videoReady, setVideoReady] = React.useState(false);
+    const handleEmbedLoad = React.useCallback(() => {
+      setTimeout(() => setVideoReady(true), 1200);
+    }, []);
 
     return styledRender(props, React.createElement("section", { id: sectionIdValue || undefined, style: outerStyle },
       // Background image overlay
@@ -736,40 +762,51 @@ const Section: Config["components"][string] = {
         backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: (bgPosition as string) || "center center",
         opacity,
       }}) : null,
-      // Video poster image (shows until video is playing)
-      videoPoster && videoResolved && !videoReady ? React.createElement("div", { style: {
+      // Video poster image (shows behind video — visible until video covers it)
+      videoPoster && videoResolved ? React.createElement("div", { style: {
         position: "absolute", inset: 0, zIndex: 1,
         backgroundImage: `url(${videoPoster})`, backgroundSize: "cover", backgroundPosition: "center center",
         opacity,
-        transition: "opacity 0.5s ease",
       }}) : null,
-      // Background video overlay
-      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: videoReady || !videoPoster ? 1 : 0, opacity } },
+      // Background video overlay (always z-index 2 so it layers above poster once playing)
+      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 2, opacity: videoReady ? 1 : 0, overflow: "hidden", transition: "opacity 0.6s ease" } },
         videoResolved.kind === "embed"
           ? React.createElement("iframe", {
             src: videoResolved.src,
             title: "Section background video",
             allow: "autoplay; fullscreen; picture-in-picture",
-            style: { width: "100%", height: "100%", border: "none", pointerEvents: "none" },
-            onLoad: () => setVideoReady(true),
+            style: {
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: "177.78vh", // 16:9 ratio — ensures cover behavior
+              height: "56.25vw", // inverse 16:9
+              minWidth: "100%",
+              minHeight: "100%",
+              transform: "translate(-50%, -50%)",
+              border: "none",
+              pointerEvents: "none",
+            },
+            onLoad: handleEmbedLoad,
           })
           : React.createElement("video", {
             ref: videoRef,
             src: videoResolved.src,
+            poster: videoPoster || undefined,
             autoPlay: (bgVideoAutoplay as string) !== "no",
             loop: (bgVideoLoop as string) !== "no",
             muted: (bgVideoSound as string) !== "on",
             controls: (bgVideoControls as string) === "yes",
             playsInline: true,
             onPlaying: () => setVideoReady(true),
-            style: { width: "100%", height: "100%", objectFit: videoFit, objectPosition: (bgVideoPosition as string) || "center center" },
+            style: { display: "block", position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: videoFit, objectPosition: (bgVideoPosition as string) || "center center" },
           }),
       ) : null,
       // Color/gradient overlay on top of media. Only render if there is an actual tint.
       shouldRenderTintOverlay ? React.createElement("div", { style: {
         position: "absolute",
         inset: 0,
-        zIndex: 2,
+        zIndex: 3,
         backgroundImage: hasGradientTint ? gradientValue : undefined,
         backgroundColor: hasSolidTint ? bg : undefined,
         opacity: 1 - opacity,
@@ -778,7 +815,7 @@ const Section: Config["components"][string] = {
       React.createElement("div", {
         style: {
           position: "relative",
-          zIndex: 3,
+          zIndex: 4,
           width: "100%",
           flex: 1,
           minHeight: "100%",
@@ -786,7 +823,9 @@ const Section: Config["components"][string] = {
           alignContent: alignContentValue,
         },
       },
-        React.createElement(DropZone, { zone: "section-content", disallow: ["Section"] })
+        typeof (props as Record<string, unknown>)["section-content"] === "function"
+          ? (((props as Record<string, unknown>)["section-content"]) as () => React.ReactNode)()
+          : null
       )
     ));
   },
@@ -794,7 +833,7 @@ const Section: Config["components"][string] = {
 
 // ─── Columns ─────────────────────────────────────────────────────────────────
 // Variable number of columns. Each column has its own width / padding / margin
-// / vertical-align / horizontal-align controls and its own DropZone
+// / vertical-align / horizontal-align controls and its own slot
 // (`column-0`, `column-1`, …).
 
 const SPACING_OPTS = [
@@ -809,9 +848,69 @@ const SPACING_OPTS = [
   { label: "64px", value: "64px" },
 ];
 
+/**
+ * Determine the effective column count from props.
+ * - If `columnCount` is present and valid (1–6), use it.
+ * - Otherwise, fall back to `columnList.length`.
+ * - Clamp to [1, 6] range.
+ */
+export function resolveColumnCount(props: Record<string, unknown>): number {
+  const explicit = props.columnCount as number | undefined;
+  if (typeof explicit === "number" && explicit >= 1 && explicit <= 6) {
+    return explicit;
+  }
+  const list = props.columnList as unknown[] | undefined;
+  return Math.max(1, Math.min(6, list?.length ?? 2));
+}
+
+/**
+ * Map a Column_Item's spacing fields to four-sided values.
+ * Prefers new fields; falls back to legacy shorthand.
+ */
+export function mapLegacySpacing(item: Record<string, string>): {
+  paddingTop: string;
+  paddingBottom: string;
+  paddingLeft: string;
+  paddingRight: string;
+  marginTop: string;
+  marginBottom: string;
+  marginLeft: string;
+  marginRight: string;
+} {
+  return {
+    paddingTop: item.paddingTop ?? item.paddingY ?? "0",
+    paddingBottom: item.paddingBottom ?? item.paddingY ?? "0",
+    paddingLeft: item.paddingLeft ?? item.paddingX ?? "0",
+    paddingRight: item.paddingRight ?? item.paddingX ?? "0",
+    marginTop: item.marginTop ?? item.marginY ?? "0",
+    marginBottom: item.marginBottom ?? item.marginY ?? "0",
+    marginLeft: item.marginLeft ?? "0",
+    marginRight: item.marginRight ?? "0",
+  };
+}
+
 const Columns: Config["components"][string] = {
   label: "Columns",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
+    columnCount: {
+      type: "number",
+      label: "Number of Columns",
+      min: 1,
+      max: 6,
+    },
+    layoutDirection: createCustomSelectField("Layout Direction", [
+      { label: "Horizontal (row)", value: "row" },
+      { label: "Vertical (stack)", value: "column" },
+    ]),
+    "column-0": { type: "slot", disallow: ["Section"] },
+    "column-1": { type: "slot", disallow: ["Section"] },
+    "column-2": { type: "slot", disallow: ["Section"] },
+    "column-3": { type: "slot", disallow: ["Section"] },
+    "column-4": { type: "slot", disallow: ["Section"] },
+    "column-5": { type: "slot", disallow: ["Section"] },
     gap: createCustomSelectField("Gap", [
       { label: "None", value: "0" }, { label: "Small", value: "sm" }, { label: "Medium", value: "md" }, { label: "Large", value: "lg" },
     ]),
@@ -822,6 +921,14 @@ const Columns: Config["components"][string] = {
         `Column ${(i ?? 0) + 1} — ${(item?.width as string) || "auto"}`,
       defaultItemProps: {
         width: "1fr",
+        paddingTop: "0",
+        paddingBottom: "0",
+        paddingLeft: "0",
+        paddingRight: "0",
+        marginTop: "0",
+        marginBottom: "0",
+        marginLeft: "0",
+        marginRight: "0",
         paddingY: "0",
         paddingX: "0",
         marginY: "0",
@@ -840,6 +947,14 @@ const Columns: Config["components"][string] = {
           { label: "75%", value: "75%" },
           { label: "100% (full)", value: "100%" },
         ]),
+        paddingTop: createCustomSelectField("Padding Top", SPACING_OPTS),
+        paddingBottom: createCustomSelectField("Padding Bottom", SPACING_OPTS),
+        paddingLeft: createCustomSelectField("Padding Left", SPACING_OPTS),
+        paddingRight: createCustomSelectField("Padding Right", SPACING_OPTS),
+        marginTop: createCustomSelectField("Margin Top", SPACING_OPTS),
+        marginBottom: createCustomSelectField("Margin Bottom", SPACING_OPTS),
+        marginLeft: createCustomSelectField("Margin Left", SPACING_OPTS),
+        marginRight: createCustomSelectField("Margin Right", SPACING_OPTS),
         paddingY: createCustomSelectField("Padding Y", SPACING_OPTS),
         paddingX: createCustomSelectField("Padding X", SPACING_OPTS),
         marginY: createCustomSelectField("Margin Y", SPACING_OPTS),
@@ -860,26 +975,55 @@ const Columns: Config["components"][string] = {
     ...spacingBorderFields,
   },
   defaultProps: {
+    columnCount: 2,
+    layoutDirection: { desktop: "row", mobile: "column" },
+    "column-0": [],
+    "column-1": [],
+    "column-2": [],
+    "column-3": [],
+    "column-4": [],
+    "column-5": [],
     gap: "md",
     columnList: [
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
+      { width: "1fr", paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0",
+        marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" },
+      { width: "1fr", paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0",
+        marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" },
     ],
     ...spacingBorderDefaults,
   },
   render: (props) => {
     const list = (props.columnList as Array<Record<string, string>>) ?? [];
-    const cols = list.length > 0 ? list : [
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-    ];
+    const count = resolveColumnCount(props);
+    const cols = list.slice(0, count);
+
+    // Fallback if list is shorter than count (shouldn't happen, but defensive)
+    while (cols.length < count) {
+      cols.push({ width: "1fr", paddingTop: "0", paddingBottom: "0",
+        paddingLeft: "0", paddingRight: "0", marginTop: "0",
+        marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" });
+    }
+
     const gapPx: Record<string, string> = { "0": "0", sm: "16px", md: "24px", lg: "40px" };
     const gap = gapPx[props.gap as string] ?? gapPx.md;
 
-    // Build grid-template-columns from per-column widths.
+    // Resolve desktop direction as inline default (CSS custom prop overrides per breakpoint)
+    const direction = resolveBreakpointValue(
+      props.layoutDirection as BreakpointValue<string> | undefined,
+      "desktop"
+    ) ?? "row";
+
+    // Build grid styles based on resolved direction
     const gridTemplate = cols
       .map((c) => (c.width && c.width !== "" ? c.width : "1fr"))
       .join(" ");
+
+    const gridStyle: React.CSSProperties = direction === "row"
+      ? { gridTemplateColumns: gridTemplate, gap }
+      : { gridTemplateColumns: "1fr", gridAutoRows: "auto", gap };
 
     return styledRender(
       props,
@@ -887,13 +1031,11 @@ const Columns: Config["components"][string] = {
         "div",
         {
           className: "grid",
-          style: {
-            gridTemplateColumns: gridTemplate,
-            gap,
-          },
+          style: gridStyle,
         },
-        ...cols.map((c, i) =>
-          React.createElement(
+        ...cols.map((c, i) => {
+          const spacing = mapLegacySpacing(c);
+          return React.createElement(
             "div",
             {
               key: i,
@@ -902,26 +1044,30 @@ const Columns: Config["components"][string] = {
                 flexDirection: "column",
                 justifyContent: c.align || "flex-start",
                 alignItems: c.justify || "stretch",
-                paddingTop: c.paddingY || "0",
-                paddingBottom: c.paddingY || "0",
-                paddingLeft: c.paddingX || "0",
-                paddingRight: c.paddingX || "0",
-                marginTop: c.marginY || "0",
-                marginBottom: c.marginY || "0",
+                paddingTop: spacing.paddingTop,
+                paddingBottom: spacing.paddingBottom,
+                paddingLeft: spacing.paddingLeft,
+                paddingRight: spacing.paddingRight,
+                marginTop: spacing.marginTop,
+                marginBottom: spacing.marginBottom,
+                marginLeft: spacing.marginLeft,
+                marginRight: spacing.marginRight,
                 minHeight: "60px",
                 minWidth: 0,
               },
             },
-            React.createElement(DropZone, { zone: `column-${i}`, disallow: ["Section"] })
-          )
-        )
+            typeof (props as Record<string, unknown>)[`column-${i}`] === "function"
+              ? (((props as Record<string, unknown>)[`column-${i}`]) as () => React.ReactNode)()
+              : null
+          );
+        })
       )
     );
   },
 };
 
 
-// ─── Container — Content width constraint with DropZone ──────────────────────
+// ─── Container — Content width constraint with slot ──────────────────────
 
 const CONTAINER_BG_COLORS = ORA_SOLID_BG_OPTIONS;
 
@@ -930,6 +1076,7 @@ const CONTAINER_GRADIENT_COLORS = ORA_GRADIENT_OPTIONS;
 const Container: Config["components"][string] = {
   label: "Container",
   fields: {
+    "container-content": { type: "slot", disallow: ["Section"] },
     maxWidth: createCustomSelectField("Max Width", [
       { label: "Small (720px)", value: "720" }, { label: "Medium (960px)", value: "960" },
       { label: "Large (1200px)", value: "1200" }, { label: "XL (1400px)", value: "1400" },
@@ -959,6 +1106,7 @@ const Container: Config["components"][string] = {
     ...spacingBorderFields,
   },
   defaultProps: {
+    "container-content": [],
     maxWidth: "1200",
     bgMode: "solid",
     bgColor: "transparent",
@@ -1016,7 +1164,9 @@ const Container: Config["components"][string] = {
         padding: mw === "100%" ? 0 : "0 16px",
       },
     },
-      React.createElement(DropZone, { zone: "container-content", disallow: ["Section"] })
+      typeof (props as Record<string, unknown>)["container-content"] === "function"
+        ? (((props as Record<string, unknown>)["container-content"]) as () => React.ReactNode)()
+        : null
     ));
   },
 };
@@ -1610,16 +1760,10 @@ const Button: Config["components"][string] = {
     }},
 
     // ── Typography ─────────────────────────────────────────────────────────
+    // NOTE: `fontFamily` is intentionally omitted. URW Geometric is enforced
+    // via CSS inheritance from the canvas/renderer root.
+    // See spec: branded-font-enforcement (Requirements 2.3, 2.5, 2.6).
     _typography: { type: "object", label: "Typography", objectFields: {
-      fontFamily: makeCustomSelectField("Font Family", [
-        { label: "Inherit", value: "inherit" },
-        { label: "Sans-serif", value: "sans-serif" },
-        { label: "Serif", value: "serif" },
-        { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
-        { label: "Playfair Display", value: "'Playfair Display', serif" },
-        { label: "Inter", value: "'Inter', sans-serif" },
-        { label: "Montserrat", value: "'Montserrat', sans-serif" },
-      ], "Reusable custom dropdown, not the browser native select."),
       fontWeight: makeCustomSelectField("Font Weight", [
         { label: "Light (300)", value: "300" },
         { label: "Regular (400)", value: "400" },
@@ -1666,7 +1810,6 @@ const Button: Config["components"][string] = {
     url: "#",
     _icon: { name: "", position: "right", size: "16", gap: "8px" },
     _typography: {
-      fontFamily: "inherit",
       fontWeight: "600",
       fontSize: "14px",
       letterSpacing: "0.05em",
@@ -2056,6 +2199,9 @@ function extractIconFeatureLabel(value: unknown, seen = new WeakSet<object>(), d
 
 const IconFeatureList: Config["components"][string] = {
   label: "Icon Feature List",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
     items: {
       type: "array",
@@ -2205,6 +2351,9 @@ const IconFeatureList: Config["components"][string] = {
 
 const AccordionGroup: Config["components"][string] = {
   label: "Accordion Group",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
     heading: { type: "text", label: "Heading", contentEditable: true },
     items: {
@@ -2414,16 +2563,17 @@ const AccordionGroup: Config["components"][string] = {
   },
 };
 
-// ─── Accordion — Expandable section with DropZone content ────────────────────
+// ─── Accordion — Expandable section with slot content ────────────────────
 
 const Accordion: Config["components"][string] = {
   label: "Accordion",
   fields: {
+    "accordion-content": { type: "slot", disallow: ["Section"] },
     title: { type: "text", label: "Title", contentEditable: true },
     defaultOpen: createCustomSelectField("Default Open", [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }]),
     ...spacingBorderFields,
   },
-  defaultProps: { title: "Light Palette", defaultOpen: "yes", ...spacingBorderDefaults },
+  defaultProps: { "accordion-content": [], title: "Light Palette", defaultOpen: "yes", ...spacingBorderDefaults },
   render: (props) => {
     const isOpen = (props.defaultOpen as string) === "yes";
     return styledRender(props, React.createElement("details", { open: isOpen || undefined, className: "group border-b border-[#E8E4DF]" },
@@ -2432,7 +2582,9 @@ const Accordion: Config["components"][string] = {
         React.createElement("span", { className: "text-[#2C2C2C] text-xl transition-transform group-open:rotate-180" }, "∧"),
       ),
       React.createElement("div", { className: "pb-6" },
-        React.createElement(DropZone, { zone: "accordion-content", disallow: ["Section"] }),
+        typeof (props as Record<string, unknown>)["accordion-content"] === "function"
+          ? (((props as Record<string, unknown>)["accordion-content"]) as () => React.ReactNode)()
+          : null,
       ),
     ));
   },
@@ -2562,37 +2714,11 @@ const ScrollIndicator: Config["components"][string] = {
     const arrowColor    = (props.arrowColor   as string) || "#FFFFFF";
 
     const sizePx: Record<string, { w: number; h: number; arrow: number }> = {
-      sm: { w: 28, h: 48, arrow: 10 },
-      md: { w: 38, h: 62, arrow: 14 },
-      lg: { w: 50, h: 80, arrow: 18 },
+      sm: { w: 30, h: 56, arrow: 20 },
+      md: { w: 36, h: 72, arrow: 26 },
+      lg: { w: 44, h: 90, arrow: 32 },
     };
     const dim = sizePx[size] ?? sizePx.md;
-
-    // ── Absolute positioning ─────────────────────────────────────────────────
-    const containerStyle: React.CSSProperties = {
-      position: "absolute",
-      zIndex: 10,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 10,
-      textDecoration: "none",
-      cursor: "pointer",
-    };
-
-    if (vPos === "top")    { containerStyle.top = vOff; }
-    else if (vPos === "bottom") { containerStyle.bottom = vOff; }
-    else                  { containerStyle.top = "50%"; }
-
-    if (hPos === "left")   { containerStyle.left = hOff; }
-    else if (hPos === "right") { containerStyle.right = hOff; }
-    else                   { containerStyle.left = "50%"; }
-
-    const tx = hPos === "center" ? "-50%" : "0%";
-    const ty = vPos === "center" ? "-50%" : "0%";
-    if (tx !== "0%" || ty !== "0%") {
-      containerStyle.transform = `translate(${tx}, ${ty})`;
-    }
 
     // ── Capsule ──────────────────────────────────────────────────────────────
     const capsuleStyle: React.CSSProperties = {
@@ -2606,18 +2732,21 @@ const ScrollIndicator: Config["components"][string] = {
       backgroundColor: indStyle === "filled" ? indicatorColor : "transparent",
     };
 
-    // ── Chevron arrow SVG ────────────────────────────────────────────────────
+    // ── Downward arrow SVG (line + arrowhead) ───────────────────────────────
     const arrowSvg = React.createElement("svg", {
-      width: dim.arrow,
+      width: dim.arrow * 0.5,
       height: dim.arrow,
-      viewBox: "0 0 24 24",
+      viewBox: "0 0 12 24",
       fill: "none",
       stroke: arrowColor,
-      strokeWidth: 2,
+      strokeWidth: 1.5,
       strokeLinecap: "round" as const,
       strokeLinejoin: "round" as const,
       "aria-hidden": "true",
-    }, React.createElement("polyline", { points: "6 9 12 15 18 9" }));
+    },
+      React.createElement("line", { x1: "6", y1: "1", x2: "6", y2: "20" }),
+      React.createElement("polyline", { points: "2 16 6 22 10 16" }),
+    );
 
     // ── Animated capsule ─────────────────────────────────────────────────────
     let indicatorEl: React.ReactNode;
@@ -2664,11 +2793,42 @@ const ScrollIndicator: Config["components"][string] = {
       : [indicatorEl, labelEl]
     ).filter(Boolean);
 
-    return React.createElement("a", {
-      href,
-      style: containerStyle,
-      "aria-label": labelText || "Scroll",
-    }, ...children);
+    // Use a flow-based wrapper so the indicator is visible and selectable in
+    // the builder. Position is controlled via absolute positioning within the
+    // section but the wrapper provides a visible footprint for the editor.
+    const wrapperStyle: React.CSSProperties = {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: vPos === "bottom" ? vOff : undefined,
+      top: vPos === "top" ? vOff : undefined,
+      display: "flex",
+      justifyContent: hPos === "left" ? "flex-start" : hPos === "right" ? "flex-end" : "center",
+      paddingLeft: hPos === "left" ? hOff : undefined,
+      paddingRight: hPos === "right" ? hOff : undefined,
+      zIndex: 10,
+      // Minimum height so the element is selectable in the builder
+      minHeight: dim.h + (labelText ? 30 : 0),
+    };
+    if (vPos === "center") {
+      wrapperStyle.top = "50%";
+      wrapperStyle.transform = "translateY(-50%)";
+    }
+
+    return React.createElement("div", { style: wrapperStyle },
+      React.createElement("a", {
+        href,
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+          textDecoration: "none",
+          cursor: "pointer",
+        },
+        "aria-label": labelText || "Scroll",
+      }, ...children),
+    );
   },
 };
 
@@ -2676,17 +2836,9 @@ const ScrollIndicator: Config["components"][string] = {
 // ─── Stats Grid ───────────────────────────────────────────────────────────────
 // A configurable stat grid. Each stat item has its own value/label typography,
 // individual border control (left / right / top / bottom), border color/width/
-// radius, and padding. The container controls columns, gap, and font family.
-
-const STATS_FONT_OPTIONS = [
-  { label: "Inherit", value: "inherit" },
-  { label: "Sans-serif", value: "sans-serif" },
-  { label: "Serif", value: "serif" },
-  { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
-  { label: "Playfair Display", value: "'Playfair Display', serif" },
-  { label: "Inter", value: "'Inter', sans-serif" },
-  { label: "Montserrat", value: "'Montserrat', sans-serif" },
-];
+// radius, and padding. The container controls columns and gap. Font family is
+// inherited from the canvas/renderer root (URW Geometric brand font) and is
+// not configurable per-block.
 
 const STATS_WEIGHT_OPTIONS = [
   { label: "Thin (100)", value: "100" },
@@ -2706,6 +2858,9 @@ const STATS_BORDER_SIDES_FIELD = {
 
 const StatsGrid: Config["components"][string] = {
   label: "Stats Grid",
+  responsiveDefaults: {
+    columns: { mobile: "1" },
+  },
   fields: {
     // ── Container layout ───────────────────────────────────────────────────
     columns: makeCustomSelectField("Columns", [
@@ -2718,7 +2873,9 @@ const StatsGrid: Config["components"][string] = {
     ], "Number of stat columns per row."),
     gap: makeFreeInputField("Column Gap", "px", ["0px", "8px", "16px", "24px", "32px", "48px"], "Gap between stat items."),
     rowGap: makeFreeInputField("Row Gap", "px", ["0px", "8px", "16px", "24px", "32px", "48px"], "Gap between rows when stats wrap."),
-    fontFamily: makeCustomSelectField("Font Family", STATS_FONT_OPTIONS, "Applied to all stats unless overridden per-item."),
+    // NOTE: `fontFamily` is intentionally not configurable. URW Geometric is
+    // enforced via CSS inheritance from the canvas/renderer root.
+    // See spec: branded-font-enforcement (Requirements 2.4, 2.5).
 
     // ── Per-item array ─────────────────────────────────────────────────────
     items: {
@@ -2783,7 +2940,6 @@ const StatsGrid: Config["components"][string] = {
     columns: "4",
     gap: "0px",
     rowGap: "0px",
-    fontFamily: "inherit",
     items: [
       { value: "4.8M²",  label: "Total Land Area",    valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
       { value: "55%",    label: "Open Spaces",        valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
@@ -3068,6 +3224,9 @@ const LocationMap: Config["components"][string] = {
 
 const ContactLocationsMap: Config["components"][string] = {
   label: "Contact Locations Map",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
     // ── Section / container ─────────────────────────────────────────────
     containerMaxWidth: makeFreeInputField("Container Max Width", "px", ["100%", "1200px", "1400px", "1600px"], "Constrains the section. Use 100% for an edge-to-edge layout."),
@@ -3303,6 +3462,9 @@ const ContactLocationsMap: Config["components"][string] = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const FeaturedProjects: Config["components"][string] = {
+  responsiveDefaults: {
+    columns: { mobile: 1 },
+  },
   fields: {
     heading: { type: "text", label: "Heading" },
     subheading: { type: "text", label: "Subheading" },
@@ -3359,6 +3521,9 @@ const FeaturedProjects: Config["components"][string] = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const FeaturedCommunities: Config["components"][string] = {
+  responsiveDefaults: {
+    columns: { mobile: 1 },
+  },
   fields: {
     heading: { type: "text", label: "Heading" },
     subheading: { type: "text", label: "Subheading" },
@@ -3466,6 +3631,7 @@ const ImageCarousel: Config["components"][string] = {
       label: "Images",
       render: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void; readOnly?: boolean }) => {
         const items = (Array.isArray(value) ? value : []) as string[];
+        const [showLibrary, setShowLibrary] = React.useState(false);
 
         const addImage = () => {
           const inp = document.createElement("input");
@@ -3527,12 +3693,21 @@ const ImageCarousel: Config["components"][string] = {
             React.createElement("button", {
               type: "button", onClick: addImage,
               style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
-            }, "Upload Images"),
+            }, "Upload"),
+            React.createElement("button", {
+              type: "button", onClick: () => setShowLibrary(true),
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "From Library"),
             React.createElement("button", {
               type: "button", onClick: addUrl,
               style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
-            }, "Add URL"),
+            }, "URL"),
           ),
+          showLibrary && React.createElement(MediaLibraryPicker, {
+            multiple: true,
+            onSelect: (urls: string[]) => { onChange([...items, ...urls]); setShowLibrary(false); },
+            onClose: () => setShowLibrary(false),
+          }),
         );
       },
     },
@@ -3604,6 +3779,183 @@ const ImageCarousel: Config["components"][string] = {
     return styledRender(props, React.createElement(ImageCarouselRuntime, {
       images, autoplay, interval, showDots, showArrows, height, objectFit,
       overlayColor, overlayOpacity, transition,
+    }));
+  },
+};
+
+
+// ─── Gallery ─────────────────────────────────────────────────────────────────
+// Multi-image gallery with grid and carousel display modes, configurable
+// columns/items-per-view, gap, image sizing, and a built-in lightbox overlay.
+
+const Gallery: Config["components"][string] = {
+  label: "Gallery",
+  fields: {
+    images: {
+      type: "custom",
+      label: "Images",
+      render: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) => {
+        const items = (Array.isArray(value) ? value : []) as GalleryImage[];
+        const [showLibrary, setShowLibrary] = React.useState(false);
+
+        const addImages = () => {
+          const inp = document.createElement("input");
+          inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+          inp.onchange = async (ev) => {
+            const files = (ev.target as HTMLInputElement).files;
+            if (!files) return;
+            const newItems: GalleryImage[] = [];
+            for (const file of Array.from(files)) {
+              const form = new FormData();
+              form.append("file", file);
+              try {
+                const res = await fetch("/api/media", { method: "POST", body: form, credentials: "include" });
+                if (!res.ok) continue;
+                const data = await res.json();
+                const url = data.data?.storageUrl ?? data.data?.storage_url ?? "";
+                if (url) newItems.push({ src: url, alt: file.name.replace(/\.[^.]+$/, "") });
+              } catch { /* skip */ }
+            }
+            if (newItems.length > 0) onChange([...items, ...newItems]);
+          };
+          inp.click();
+        };
+
+        const addUrl = () => {
+          const url = prompt("Enter image URL:");
+          if (url?.trim()) onChange([...items, { src: url.trim(), alt: "" }]);
+        };
+
+        const removeAt = (idx: number) => {
+          onChange(items.filter((_, i) => i !== idx));
+        };
+
+        const moveUp = (idx: number) => {
+          if (idx === 0) return;
+          const next = [...items];
+          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+          onChange(next);
+        };
+
+        const moveDown = (idx: number) => {
+          if (idx >= items.length - 1) return;
+          const next = [...items];
+          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+          onChange(next);
+        };
+
+        return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+          items.map((img, i) =>
+            React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 4, background: "#F9F7F5", border: "1px solid #E8E4DF", padding: 4 } },
+              React.createElement("img", { src: img.src, alt: img.alt || `Image ${i + 1}`, style: { width: 48, height: 32, objectFit: "cover" } }),
+              React.createElement("span", { style: { flex: 1, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, img.src.split("/").pop()),
+              React.createElement("button", { type: "button", onClick: () => moveUp(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move up" }, "↑"),
+              React.createElement("button", { type: "button", onClick: () => moveDown(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move down" }, "↓"),
+              React.createElement("button", { type: "button", onClick: () => removeAt(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11, color: "#c00" }, title: "Remove" }, "✕"),
+            )
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 4 } },
+            React.createElement("button", {
+              type: "button", onClick: addImages,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "Upload"),
+            React.createElement("button", {
+              type: "button", onClick: () => setShowLibrary(true),
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "From Library"),
+            React.createElement("button", {
+              type: "button", onClick: addUrl,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "URL"),
+          ),
+          showLibrary && React.createElement(MediaLibraryPicker, {
+            multiple: true,
+            onSelect: (urls: string[]) => {
+              const newItems = urls.map((url) => ({ src: url, alt: "" }));
+              onChange([...items, ...newItems]);
+              setShowLibrary(false);
+            },
+            onClose: () => setShowLibrary(false),
+          }),
+        );
+      },
+    },
+    mode: createToggleField("Display Mode", [
+      { label: "Grid", value: "grid" },
+      { label: "Carousel", value: "carousel" },
+    ], "Grid shows all images; Carousel scrolls horizontally."),
+    columns: createCustomSelectField("Columns (Grid)", [
+      { label: "2", value: "2" },
+      { label: "3", value: "3" },
+      { label: "4", value: "4" },
+      { label: "5", value: "5" },
+      { label: "6", value: "6" },
+    ], "Number of columns in grid mode."),
+    itemsPerView: createCustomSelectField("Items Per View (Carousel)", [
+      { label: "2", value: "2" },
+      { label: "3", value: "3" },
+      { label: "4", value: "4" },
+      { label: "5", value: "5" },
+    ], "Number of visible items in carousel mode."),
+    gap: createCustomSelectField("Gap", [
+      { label: "None", value: "0" },
+      { label: "4px", value: "4" },
+      { label: "8px", value: "8" },
+      { label: "12px", value: "12" },
+      { label: "16px", value: "16" },
+      { label: "20px", value: "20" },
+      { label: "24px", value: "24" },
+      { label: "32px", value: "32" },
+    ], "Space between images."),
+    imageHeight: createCustomSelectField("Image Height", [
+      { label: "Small (180px)", value: "180px" },
+      { label: "Medium (240px)", value: "240px" },
+      { label: "Large (320px)", value: "320px" },
+      { label: "X-Large (400px)", value: "400px" },
+      { label: "Auto", value: "auto" },
+    ], "Height of each image thumbnail."),
+    objectFit: createCustomSelectField("Image Fit", [
+      { label: "Cover", value: "cover" },
+      { label: "Contain", value: "contain" },
+    ]),
+    showArrows: createToggleField("Show Arrows", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ], "Navigation arrows for carousel mode."),
+    enableLightbox: createToggleField("Lightbox", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ], "Click image to open full-screen lightbox with navigation."),
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    images: [],
+    mode: "carousel",
+    columns: "4",
+    itemsPerView: "4",
+    gap: "12",
+    imageHeight: "280px",
+    objectFit: "cover",
+    borderRadius: "0",
+    showArrows: "yes",
+    enableLightbox: "yes",
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    const images = (Array.isArray(props.images) ? props.images : []) as GalleryImage[];
+    const mode = (props.mode as string) === "grid" ? "grid" : "carousel";
+    const columns = Number(props.columns) || 4;
+    const itemsPerView = Number(props.itemsPerView) || 4;
+    const gap = Number(props.gap) || 12;
+    const imageHeight = (props.imageHeight as string) || "280px";
+    const objectFit = (props.objectFit as string) === "contain" ? "contain" : "cover";
+    const borderRadius = Number(props.borderRadius) || 0;
+    const showArrows = (props.showArrows as string) !== "no";
+    const enableLightbox = (props.enableLightbox as string) !== "no";
+
+    return styledRender(props, React.createElement(GalleryRuntime, {
+      images, mode, columns, gap, imageHeight, objectFit,
+      borderRadius, showArrows, enableLightbox, itemsPerView,
     }));
   },
 };
@@ -3730,20 +4082,256 @@ const ExperienceLauncher: Config["components"][string] = {
 // expressed as nested **templates** of these atomic components. See
 // ./templates/component-templates.ts and the Templates sidebar plugin.
 
+/**
+ * Wraps every component's `render` function with `withBreakpointResolution`
+ * so that breakpoint-aware props (fontSize, _padding, _margin, etc.) are
+ * resolved to their active-breakpoint scalar before the render runs.
+ *
+ * This is the core fix for Bug Condition 1: style changes not reflected on
+ * the canvas because render functions received BreakpointValue objects
+ * instead of scalar strings.
+ */
+function wrapAllRenders(
+  components: Config["components"],
+): Config["components"] {
+  const wrapped: Config["components"] = {};
+  for (const [name, component] of Object.entries(components)) {
+    const responsiveDefaults = (component as any).responsiveDefaults;
+
+    // Registration-time validation: fail fast if responsiveDefaults is invalid
+    if (responsiveDefaults) {
+      const errors = validateResponsiveDefaults(name, responsiveDefaults);
+      if (errors.length > 0) {
+        const messages = errors.map((e) => `  - ${e.reason}${e.field ? ` (field: ${e.field})` : ""}`).join("\n");
+        throw new Error(
+          `[pageBuilderConfig] Component "${name}" has invalid responsiveDefaults:\n${messages}`,
+        );
+      }
+    }
+
+    // Inject tracking fields into every component
+    const fieldsWithTracking = { ...(component.fields ?? {}), ...trackingFields };
+    const defaultPropsWithTracking = { ...(component.defaultProps ?? {}), ...trackingDefaults };
+
+    if (component.render) {
+      wrapped[name] = {
+        ...component,
+        fields: fieldsWithTracking,
+        defaultProps: defaultPropsWithTracking,
+        render: withBreakpointResolution(
+          component.render as (props: Record<string, unknown>) => React.ReactElement,
+          responsiveDefaults,
+        ),
+      };
+    } else {
+      wrapped[name] = {
+        ...component,
+        fields: fieldsWithTracking,
+        defaultProps: defaultPropsWithTracking,
+      };
+    }
+  }
+  return wrapped;
+}
+
+// ─── Per-Page Analytics Configuration (Root Fields) ─────────────────────────
+// Task 13.1 & 13.2: Analytics fields stored under root.props._analytics
+
+const EVENT_VOCABULARY_OPTIONS = EVENT_VOCABULARY.map((name) => ({
+  label: name.replace(/_/g, " "),
+  value: name,
+}));
+
+const CONSENT_OVERRIDE_OPTIONS = [
+  { label: "Inherit site default", value: "inherit" },
+  { label: "Analytics only", value: "analytics-only" },
+  { label: "No tracking", value: "no-tracking" },
+];
+
+const SURVEY_TRIGGER_TYPE_OPTIONS = [
+  { label: "None", value: "" },
+  { label: "Exit Intent", value: "exit-intent" },
+  { label: "Time on Page", value: "time-on-page" },
+  { label: "Scroll Depth", value: "scroll-depth" },
+];
+
+const analyticsRootFields = {
+  _analytics: {
+    type: "object" as const,
+    label: "Analytics",
+    objectFields: {
+      pageTemplate: {
+        type: "custom" as const,
+        label: "Page Template",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. project-landing, unit-detail",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      projectId: {
+        type: "custom" as const,
+        label: "Project Tag",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. Marina, Creek",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      unitType: {
+        type: "custom" as const,
+        label: "Unit Type",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. 2br-apartment",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      priceBand: {
+        type: "custom" as const,
+        label: "Price Band",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. 1.5m-2m",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      conversionGoal: createCustomSelectField(
+        "Conversion Goal",
+        [{ label: "None", value: "" }, ...EVENT_VOCABULARY_OPTIONS],
+        "Primary conversion event for this page.",
+      ),
+      funnelSteps: {
+        type: "custom" as const,
+        label: "Funnel Steps",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) => {
+          const current = (value as string) || "";
+          return React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: current,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+              placeholder: "page_viewed,form_started,form_submitted",
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+            React.createElement("div", { style: { fontSize: 10, color: "#6B6B6B", marginTop: 4 } }, "Comma-separated event names (2–6 steps)"),
+          );
+        },
+      },
+      experimentFlag: {
+        type: "custom" as const,
+        label: "Experiment Flag",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 100)),
+              placeholder: "PostHog feature flag key",
+              maxLength: 100,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      surveyTriggerType: createCustomSelectField(
+        "Survey Trigger",
+        SURVEY_TRIGGER_TYPE_OPTIONS,
+        "When to fire the PostHog survey.",
+      ),
+      surveyTriggerValue: {
+        type: "custom" as const,
+        label: "Survey Trigger Value",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "number",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+              placeholder: "e.g. 30 (seconds) or 75 (%)",
+              min: 5,
+              max: 300,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      consentOverride: createCustomSelectField(
+        "Consent Override",
+        CONSENT_OVERRIDE_OPTIONS,
+        "Override site-level consent mode for this page.",
+      ),
+    },
+  },
+};
+
+const analyticsRootDefaults: { _analytics: PageAnalyticsConfig & { surveyTriggerType?: string; surveyTriggerValue?: string; funnelSteps?: string } } = {
+  _analytics: {
+    pageTemplate: "",
+    projectId: "",
+    unitType: "",
+    priceBand: "",
+    conversionGoal: "",
+    funnelSteps: "",
+    experimentFlag: "",
+    surveyTriggerType: "",
+    surveyTriggerValue: "",
+    consentOverride: "inherit",
+  } as any,
+};
+
 export const pageBuilderConfig: Config = {
   categories: {
-    layout: { components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider"], title: "Layout", defaultExpanded: true },
-    basic: { components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel"], title: "Basic" },
-    interactive: { components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap"], title: "Interactive" },
-    projects: { components: ["FeaturedProjects", "FeaturedCommunities", "ProjectSection"], title: "Projects" },
-    experiences: { components: ["ExperienceLauncher"], title: "Experiences" },
+    layout: {
+      components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider"],
+      title: "Layout",
+      defaultExpanded: true,
+    },
+    blocks: {
+      components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel", "Gallery"],
+      title: "Blocks",
+    },
+    components: {
+      components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap", "FeaturedProjects", "FeaturedCommunities", "ProjectSection", "ExperienceLauncher"],
+      title: "Components",
+    },
   },
-  components: {
+  root: {
+    fields: {
+      ...analyticsRootFields,
+    },
+    defaultProps: {
+      ...analyticsRootDefaults,
+    },
+  },
+  components: wrapAllRenders({
     Section, Container, Columns, Accordion, Spacer, Divider,
-    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel,
+    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel, Gallery,
     FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap,
     ContactLocationsMap,
     FeaturedProjects, FeaturedCommunities, ProjectSection,
     ExperienceLauncher,
-  },
+  }),
 };

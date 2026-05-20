@@ -14,8 +14,6 @@ import {
   Newspaper,
   Image as ImageIcon,
   Inbox,
-  Menu,
-  PanelBottom,
   CheckSquare,
   Ticket,
   Settings,
@@ -28,6 +26,10 @@ import {
   Users,
   CalendarDays,
   BarChart3,
+  TrendingUp,
+  Link2,
+  ListChecks,
+  DollarSign,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
 
@@ -50,14 +52,10 @@ const navItems = [
   { href: '/ora-panel/communities', label: 'Communities', icon: MapPin, permission: 'communities:read' },
   { href: '/ora-panel/projects', label: 'Projects', icon: Building2, permission: 'projects:read' },
   { href: '/ora-panel/media', label: 'Media', icon: ImageIcon, permission: 'media:read' },
-  { href: '/ora-panel/menus', label: 'Menus', icon: Menu, permission: 'settings:read' },
-  { href: '/ora-panel/footer-settings', label: 'Footer', icon: PanelBottom, permission: 'settings:read' },
   { href: '/ora-panel/submissions', label: 'Submissions', icon: Inbox, permission: 'leads:read' },
   { href: '/ora-panel/reviews', label: 'Reviews', icon: CheckSquare, permission: 'bookings:read' },
   { href: '/ora-panel/tickets', label: 'Tickets', icon: Ticket, permission: 'tickets:read' },
   { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
-  { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
-  { href: '/ora-panel/audit', label: 'Audit', icon: Shield, permission: 'audit:read' },
   { href: '/ora-panel/ai', label: 'My AI', icon: BrainCircuit, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/knowledge-base', label: 'AI Knowledge', icon: BrainCircuit, permission: 'ai:knowledge-base:manage' },
   { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
@@ -65,6 +63,12 @@ const navItems = [
   { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
   { href: '/ora-panel/ai/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'ai:analytics:read' },
   { href: '/ora-panel/ai/audit', label: 'AI Audit', icon: Shield, permission: 'audit:read' },
+  { href: '/ora-panel/marketing/dashboard', label: 'Marketing', icon: TrendingUp, permission: 'analytics:read' },
+  { href: '/ora-panel/marketing/spend', label: 'Ad Spend', icon: DollarSign, permission: 'analytics:read' },
+  { href: '/ora-panel/marketing/utm-builder', label: 'UTM Builder', icon: Link2, permission: 'analytics:read' },
+  { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
+  { href: '/ora-panel/settings/analytics', label: 'Analytics Settings', icon: BarChart3, permission: 'settings:update' },
+  { href: '/ora-panel/settings/event-vocabulary', label: 'Event Vocabulary', icon: ListChecks, permission: 'settings:update' },
 ];
 
 /**
@@ -167,7 +171,7 @@ export default function OraPanelLayout({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen" style={{ fontFamily: "var(--font-poppins), Poppins, system-ui, sans-serif" }}>
         {/* Sidebar — expands on hover, collapses on mouse leave */}
         <aside
           onMouseEnter={() => setCollapsed(false)}

@@ -7,6 +7,7 @@ import '@puckeditor/core/dist/index.css';
 import { Puck } from '@puckeditor/core';
 import type { Data } from '@puckeditor/core';
 import { pageBuilderConfig } from '@/lib/page-builder/config';
+import { migratePageData } from '@/lib/page-builder/migrate-data';
 import { createOverrides } from '@/lib/page-builder/components/ui-overrides';
 import { createEditorPlugins } from '@/lib/page-builder/components/plugins';
 import { defaultTheme } from '@/lib/page-builder/theme';
@@ -629,7 +630,11 @@ export default function ProjectDesignPage({
   // Must be above early returns to maintain consistent hook order
   const { data: pageData, removed: removedTypes } = useMemo(() => {
     const rawPageData = (project?.landingPageData as PageData) ?? getDefaultTemplate();
-    return sanitizePageData(rawPageData);
+    const sanitized = sanitizePageData(rawPageData);
+    return {
+      data: migratePageData(sanitized.data as unknown as Data) as unknown as PageData,
+      removed: sanitized.removed,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 

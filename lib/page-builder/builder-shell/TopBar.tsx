@@ -1,9 +1,17 @@
 "use client";
 
 import React from "react";
-import { usePuck } from "@puckeditor/core";
+import {
+  Undo2,
+  Redo2,
+  Eye,
+  Save as SaveIcon,
+  Rocket,
+} from "lucide-react";
+import { usePuckStore } from "@/lib/page-builder/use-puck-store";
 import { ORA_THEME } from "./inspector/tokens";
 import { useBuilderShell } from "./shell-context";
+import { BreakpointSwitcher } from "./BreakpointSwitcher";
 
 const buttonBase: React.CSSProperties = {
   height: 32,
@@ -50,7 +58,7 @@ export function TopBar() {
     onPublish,
     onPreview,
   } = useBuilderShell();
-  const { history } = usePuck();
+  const history = usePuckStore((s) => s.history);
   const [confirmingPublish, setConfirmingPublish] = React.useState(false);
 
   // beforeunload guard — block navigation if there are unsaved changes
@@ -142,7 +150,7 @@ export function TopBar() {
         disabled={!history.hasPast}
         style={{ ...ghostBtn, opacity: history.hasPast ? 1 : 0.4 }}
       >
-        ↶
+        <Undo2 size={16} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -151,18 +159,21 @@ export function TopBar() {
         disabled={!history.hasFuture}
         style={{ ...ghostBtn, opacity: history.hasFuture ? 1 : 0.4 }}
       >
-        ↷
+        <Redo2 size={16} aria-hidden="true" />
       </button>
 
       <button type="button" onClick={onPreview} style={outlineBtn}>
+        <Eye size={14} aria-hidden="true" />
         Preview
       </button>
+      <BreakpointSwitcher />
       <button
         type="button"
         onClick={onSave}
         disabled={saving}
         style={{ ...outlineBtn, opacity: saving ? 0.6 : 1 }}
       >
+        <SaveIcon size={14} aria-hidden="true" />
         {saving ? "Saving…" : "Save"}
       </button>
       <button
@@ -171,6 +182,7 @@ export function TopBar() {
         disabled={publishing}
         style={{ ...primaryBtn, opacity: publishing ? 0.6 : 1 }}
       >
+        <Rocket size={14} aria-hidden="true" />
         {publishing ? "Publishing…" : "Publish"}
       </button>
 

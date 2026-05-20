@@ -7,9 +7,9 @@
  * ORA-styled control. For field types Puck describes natively (text, textarea,
  * number, select, radio) we render our own primitives; for `custom` fields we
  * delegate to the field's own `render` function (preserving today's behavior
- * for color pickers, pin map editors, etc.); `array`, `object`, `external`,
- * `slot`, and `richtext` fall back to a "not yet supported" placeholder so we
- * never crash an unknown field.
+ * for color pickers, pin map editors, etc.); unsupported field types (`array`,
+ * `object`, `external`, `slot`) return `null` silently. Richtext fields are
+ * edited inline on the canvas and are filtered out before reaching this renderer.
  */
 
 import React from "react";
@@ -20,7 +20,6 @@ import {
   OraSelect,
   type OraSelectOption,
 } from "./controls/OraFields";
-import { ORA_THEME } from "./tokens";
 
 export interface InspectorFieldRendererProps {
   name: string;
@@ -51,14 +50,6 @@ function optionsToSelect(
 ): OraSelectOption[] {
   return options.map((o) => ({ label: o.label, value: String(o.value) }));
 }
-
-const placeholderStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: ORA_THEME.muted,
-  padding: 8,
-  border: `1px dashed ${ORA_THEME.border}`,
-  marginBottom: 12,
-};
 
 export function InspectorFieldRenderer({
   name,
@@ -132,18 +123,94 @@ export function InspectorFieldRenderer({
         </div>
       );
 
-    case "array":
     case "object":
+      // Render the object's nested fields recursively. This supports the
+      // common pattern used by `_animation`, `_tracking`, and `_analytics`
+      // where a group of related fields is expressed as an object with
+      // `objectFields`.
+      return (
+        <ObjectFieldRenderer
+          name={name}
+          label={label}
+          field={field as Field & { objectFields: Record<string, Field> }}
+          value={value}
+          onChange={onChange}
+        />
+      );
+
+    case "array":
     case "external":
     case "slot":
-    case "richtext":
     default:
-      return (
-        <div style={placeholderStyle}>
-          <strong style={{ display: "block", marginBottom: 4 }}>{label}</strong>
-          Editing this field type ({field.type}) is not yet supported in the new
-          inspector. Use the legacy editor for now.
-        </div>
-      );
+      return null;
   }
+}
+
+/**
+ * Renders a Puck `object` field as a labeled group of nested fields.
+ * Nested values are read from the object value and updated immutably.
+ */
+function ObjectFieldRenderer({
+  name,
+  label,
+  field,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  field: Field & { objectFields?: Record<string, Field> };
+  value: unknown;
+  onChange: (next: unknown) => void;
+}) {
+  const objectFields = field.objectFields;
+  if (!objectFields || typeof objectFields !== "object") return null;
+
+  const objectValue =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const handleChildChange = (childName: string, childValue: unknown) => {
+    onChange({ ...objectValue, [childName]: childValue });
+  };
+
+  return (
+    <div
+      style={{
+        marginBottom: 16,
+        paddingTop: 12,
+        borderTop: "1px solid #E8E4DF",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          color: "#9A9A9A",
+          marginBottom: 10,
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {Object.entries(objectFields).map(([childName, childField]) => {
+          if (!childField) return null;
+          if ((childField as { visible?: boolean }).visible === false)
+            return null;
+          return (
+            <InspectorFieldRenderer
+              key={`${name}.${childName}`}
+              name={childName}
+              field={childField}
+              value={objectValue[childName]}
+              onChange={(v) => handleChildChange(childName, v)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
 }

@@ -1,5 +1,17 @@
 import type { EditorTheme } from "./types";
 
+// Re-export canonical breakpoint thresholds so theme consumers (public
+// renderer, builder-shell canvas preview) can import tokens and
+// breakpoints from the same module.
+// Source of truth lives in `./breakpoints.ts`.
+export { BREAKPOINTS } from "./breakpoints";
+export type {
+  Breakpoint,
+  BreakpointValue,
+  BreakpointsThresholds,
+  VisibilityFlags,
+} from "./breakpoints";
+
 /**
  * Convert an EditorTheme into CSS custom properties for styling the editor UI.
  */

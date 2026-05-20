@@ -12,6 +12,7 @@
 
 import React from "react";
 import type { Overrides } from "@puckeditor/core";
+import { componentItemOverride } from "./InsertionButtonLayer";
 
 const renderNull = () => <></> as unknown as React.ReactElement;
 
@@ -22,7 +23,12 @@ export const headlessOverrides: Partial<Overrides> = {
   fields: renderNull,
   fieldLabel: renderNull,
   components: renderNull,
-  componentItem: renderNull,
+  // `componentItem` wraps each rendered block on the canvas with insertion-
+  // button affordances (Task 8.1, Reqs 4.1, 4.2, 4.3). The wrapper is
+  // additive — it never hides the rendered component — and degrades to an
+  // identity function when Puck invokes the override without positional
+  // metadata.
+  componentItem: componentItemOverride,
   drawer: renderNull,
   drawerItem: renderNull,
   outline: renderNull,

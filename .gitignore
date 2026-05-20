@@ -33,6 +33,13 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# kiro
+/.kiro
+
+# scratch / scripts
+/scratch
+/scripts
+
 # vercel
 .vercel
 
