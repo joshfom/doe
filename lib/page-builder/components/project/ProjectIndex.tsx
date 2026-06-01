@@ -13,7 +13,7 @@ export interface PublicProjectListItem {
   expectedHandoverDate?: string | null;
   developer?: string | null;
   communityId?: string | null;
-  floorplans?: Array<{ bedrooms?: number | null }> | null;
+  floorplans?: Array<{ bedrooms?: number | null; unitType?: string | null }> | null;
 }
 
 export interface PublicCommunityRef {
@@ -23,30 +23,29 @@ export interface PublicCommunityRef {
   nameAr?: string | null;
 }
 
-function FilterRow({
-  heading,
-  children,
-}: {
-  heading: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="me-2 text-[11px] font-medium uppercase tracking-wider text-ora-muted">
-        {heading}
-      </span>
-      {children}
-    </div>
-  );
+/** Derive the dominant property type for a project from its floorplans */
+function derivePropertyType(
+  project: PublicProjectListItem
+): string | null {
+  if (!Array.isArray(project.floorplans) || project.floorplans.length === 0)
+    return null;
+  // Count unit types and return the most common
+  const counts: Record<string, number> = {};
+  for (const fp of project.floorplans) {
+    const t = fp.unitType?.toLowerCase();
+    if (t) counts[t] = (counts[t] ?? 0) + 1;
+  }
+  const entries = Object.entries(counts);
+  if (entries.length === 0) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
 }
 
-const STATUS_LABELS: Record<string, { en: string; ar: string }> = {
-  planning: { en: "Planning", ar: "قيد التخطيط" },
-  pre_launch: { en: "Pre-Launch", ar: "قبل الإطلاق" },
-  selling: { en: "Selling Now", ar: "البيع متاح" },
-  under_construction: { en: "Under Construction", ar: "قيد الإنشاء" },
-  handover: { en: "Handover", ar: "التسليم" },
-  completed: { en: "Completed", ar: "مكتمل" },
+const PROPERTY_TYPE_LABELS: Record<string, { en: string; ar: string }> = {
+  villa: { en: "Villas", ar: "فلل" },
+  townhouse: { en: "Townhouses", ar: "تاون هاوس" },
+  apartment: { en: "Apartments", ar: "شقق" },
+  office: { en: "Offices", ar: "مكاتب" },
 };
 
 export function ProjectIndex({
@@ -68,165 +67,99 @@ export function ProjectIndex({
   activeCommunity?: string | null;
   activeBedrooms?: string | null;
 }) {
-  const heading = locale === "ar" ? "المشاريع" : "Projects";
-  const empty =
-    locale === "ar" ? "لا توجد مشاريع منشورة بعد." : "No projects published yet.";
   const basePath = locale === "ar" ? `/ar/${prefix}` : `/${prefix}`;
 
-  // Build available filter chips from the union of project statuses.
-  const availableStatuses = Array.from(
-    new Set(projects.map((p) => p.status))
-  ).filter((s) => STATUS_LABELS[s]);
-
-  // Available bedroom counts across all floorplans
-  const availableBedrooms = Array.from(
-    new Set(
-      projects.flatMap((p) =>
-        Array.isArray(p.floorplans)
-          ? p.floorplans
-              .map((f) => f?.bedrooms)
-              .filter((n): n is number => typeof n === "number" && n > 0)
-          : []
-      )
-    )
-  ).sort((a, b) => a - b);
-
-  // Available communities present in this list
-  const presentCommunityIds = new Set(
-    projects.map((p) => p.communityId).filter((v): v is string => !!v)
-  );
-  const availableCommunities = (communities ?? []).filter((c) =>
-    presentCommunityIds.has(c.id)
-  );
-
-  let filtered = projects;
-  if (activeStatus) filtered = filtered.filter((p) => p.status === activeStatus);
-  if (activeCommunity)
-    filtered = filtered.filter((p) => p.communityId === activeCommunity);
-  if (activeBedrooms) {
-    const target = Number(activeBedrooms);
-    if (!Number.isNaN(target)) {
-      filtered = filtered.filter((p) =>
-        Array.isArray(p.floorplans)
-          ? p.floorplans.some((f) => f?.bedrooms === target)
-          : false
-      );
+  // Derive property type categories from floorplans
+  const projectsByType: Record<string, PublicProjectListItem[]> = {};
+  for (const p of projects) {
+    const ptype = derivePropertyType(p);
+    if (ptype) {
+      if (!projectsByType[ptype]) projectsByType[ptype] = [];
+      projectsByType[ptype].push(p);
     }
   }
 
-  // URL helper preserving the other active filters when a chip is clicked.
-  function buildHref(next: {
-    status?: string | null;
-    community?: string | null;
-    bedrooms?: string | null;
-  }): string {
+  const availableTypes = Object.keys(projectsByType).filter(
+    (t) => PROPERTY_TYPE_LABELS[t]
+  );
+
+  // Active type filter from query params (reuses "status" param for simplicity,
+  // or we can add a "type" param)
+  const activeType = activeCommunity; // repurpose community param as property type for now
+
+  // URL helper
+  function buildHref(type?: string | null): string {
     const params = new URLSearchParams();
-    const status = next.status === undefined ? activeStatus : next.status;
-    const community =
-      next.community === undefined ? activeCommunity : next.community;
-    const bedrooms =
-      next.bedrooms === undefined ? activeBedrooms : next.bedrooms;
-    if (status) params.set("status", status);
-    if (community) params.set("community", community);
-    if (bedrooms) params.set("bedrooms", bedrooms);
+    if (type) params.set("community", type);
     const qs = params.toString();
     return qs ? `${basePath}?${qs}` : basePath;
   }
 
-  const allLabel = locale === "ar" ? "الكل" : "All";
-  const communityHeading = locale === "ar" ? "المجتمع" : "Community";
-  const bedroomsHeading = locale === "ar" ? "غرف النوم" : "Bedrooms";
-  const statusHeading = locale === "ar" ? "الحالة" : "Status";
-
-  function chipClass(active: boolean): string {
-    return `inline-flex h-8 items-center px-4 text-xs uppercase tracking-wider transition-colors ${
-      active
-        ? "bg-ora-charcoal text-ora-white"
-        : "border border-ora-sand bg-ora-white text-ora-charcoal-light hover:border-ora-gold hover:text-ora-charcoal"
-    }`;
+  // Filter projects
+  let filtered = projects;
+  if (activeType && PROPERTY_TYPE_LABELS[activeType]) {
+    filtered = projectsByType[activeType] ?? [];
   }
 
+  const filterByLabel = locale === "ar" ? "تصفية حسب" : "FILTER BY";
+  const allLabel = locale === "ar" ? "الكل" : "All";
+
   return (
-    <main dir={locale === "ar" ? "rtl" : "ltr"} className="bg-ora-cream">
-      <header className="border-b border-ora-sand/60 bg-ora-white py-16">
-        <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <h1 className="font-serif text-4xl text-ora-charcoal md:text-5xl">
-            {heading}
-          </h1>
-          {(availableStatuses.length > 1 ||
-            availableCommunities.length > 1 ||
-            availableBedrooms.length > 0) && (
-            <div className="mt-6 space-y-3">
-              {availableStatuses.length > 1 && (
-                <FilterRow heading={statusHeading}>
-                  <Link href={buildHref({ status: null })} className={chipClass(!activeStatus)}>
-                    {allLabel}
-                  </Link>
-                  {availableStatuses.map((s) => {
-                    const label = STATUS_LABELS[s]?.[locale] ?? s;
-                    return (
-                      <Link
-                        key={s}
-                        href={buildHref({ status: s })}
-                        className={chipClass(activeStatus === s)}
-                      >
-                        {label}
-                      </Link>
-                    );
-                  })}
-                </FilterRow>
-              )}
-              {availableCommunities.length > 1 && (
-                <FilterRow heading={communityHeading}>
-                  <Link
-                    href={buildHref({ community: null })}
-                    className={chipClass(!activeCommunity)}
-                  >
-                    {allLabel}
-                  </Link>
-                  {availableCommunities.map((c) => {
-                    const cname =
-                      locale === "ar" ? c.nameAr?.trim() || c.nameEn : c.nameEn;
-                    return (
-                      <Link
-                        key={c.id}
-                        href={buildHref({ community: c.id })}
-                        className={chipClass(activeCommunity === c.id)}
-                      >
-                        {cname}
-                      </Link>
-                    );
-                  })}
-                </FilterRow>
-              )}
-              {availableBedrooms.length > 0 && (
-                <FilterRow heading={bedroomsHeading}>
-                  <Link
-                    href={buildHref({ bedrooms: null })}
-                    className={chipClass(!activeBedrooms)}
-                  >
-                    {allLabel}
-                  </Link>
-                  {availableBedrooms.map((n) => (
-                    <Link
-                      key={n}
-                      href={buildHref({ bedrooms: String(n) })}
-                      className={chipClass(activeBedrooms === String(n))}
-                    >
-                      {n} {locale === "ar" ? "غرف" : n === 1 ? "BR" : "BR"}
-                    </Link>
-                  ))}
-                </FilterRow>
-              )}
-            </div>
-          )}
+    <main dir={locale === "ar" ? "rtl" : "ltr"} className="bg-ora-white">
+      {/* Filter Section */}
+      <section className="mx-auto max-w-7xl px-6 pt-24 md:px-10 lg:px-16">
+        <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-ora-muted">
+          {filterByLabel}
+        </span>
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <Link
+            href={buildHref(null)}
+            className={`font-serif text-3xl transition-colors md:text-4xl ${
+              !activeType
+                ? "text-ora-teal"
+                : "text-ora-charcoal/40 hover:text-ora-charcoal"
+            }`}
+          >
+            {allLabel}
+            <sup className="ms-0.5 text-sm font-sans font-normal">
+              {projects.length}
+            </sup>
+          </Link>
+          {availableTypes.map((type) => {
+            const label = PROPERTY_TYPE_LABELS[type]?.[locale] ?? type;
+            const count = projectsByType[type]?.length ?? 0;
+            const isActive = activeType === type;
+            return (
+              <Link
+                key={type}
+                href={buildHref(type)}
+                className={`font-serif text-3xl transition-colors md:text-4xl ${
+                  isActive
+                    ? "text-ora-teal"
+                    : "text-ora-charcoal/40 hover:text-ora-charcoal"
+                }`}
+              >
+                {label}
+                <sup className="ms-0.5 text-sm font-sans font-normal">
+                  {count}
+                </sup>
+              </Link>
+            );
+          })}
         </div>
-      </header>
-      <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
+        <hr className="mt-6 border-ora-sand" />
+      </section>
+
+      {/* Project Grid */}
+      <section className="mx-auto max-w-7xl px-6 py-12 md:px-10 lg:px-16">
         {filtered.length === 0 ? (
-          <p className="text-sm text-ora-charcoal-light">{empty}</p>
+          <p className="text-sm text-ora-charcoal-light">
+            {locale === "ar"
+              ? "لا توجد مشاريع منشورة بعد."
+              : "No projects published yet."}
+          </p>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((p) => {
               const hero = p.heroImageId ? media[p.heroImageId] : null;
               const name =
@@ -235,48 +168,56 @@ export function ProjectIndex({
                 locale === "ar"
                   ? p.shortDescriptionAr?.trim() || p.shortDescriptionEn
                   : p.shortDescriptionEn;
-              const status = STATUS_LABELS[p.status]?.[locale];
               return (
                 <Link
                   key={p.id}
                   href={`${basePath}/${p.slug}`}
-                  className="group block bg-ora-white border border-ora-sand/60 transition-shadow hover:shadow-ora-md"
+                  className="group block"
                 >
-                  <div className="relative aspect-4/3 bg-ora-sand/40">
+                  {/* Hero Image */}
+                  <div className="relative aspect-4/3 overflow-hidden bg-ora-sand/30">
                     {hero && (
                       <img
                         src={hero.url}
                         alt={hero.alt || name}
-                        className="absolute inset-0 h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     )}
-                    {status && (
-                      <span className="absolute left-3 top-3 bg-ora-charcoal/90 px-3 py-1 text-[10px] uppercase tracking-wider text-ora-white">
-                        {status}
-                      </span>
-                    )}
                   </div>
-                  <div className="p-5">
-                    <h2 className="text-lg font-medium text-ora-charcoal group-hover:text-ora-gold">
+                  {/* Card Info */}
+                  <div className="mt-4 flex items-center justify-between">
+                    <h2 className="text-base font-medium text-ora-charcoal">
                       {name}
                     </h2>
-                    {desc && (
-                      <p className="mt-2 line-clamp-2 text-sm text-ora-charcoal-light">
-                        {desc}
-                      </p>
-                    )}
-                    {p.developer && (
-                      <p className="mt-3 text-[11px] uppercase tracking-wider text-ora-muted">
-                        {p.developer}
-                      </p>
-                    )}
+                    <span className="flex h-8 shrink-0 items-center justify-center rounded-full border border-ora-charcoal/30 px-4 text-ora-charcoal transition-colors group-hover:border-ora-charcoal group-hover:bg-ora-charcoal group-hover:text-ora-white">
+                      <svg
+                        width="18"
+                        height="12"
+                        viewBox="0 0 18 12"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M1 6h16M12 1l5 5-5 5"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
                   </div>
+                  {desc && (
+                    <p className="mt-1 line-clamp-2 text-sm text-ora-charcoal-light">
+                      {desc}
+                    </p>
+                  )}
                 </Link>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
     </main>
   );
 }

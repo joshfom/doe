@@ -90,12 +90,13 @@ export default function PageEditorPage({
 
     async function loadPageAndDraft() {
       try {
-        const res = await apiFetch<{ data: Record<string, unknown> }>(`/api/pages/${id}`);
+        const res = await apiFetch<{ data: Record<string, unknown>; hasPendingDraft?: boolean }>(`/api/pages/${id}`);
         if (cancelled) return;
         setPage(res.data);
 
-        // Check if page has a pending draft
-        const pageHasPendingDraft = !!(res.data as { hasPendingDraft?: boolean }).hasPendingDraft;
+        // Check if page has a pending draft — hasPendingDraft lives on the
+        // outer response envelope, not on the page record itself.
+        const pageHasPendingDraft = !!res.hasPendingDraft;
         setHasPendingDraft(pageHasPendingDraft);
 
         if (pageHasPendingDraft) {

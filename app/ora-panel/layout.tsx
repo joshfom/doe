@@ -17,7 +17,6 @@ import {
   CheckSquare,
   Ticket,
   Settings,
-  Shield,
   LogOut,
   MapPin,
   Building2,
@@ -25,11 +24,9 @@ import {
   MessageSquare,
   Users,
   CalendarDays,
-  BarChart3,
   TrendingUp,
-  Link2,
-  ListChecks,
   DollarSign,
+  BarChart3,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
 
@@ -61,14 +58,10 @@ const navItems = [
   { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/clients', label: 'People', icon: Users, permission: 'ai:clients:manage' },
   { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
-  { href: '/ora-panel/ai/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'ai:analytics:read' },
-  { href: '/ora-panel/ai/audit', label: 'AI Audit', icon: Shield, permission: 'audit:read' },
   { href: '/ora-panel/marketing/dashboard', label: 'Marketing', icon: TrendingUp, permission: 'analytics:read' },
   { href: '/ora-panel/marketing/spend', label: 'Ad Spend', icon: DollarSign, permission: 'analytics:read' },
-  { href: '/ora-panel/marketing/utm-builder', label: 'UTM Builder', icon: Link2, permission: 'analytics:read' },
+  { href: '/ora-panel/marketing/utm-analytics', label: 'UTM Analytics', icon: BarChart3, permission: 'analytics:read' },
   { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
-  { href: '/ora-panel/settings/analytics', label: 'Analytics Settings', icon: BarChart3, permission: 'settings:update' },
-  { href: '/ora-panel/settings/event-vocabulary', label: 'Event Vocabulary', icon: ListChecks, permission: 'settings:update' },
 ];
 
 /**

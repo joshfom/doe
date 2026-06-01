@@ -69,20 +69,22 @@ export async function fetchPublicPost(locale: string, slug: string) {
 export async function fetchPublicPosts(
   locale: string,
   page: number = 1,
-  pageSize: number = 12
+  pageSize: number = 12,
+  postType?: "blog" | "news"
 ) {
   try {
     const offset = (page - 1) * pageSize;
 
+    const conditions = [
+      eq(posts.locale, locale as "en" | "ar"),
+      eq(posts.status, "published"),
+    ];
+    if (postType) conditions.push(eq(posts.postType, postType));
+
     const postsResult = await db
       .select()
       .from(posts)
-      .where(
-        and(
-          eq(posts.locale, locale as "en" | "ar"),
-          eq(posts.status, "published")
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(posts.publishedAt))
       .limit(pageSize)
       .offset(offset);
@@ -90,12 +92,7 @@ export async function fetchPublicPosts(
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(posts)
-      .where(
-        and(
-          eq(posts.locale, locale as "en" | "ar"),
-          eq(posts.status, "published")
-        )
-      );
+      .where(and(...conditions));
 
     // Fetch categories for each post
     const postsWithCategories = await Promise.all(

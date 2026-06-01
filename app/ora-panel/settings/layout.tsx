@@ -9,6 +9,8 @@ import {
   Shield,
   Link2,
   BarChart3,
+  ListChecks,
+  Target,
 } from 'lucide-react';
 
 const settingsNav = [
@@ -16,6 +18,8 @@ const settingsNav = [
   { href: '/ora-panel/settings/menus', label: 'Menus', icon: Menu },
   { href: '/ora-panel/settings/footer', label: 'Footer', icon: PanelBottom },
   { href: '/ora-panel/settings/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/ora-panel/settings/event-vocabulary', label: 'Event Vocabulary', icon: ListChecks },
+  { href: '/ora-panel/settings/conversion-goals', label: 'Conversion Goals', icon: Target },
   { href: '/ora-panel/settings/utm-builder', label: 'UTM Builder', icon: Link2 },
   { href: '/ora-panel/settings/audit', label: 'Audit Log', icon: Shield },
 ];

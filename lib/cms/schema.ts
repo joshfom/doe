@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -303,6 +304,7 @@ export const formSubmissions = pgTable("form_submissions", {
   sourceLocale: text("source_locale"),
   firstTouchAttribution: jsonb("first_touch_attribution"),
   lastTouchAttribution: jsonb("last_touch_attribution"),
+  conversionAttributions: jsonb("conversion_attributions").default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -402,6 +404,7 @@ export const posts = pgTable(
     ogImage: text("og_image"),
     canonicalUrl: text("canonical_url"),
     robotsDirective: text("robots_directive").default("index, follow"),
+    featured: boolean("featured").notNull().default(false),
     authorId: uuid("author_id")
       .notNull()
       .references(() => users.id),
@@ -508,6 +511,7 @@ export const menus = pgTable("menus", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  locale: text("locale").notNull().default("en"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -524,6 +528,8 @@ export const menuItems = pgTable(
     label: text("label").notNull(),
     url: text("url").notNull().default("#"),
     icon: text("icon"),
+    /** Translated labels per locale, e.g. { "ar": "اتصل بنا" } */
+    translations: jsonb("translations").$type<Record<string, string>>(),
     itemType: text("item_type", { enum: ["link", "dropdown", "mega"] })
       .notNull()
       .default("link"),
@@ -1374,12 +1380,21 @@ export const utmLinks = pgTable(
     utmContent: text("utm_content"),
     taggedUrl: text("tagged_url").notNull(),
     project: text("project"),
+    autoRegistered: boolean("auto_registered").notNull().default(false),
+    totalHits: integer("total_hits").notNull().default(0),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("utm_links_project_idx").on(table.project),
     index("utm_links_created_at_idx").on(table.createdAt),
+    uniqueIndex("utm_links_params_unique_idx").on(
+      sql`LOWER(${table.utmSource})`,
+      sql`LOWER(${table.utmMedium})`,
+      sql`LOWER(${table.utmCampaign})`,
+      sql`COALESCE(LOWER(${table.utmTerm}), '')`,
+      sql`COALESCE(LOWER(${table.utmContent}), '')`
+    ),
   ]
 );
 
@@ -1438,5 +1453,23 @@ export const customEvents = pgTable(
   (table) => [
     index("custom_events_name_idx").on(table.name),
     index("custom_events_active_idx").on(table.isActive),
+  ]
+);
+
+// ── Conversion Goals ─────────────────────────────────────────────────────────
+// Admin-configured PostHog events that count as "conversions" in the marketing
+// dashboard. Replaces the hardcoded event list with a dynamic, queryable set.
+export const conversionGoals = pgTable(
+  "conversion_goals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventName: text("event_name").notNull().unique(),
+    displayLabel: text("display_label"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("conversion_goals_active_idx").on(table.isActive),
   ]
 );

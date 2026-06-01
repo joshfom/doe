@@ -39,7 +39,7 @@ export default async function ArLayout({
         <SiteSettingsProvider settings={settings}>
           <ReactQueryProvider>
             <div className="min-h-screen flex flex-col">
-              <NavigationBar />
+              <NavigationBar locale="ar" />
               <main className="flex-1">
                 <AutoFormTracker>{children}</AutoFormTracker>
               </main>

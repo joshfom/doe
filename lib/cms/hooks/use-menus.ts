@@ -19,17 +19,20 @@ interface MenuRecord {
   id: string;
   name: string;
   slug: string;
+  locale: string;
   createdAt: string;
   updatedAt: string;
 }
 
 interface CreateMenuInput {
   name: string;
+  locale?: string;
 }
 
 interface UpdateMenuInput {
   id: string;
   name: string;
+  locale?: string;
 }
 
 interface CreateMenuItemInput {
@@ -40,6 +43,7 @@ interface CreateMenuItemInput {
   itemType?: ItemType;
   parentId?: string | null;
   megaColumns?: number;
+  translations?: Record<string, string> | null;
 }
 
 interface UpdateMenuItemInput {
@@ -50,6 +54,7 @@ interface UpdateMenuItemInput {
   icon?: string;
   itemType?: ItemType;
   megaColumns?: number;
+  translations?: Record<string, string> | null;
 }
 
 interface DeleteMenuItemInput {
@@ -256,6 +261,7 @@ export function useUpdateMenuItem() {
                   icon: variables.icon !== undefined ? variables.icon : item.icon,
                   itemType: variables.itemType ?? item.itemType,
                   megaColumns: variables.megaColumns ?? item.megaColumns,
+                  translations: variables.translations !== undefined ? variables.translations : item.translations,
                 }
               : {}),
             children: updateItems(item.children),

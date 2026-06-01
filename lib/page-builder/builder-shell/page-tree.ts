@@ -140,7 +140,86 @@ export function buildPageTree(data: Data, config: Config): PageTree {
     null,
   );
 
-  // Step 2: Process all nested zones (data.zones).
+  // Step 2a: Process inline slot fields (Puck 0.21+ data model).
+  // Components with slot fields store children directly in their props as
+  // arrays of component instances. We detect these by checking the config's
+  // field definitions for `{ type: "slot" }` entries, then traversing them
+  // recursively. This must run before legacy zone processing so that slot
+  // children are already in `byId` when orphan detection occurs.
+  function processSlotChildren(nodes: PageTreeNode[]) {
+    for (const node of nodes) {
+      const componentConfig = config.components?.[node.type] as
+        | { fields?: Record<string, { type?: string }> }
+        | undefined;
+      if (!componentConfig?.fields) continue;
+
+      // Find which props correspond to slot fields
+      const item = (data.content ?? []).find(
+        (c: { props?: { id?: unknown } }) =>
+          (c.props?.id as string) === node.id
+      ) ?? findItemById(node.id);
+      if (!item) continue;
+
+      const props = (item as { props: Record<string, unknown> }).props;
+
+      for (const [fieldName, fieldDef] of Object.entries(componentConfig.fields)) {
+        if (fieldDef.type !== "slot") continue;
+
+        const slotItems = props[fieldName];
+        if (!Array.isArray(slotItems) || slotItems.length === 0) continue;
+
+        const zoneKey = `${node.id}:${fieldName}`;
+        const childNodes = processZone(
+          zoneKey,
+          slotItems as Array<{ type: string; props: Record<string, unknown> }>,
+          node.id,
+        );
+
+        node.childrenByZone[fieldName] = childNodes;
+
+        // Recurse into slot children
+        processSlotChildren(childNodes);
+      }
+    }
+  }
+
+  // Helper to locate a component instance anywhere in the data by its id.
+  // Needed because slot children aren't in data.content.
+  function findItemById(id: string): { type: string; props: Record<string, unknown> } | null {
+    // Search root content
+    for (const item of (data.content ?? []) as Array<{ type: string; props: Record<string, unknown> }>) {
+      const found = findInItem(item, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function findInItem(
+    item: { type: string; props: Record<string, unknown> },
+    id: string,
+  ): { type: string; props: Record<string, unknown> } | null {
+    if ((item.props.id as string) === id) return item;
+
+    const componentConfig = config.components?.[item.type] as
+      | { fields?: Record<string, { type?: string }> }
+      | undefined;
+    if (!componentConfig?.fields) return null;
+
+    for (const [fieldName, fieldDef] of Object.entries(componentConfig.fields)) {
+      if (fieldDef.type !== "slot") continue;
+      const slotItems = item.props[fieldName];
+      if (!Array.isArray(slotItems)) continue;
+      for (const child of slotItems as Array<{ type: string; props: Record<string, unknown> }>) {
+        const found = findInItem(child, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  processSlotChildren(roots);
+
+  // Step 2b: Process legacy nested zones (data.zones).
   // Each key follows the convention "{ownerId}:{zoneName}".
   // Zone keys may reference owners defined in other zones, so iteration
   // order is not guaranteed to be topological. We use repeated passes
@@ -163,14 +242,19 @@ export function buildPageTree(data: Data, config: Config): PageTree {
           continue;
         }
 
+        // Skip if already populated by slot processing
+        const parentNode = byId.get(ownerId)!;
         const zoneName = zoneKey.slice(colonIndex + 1);
+        if (parentNode.childrenByZone[zoneName]?.length) {
+          continue;
+        }
+
         const childNodes = processZone(
           zoneKey,
           items as Array<{ type: string; props: Record<string, unknown> }>,
           ownerId,
         );
 
-        const parentNode = byId.get(ownerId)!;
         parentNode.childrenByZone[zoneName] = childNodes;
       }
 

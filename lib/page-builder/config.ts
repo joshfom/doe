@@ -23,6 +23,7 @@ import { validateResponsiveDefaults } from "./responsive-defaults";
 import { LocationMap as LocationMapRuntime } from "./components/LocationMap/LocationMap";
 import { ContactLocationsMap as ContactLocationsMapRuntime } from "./components/LocationMap/ContactLocationsMap";
 import { PinMapPicker } from "./components/LocationMap/PinMapPicker";
+import { ContactLocationPicker } from "./components/LocationMap/ContactLocationPicker";
 import type { LocationMapPin, LocationMapCard, ContactLocationItem } from "./components/LocationMap/types";
 import { FeaturedProjectsRuntime } from "./components/project/FeaturedProjectsRuntime";
 import { FeaturedCommunitiesRuntime } from "./components/project/FeaturedCommunitiesRuntime";
@@ -82,22 +83,120 @@ function renderSimpleStepper(
   );
 }
 
+// Compact 4-side editor (Top / Right / Bottom / Left) with a link-all toggle.
+// Used for both padding and margin so users get full per-side control.
+function renderFourSideEditor(
+  current: Record<string, string>,
+  prefix: "padding" | "margin",
+  onChange: (next: Record<string, string>) => void,
+  step = 4,
+) {
+  const top = asNumber(current[`${prefix}Top`]);
+  const right = asNumber(current[`${prefix}Right`]);
+  const bottom = asNumber(current[`${prefix}Bottom`]);
+  const left = asNumber(current[`${prefix}Left`]);
+  const allEqual = top === right && right === bottom && bottom === left;
+
+  // We persist link state inside the value object using a synthetic key
+  // (`__link__`) so the UI remembers the user's choice across renders.
+  // The runtime only consumes `${prefix}Top/Right/Bottom/Left`, so the
+  // extra key is ignored downstream.
+  const linkKey = `__${prefix}Link__`;
+  const linked = current[linkKey] != null ? current[linkKey] === "1" : allEqual;
+
+  const setAll = (v: number) =>
+    onChange({
+      ...current,
+      [`${prefix}Top`]: String(v),
+      [`${prefix}Right`]: String(v),
+      [`${prefix}Bottom`]: String(v),
+      [`${prefix}Left`]: String(v),
+      [linkKey]: "1",
+    });
+
+  const setSide = (side: "Top" | "Right" | "Bottom" | "Left", v: number) =>
+    onChange({
+      ...current,
+      [`${prefix}${side}`]: String(Math.max(0, v)),
+      [linkKey]: "0",
+    });
+
+  const toggleLinked = () => {
+    if (linked) {
+      onChange({ ...current, [linkKey]: "0" });
+    } else {
+      // Going from unlinked → linked: snap all sides to current Top.
+      onChange({
+        ...current,
+        [`${prefix}Right`]: String(top),
+        [`${prefix}Bottom`]: String(top),
+        [`${prefix}Left`]: String(top),
+        [linkKey]: "1",
+      });
+    }
+  };
+
+  const linkButton = React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: toggleLinked,
+      title: linked ? "Sides are linked — click to unlink" : "Sides are unlinked — click to link",
+      style: {
+        height: 22,
+        padding: "0 8px",
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        border: "1px solid #E8E4DF",
+        background: linked ? "#2C2C2C" : "#F9F7F5",
+        color: linked ? "#FFF" : "#2C2C2C",
+        cursor: "pointer",
+      },
+    },
+    linked ? "Linked" : "Per-side",
+  );
+
+  if (linked) {
+    return React.createElement(
+      "div",
+      { style: { display: "flex", flexDirection: "column", gap: 6 } },
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "flex-end" } },
+        linkButton,
+      ),
+      renderSimpleStepper("All sides", top, setAll, step),
+    );
+  }
+
+  return React.createElement(
+    "div",
+    { style: { display: "flex", flexDirection: "column", gap: 6 } },
+    React.createElement(
+      "div",
+      { style: { display: "flex", justifyContent: "flex-end" } },
+      linkButton,
+    ),
+    renderSimpleStepper("Top", top, (v) => setSide("Top", v), step),
+    renderSimpleStepper("Right", right, (v) => setSide("Right", v), step),
+    renderSimpleStepper("Bottom", bottom, (v) => setSide("Bottom", v), step),
+    renderSimpleStepper("Left", left, (v) => setSide("Left", v), step),
+  );
+}
+
 function paddingField() {
   return {
     type: "custom" as const,
     label: "Padding",
     render: ({ value, onChange }: { value: unknown; onChange: (v: Record<string, string>) => void }) => {
       const current = (value as Record<string, string>) ?? {};
-      const all = asNumber(current.paddingTop);
-      const setAll = (next: number) => onChange({
-        paddingTop: String(next),
-        paddingBottom: String(next),
-        paddingLeft: String(next),
-        paddingRight: String(next),
-      });
-      return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+      return React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: 6 } },
         React.createElement("div", { style: { fontSize: 12, color: "#6B6B6B" } }, "Area padding"),
-        renderSimpleStepper("All sides", all, setAll),
+        renderFourSideEditor(current, "padding", onChange),
       );
     },
   };
@@ -109,11 +208,11 @@ function marginField() {
     label: "Margin",
     render: ({ value, onChange }: { value: unknown; onChange: (v: Record<string, string>) => void }) => {
       const current = (value as Record<string, string>) ?? {};
-      const mt = asNumber(current.marginTop);
-      const mb = asNumber(current.marginBottom);
-      return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-        renderSimpleStepper("Top", mt, (next) => onChange({ ...current, marginTop: String(next), marginBottom: String(mb) })),
-        renderSimpleStepper("Bottom", mb, (next) => onChange({ ...current, marginTop: String(mt), marginBottom: String(next) })),
+      return React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: 6 } },
+        React.createElement("div", { style: { fontSize: 12, color: "#6B6B6B" } }, "Area margin"),
+        renderFourSideEditor(current, "margin", onChange),
       );
     },
   };
@@ -158,7 +257,7 @@ const spacingBorderFields = {
 };
 const spacingBorderDefaults = {
   _padding: { paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0" },
-  _margin: { marginTop: "0", marginBottom: "0" },
+  _margin: { marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0" },
   _border: { borderWidth: "0", borderColor: "#E8E4DF", borderRadius: "0" },
 };
 
@@ -818,7 +917,7 @@ const Section: Config["components"][string] = {
           zIndex: 4,
           width: "100%",
           flex: 1,
-          minHeight: "100%",
+          minHeight: 0,
           display: "grid",
           alignContent: alignContentValue,
         },
@@ -1807,7 +1906,7 @@ const Button: Config["components"][string] = {
   },
   defaultProps: {
     text: "Click Me",
-    url: "#",
+    url: "",
     _icon: { name: "", position: "right", size: "16", gap: "8px" },
     _typography: {
       fontWeight: "600",
@@ -1900,11 +1999,17 @@ const Button: Config["components"][string] = {
 
     return React.createElement("div", { style: wrapStyle },
       React.createElement("style", null, BUTTON_HOVER_CSS),
-      React.createElement("a", { href: (props.url as string) || "#", style: btnStyle, className: "ora-builder-button" },
-        iconPos === "left" ? iconEl : null,
-        React.createElement("span", null, props.text as string),
-        iconPos === "right" ? iconEl : null,
-      )
+      (props.url as string) && (props.url as string) !== "#"
+        ? React.createElement("a", { href: (props.url as string), style: btnStyle, className: "ora-builder-button" },
+            iconPos === "left" ? iconEl : null,
+            React.createElement("span", null, props.text as string),
+            iconPos === "right" ? iconEl : null,
+          )
+        : React.createElement("button", { type: "button", style: btnStyle, className: "ora-builder-button" },
+            iconPos === "left" ? iconEl : null,
+            React.createElement("span", null, props.text as string),
+            iconPos === "right" ? iconEl : null,
+          )
     );
   },
 };
@@ -2307,15 +2412,27 @@ const IconFeatureList: Config["components"][string] = {
         const sourceType = String(row.sourceType ?? "lucide");
         const key = String(row.icon ?? "star");
         const LabelIcon = ICON_MAP[key] ?? Star;
-        const label = extractIconFeatureLabel(row.label)
-          .replace(/\s*\n+\s*/g, " ")
-          .replace(/\s{2,}/g, " ")
-          .trim() || "Feature item";
+        // `row.label` may be a React element (Puck wraps `contentEditable`
+        // text fields with InlineTextField). Pass it through to the span
+        // and only fall back to a plain "Feature item" placeholder when
+        // there's truly nothing to render.
+        const labelValue = row.label;
+        const labelIsElement = React.isValidElement(labelValue);
+        const labelText = !labelIsElement
+          ? extractIconFeatureLabel(labelValue)
+              .replace(/\s*\n+\s*/g, " ")
+              .replace(/\s{2,}/g, " ")
+              .trim() || "Feature item"
+          : null;
+        const labelNode: React.ReactNode = labelIsElement
+          ? (labelValue as React.ReactNode)
+          : labelText;
+        const accessibleLabel = labelText ?? "Feature";
 
         const iconNode = sourceType === "image" && typeof row.image === "string" && row.image.trim()
           ? React.createElement("img", {
               src: row.image,
-              alt: `${label} icon`,
+              alt: `${accessibleLabel} icon`,
               style: { width: iconSize, height: iconSize, objectFit: "contain", display: "block" },
             })
           : sourceType === "svg" && typeof row.svgMarkup === "string" && row.svgMarkup.trim()
@@ -2343,7 +2460,7 @@ const IconFeatureList: Config["components"][string] = {
             fontSize: textSize,
             fontWeight: textWeight,
           },
-        }, label));
+        }, labelNode));
       }),
     ));
   },
@@ -2382,11 +2499,11 @@ const AccordionGroup: Config["components"][string] = {
     },
     defaultOpenIndex: { type: "number", label: "Default Open Index (0-based)", min: 0 },
     headingColor: makeColorField("Heading Color", "#2C2C2C"),
-    headingSize: makeFreeInputField("Heading Size", "px", ["36px", "44px", "52px", "60px"]),
+    headingSize: makeFreeInputField("Heading Size", "px", ["28px", "36px", "44px", "52px", "60px"]),
     titleColor: makeColorField("Title Color", "#2C2C2C"),
-    titleSize: makeFreeInputField("Title Size", "px", ["28px", "36px", "44px", "50px"]),
+    titleSize: makeFreeInputField("Title Size", "px", ["18px", "24px", "28px", "36px", "44px", "50px"]),
     bodyColor: makeColorField("Body Color", "#2C2C2C"),
-    bodySize: makeFreeInputField("Body Size", "px", ["18px", "20px", "24px", "28px"]),
+    bodySize: makeFreeInputField("Body Size", "px", ["14px", "16px", "18px", "20px", "24px", "28px"]),
     bodyIndent: makeFreeInputField("Body Left Indent", "px", ["0px", "8px", "12px", "16px"]),
     dividerColor: makeColorField("Divider Color", "#D9D6D1"),
     dividerWidth: makeSliderField("Divider Width", 0, 4, "px"),
@@ -2425,11 +2542,11 @@ const AccordionGroup: Config["components"][string] = {
     ],
     defaultOpenIndex: 0,
     headingColor: "#2C2C2C",
-    headingSize: "60px",
+    headingSize: "36px",
     titleColor: "#2C2C2C",
-    titleSize: "50px",
+    titleSize: "24px",
     bodyColor: "#2C2C2C",
-    bodySize: "20px",
+    bodySize: "16px",
     bodyIndent: "12px",
     dividerColor: "#D9D6D1",
     dividerWidth: "1",
@@ -2443,7 +2560,15 @@ const AccordionGroup: Config["components"][string] = {
     ...spacingBorderDefaults,
   },
   render: (props) => {
-    const heading = extractIconFeatureLabel(props.heading).trim();
+    // Puck transforms `text` fields with `contentEditable: true` into React
+    // elements (InlineTextField). Pass them straight through to React rather
+    // than coercing to strings, otherwise the inline editor's wrapper is
+    // erased and the rendered title appears empty.
+    const heading = props.heading;
+    const hasHeading =
+      typeof heading === "string"
+        ? heading.trim() !== ""
+        : React.isValidElement(heading);
     const rows = (props.items as Array<Record<string, unknown>>) ?? [];
     const defaultOpenIndex = Number(props.defaultOpenIndex) || 0;
     const headingColor = (props.headingColor as string) || "#2C2C2C";
@@ -2463,19 +2588,41 @@ const AccordionGroup: Config["components"][string] = {
     const itemPaddingY = (props.itemPaddingY as string) || "8px";
     const typoCSS = typographyPropsToCSS(props);
     const renderBody = (value: unknown) => {
+      // Puck transforms richtext fields (with `contentEditable: true`) into
+      // React elements (InlineEditorWrapper / RichTextRender) before
+      // reaching this render function. We must render those elements
+      // directly — calling sanitizeRichTextHtml/extractIconFeatureLabel
+      // on a React element would erase the body content.
+      if (React.isValidElement(value)) {
+        return React.createElement(
+          "div",
+          {
+            className: "ora-richtext ora-accordion-body",
+            style: {
+              ...typoCSS,
+              color: bodyColor,
+              fontSize: bodySize,
+              lineHeight: 1.6,
+              padding: `4px 0 8px ${bodyIndent}`,
+            },
+          },
+          value,
+        );
+      }
+
       if (typeof value === "string") {
         const safeHtml = sanitizeRichTextHtml(value);
         return React.createElement("div", {
-          className: "ora-richtext",
+          className: "ora-richtext ora-accordion-body",
           style: {
             ...typoCSS,
             color: bodyColor,
             fontSize: bodySize,
             lineHeight: 1.6,
-            padding: `8px 0 12px ${bodyIndent}`,
+            padding: `4px 0 8px ${bodyIndent}`,
           },
         },
-        React.createElement("style", null, RICH_TEXT_EMBEDDED_STYLES),
+        React.createElement("style", null, RICH_TEXT_EMBEDDED_STYLES + `\n.ora-accordion-body .tiptap, .ora-accordion-body .ProseMirror { min-height: 0 !important; }`),
         React.createElement("div", { dangerouslySetInnerHTML: { __html: safeHtml } }));
       }
 
@@ -2486,7 +2633,7 @@ const AccordionGroup: Config["components"][string] = {
           color: bodyColor,
           fontSize: bodySize,
           lineHeight: 1.6,
-          padding: `8px 0 12px ${bodyIndent}`,
+          padding: `4px 0 8px ${bodyIndent}`,
         },
       }, plain);
     };
@@ -2495,7 +2642,6 @@ const AccordionGroup: Config["components"][string] = {
     const AccordionItem = ({ row, i, isDefaultOpen }: { row: Record<string, unknown>; i: number; isDefaultOpen: boolean }) => {
       const [isOpen, setIsOpen] = React.useState(isDefaultOpen);
       return React.createElement("div", {
-        key: `${String(row.title ?? "item")}-${i}`,
         style: {
           borderBottom: dividerWidth > 0 ? `${dividerWidth}px solid ${dividerColor}` : undefined,
           padding: `${itemPaddingY} 0`,
@@ -2515,11 +2661,11 @@ const AccordionGroup: Config["components"][string] = {
           fontSize: titleSize,
           lineHeight: 1.25,
           fontWeight: 400,
-          padding: "8px 0",
+          padding: "4px 0",
           userSelect: "none",
         },
       },
-      React.createElement("span", { style: { color: titleColor, flex: 1, minWidth: 0 } }, extractIconFeatureLabel(row.title).trim()),
+      React.createElement("span", { style: { color: titleColor, flex: 1, minWidth: 0 } }, row.title as React.ReactNode),
       React.createElement(ChevronDown, {
         size: iconSize,
         color: iconColor,
@@ -2538,22 +2684,22 @@ const AccordionGroup: Config["components"][string] = {
     };
 
     return styledRender(props, React.createElement("div", {
-      style: { display: "flex", flexDirection: "column", gap: 12 },
+      style: { display: "flex", flexDirection: "column", gap: 0 },
     },
-      heading
+      hasHeading
         ? React.createElement("h3", {
             style: {
-              margin: 0,
+              margin: "0 0 12px 0",
               color: headingColor,
               fontSize: headingSize,
               lineHeight: 1.1,
               fontWeight: 400,
             },
-          }, heading)
+          }, heading as React.ReactNode)
         : null,
       ...rows.map((row, i) =>
         React.createElement(AccordionItem, {
-          key: `${String(row.title ?? "item")}-${i}`,
+          key: i,
           row,
           i,
           isDefaultOpen: i === defaultOpenIndex,
@@ -2597,7 +2743,6 @@ const Accordion: Config["components"][string] = {
 
 const ScrollIndicator: Config["components"][string] = {
   label: "Scroll Indicator",
-  inline: true,
   fields: {
     label: createFreeInputField("Label Text", "", [], "Short text shown above/below the indicator.", "SCROLL TO EXPLORE"),
     labelPosition: createToggleField("Label Position", [
@@ -2794,29 +2939,20 @@ const ScrollIndicator: Config["components"][string] = {
     ).filter(Boolean);
 
     // Use a flow-based wrapper so the indicator is visible and selectable in
-    // the builder. Position is controlled via absolute positioning within the
-    // section but the wrapper provides a visible footprint for the editor.
-    const wrapperStyle: React.CSSProperties = {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: vPos === "bottom" ? vOff : undefined,
-      top: vPos === "top" ? vOff : undefined,
-      display: "flex",
-      justifyContent: hPos === "left" ? "flex-start" : hPos === "right" ? "flex-end" : "center",
-      paddingLeft: hPos === "left" ? hOff : undefined,
-      paddingRight: hPos === "right" ? hOff : undefined,
-      zIndex: 10,
-      // Minimum height so the element is selectable in the builder
-      minHeight: dim.h + (labelText ? 30 : 0),
-    };
-    if (vPos === "center") {
-      wrapperStyle.top = "50%";
-      wrapperStyle.transform = "translateY(-50%)";
-    }
-
-    return React.createElement("div", { style: wrapperStyle },
-      React.createElement("a", {
+    // the builder. We render two elements:
+    //   1) A static placeholder with the indicator's footprint (height = dim.h
+    //      + label gap). This gives Puck's wrapping <div> a non-zero size so
+    //      the block is clickable on the canvas and the floating toolbar can
+    //      anchor to it.
+    //   2) An absolutely-positioned visual that pins to the Section bounds
+    //      (the nearest positioned ancestor — Section sets position:relative).
+    //
+    // Both render the same content; the static one is invisible (opacity 0,
+    // pointer-events none) so the visible indicator only appears via the
+    // pinned absolute layer.
+    const visualLink = React.createElement(
+      "a",
+      {
         href,
         style: {
           display: "flex",
@@ -2827,7 +2963,58 @@ const ScrollIndicator: Config["components"][string] = {
           cursor: "pointer",
         },
         "aria-label": labelText || "Scroll",
-      }, ...children),
+      },
+      ...children,
+    );
+
+    const pinnedStyle: React.CSSProperties = {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: vPos === "bottom" ? vOff : undefined,
+      top: vPos === "top" ? vOff : undefined,
+      display: "flex",
+      justifyContent: hPos === "left" ? "flex-start" : hPos === "right" ? "flex-end" : "center",
+      paddingLeft: hPos === "left" ? hOff : undefined,
+      paddingRight: hPos === "right" ? hOff : undefined,
+      zIndex: 10,
+      pointerEvents: "auto",
+    };
+    if (vPos === "center") {
+      pinnedStyle.top = "50%";
+      pinnedStyle.transform = "translateY(-50%)";
+    }
+
+    // The placeholder gets the indicator's intrinsic size so Puck's selectable
+    // wrapper has a real footprint. Visually hidden so it doesn't duplicate
+    // the indicator. `aria-hidden` to keep it out of the AT tree.
+    const placeholderStyle: React.CSSProperties = {
+      visibility: "hidden",
+      pointerEvents: "none",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+      minHeight: dim.h + (labelText ? 30 : 0),
+    };
+
+    return React.createElement(
+      "div",
+      {
+        style: {
+          // Width: 100% so the placeholder occupies a row in the parent
+          // flex/flow, giving Puck's wrapper a visible footprint that can
+          // be clicked and anchored by the floating toolbar.
+          width: "100%",
+        },
+      },
+      React.createElement(
+        "div",
+        { style: placeholderStyle, "aria-hidden": true },
+        visualLink,
+      ),
+      React.createElement("div", { style: pinnedStyle }, visualLink),
     );
   },
 };
@@ -3041,6 +3228,23 @@ const pinPickerField = {
   },
 };
 
+const contactLocationPickerField = {
+  type: "custom" as const,
+  label: "Locations",
+  render: ({ value, onChange, readOnly }: { value: unknown; onChange: (v: ContactLocationItem[]) => void; readOnly?: boolean }) => {
+    const apiKey = (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY : "") || "";
+    return React.createElement(ContactLocationPicker, {
+      value: (value as ContactLocationItem[]) ?? [],
+      onChange,
+      readOnly,
+      apiKey,
+      centerLat: DEFAULT_DUBAI_LAT,
+      centerLng: 55.2708,
+      zoom: 10,
+    });
+  },
+};
+
 const LocationMap: Config["components"][string] = {
   label: "Location Map",
   fields: {
@@ -3228,6 +3432,9 @@ const ContactLocationsMap: Config["components"][string] = {
     layoutDirection: { mobile: "column" },
   },
   fields: {
+    // ── Locations (custom picker — click map to add) ─────────────────────
+    locations: contactLocationPickerField,
+
     // ── Section / container ─────────────────────────────────────────────
     containerMaxWidth: makeFreeInputField("Container Max Width", "px", ["100%", "1200px", "1400px", "1600px"], "Constrains the section. Use 100% for an edge-to-edge layout."),
     containerPaddingX: makeFreeInputField("Container Padding X", "px", ["0px", "16px", "24px", "32px", "48px"]),
@@ -3244,6 +3451,14 @@ const ContactLocationsMap: Config["components"][string] = {
     panelPaddingX: makeFreeInputField("Panel Padding X", "px", ["16px", "24px", "32px", "40px", "48px"]),
     panelPaddingY: makeFreeInputField("Panel Padding Y", "px", ["16px", "24px", "32px", "40px", "48px"]),
     panelGap: makeFreeInputField("Spacing Between Locations", "px", ["12px", "16px", "20px", "24px", "32px"]),
+    panelOffsetTop: makeFreeInputField("Panel Offset Top", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the map's top edge."),
+    panelOffsetBottom: makeFreeInputField("Panel Offset Bottom", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the map's bottom edge."),
+    panelOffsetSide: makeFreeInputField("Panel Offset Side", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the chosen side (left or right)."),
+    panelBorderRadius: makeSliderField("Panel Border Radius", 0, 32, "px"),
+    panelShadow: createToggleField("Panel Drop Shadow", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ]),
     showDividers: createToggleField("Show Dividers", [
       { label: "Yes", value: "yes" },
       { label: "No", value: "no" },
@@ -3256,46 +3471,9 @@ const ContactLocationsMap: Config["components"][string] = {
     centerLat: { type: "number", label: "Center Latitude" },
     centerLng: { type: "number", label: "Center Longitude" },
     zoom: makeSliderField("Zoom", 1, 20, ""),
-    mapHeight: makeFreeInputField("Map Height", "px", ["480px", "560px", "640px", "720px", "80vh"]),
+    mapHeight: makeFreeInputField("Map Height", "px", ["480px", "560px", "640px", "720px", "80vh", "100vh"]),
     mapStyleJson: { type: "textarea", label: "Map Style JSON (Snazzy Maps export)" },
     mapId: { type: "text", label: "Cloud Map ID (optional)" },
-
-    // ── Locations list ───────────────────────────────────────────────────
-    locations: {
-      type: "array",
-      label: "Locations",
-      getItemSummary: (item: Record<string, unknown>, i?: number) =>
-        `${(i ?? 0) + 1}. ${(item.title as string) || "Location"}`,
-      defaultItemProps: {
-        title: "Sales Office",
-        badge: "",
-        address: "Street, City, Country.",
-        hours: "",
-        lat: DEFAULT_DUBAI_LAT,
-        lng: DEFAULT_DUBAI_LNG,
-        ctaLabel: "Get Direction",
-        ctaUrl: "",
-        isHighlight: "no",
-        pinIcon: "",
-        pinIconHighlight: "",
-      },
-      arrayFields: {
-        title: { type: "text", label: "Title", contentEditable: true },
-        badge: { type: "text", label: "Badge (e.g. COMING SOON)", contentEditable: true },
-        address: { type: "textarea", label: "Address (multi-line)" },
-        hours: { type: "textarea", label: "Hours / Secondary line" },
-        lat: { type: "number", label: "Latitude" },
-        lng: { type: "number", label: "Longitude" },
-        ctaLabel: { type: "text", label: "Button Label", contentEditable: true },
-        ctaUrl: { type: "text", label: "Button URL (Google Maps link)" },
-        isHighlight: createToggleField("Highlighted", [
-          { label: "No", value: "no" },
-          { label: "Yes", value: "yes" },
-        ], "Marks this as the active location (different title color + larger pin)."),
-        pinIcon: imageUploadField,
-        pinIconHighlight: imageUploadField,
-      },
-    },
 
     // ── Per-location styling ─────────────────────────────────────────────
     titleColor: createCustomSelectField("Title Color", ORA_TEXT_COLOR_OPTIONS),
@@ -3331,6 +3509,11 @@ const ContactLocationsMap: Config["components"][string] = {
     panelPaddingX: "40px",
     panelPaddingY: "40px",
     panelGap: "24px",
+    panelOffsetTop: "40px",
+    panelOffsetBottom: "40px",
+    panelOffsetSide: "40px",
+    panelBorderRadius: 0,
+    panelShadow: "no",
     showDividers: "yes",
     dividerColor: "#E8E4DF",
     stackBreakpoint: 900,
@@ -3339,7 +3522,7 @@ const ContactLocationsMap: Config["components"][string] = {
     centerLat: DEFAULT_DUBAI_LAT,
     centerLng: 55.2708,
     zoom: 10,
-    mapHeight: "640px",
+    mapHeight: "100vh",
     mapStyleJson: "",
     mapId: "",
 
@@ -3418,6 +3601,11 @@ const ContactLocationsMap: Config["components"][string] = {
         panelPaddingX: (props.panelPaddingX as string) || "40px",
         panelPaddingY: (props.panelPaddingY as string) || "40px",
         panelGap: (props.panelGap as string) || "24px",
+        panelOffsetTop: (props.panelOffsetTop as string) || "40px",
+        panelOffsetBottom: (props.panelOffsetBottom as string) || "40px",
+        panelOffsetSide: (props.panelOffsetSide as string) || "40px",
+        panelBorderRadius: Number(props.panelBorderRadius) || 0,
+        panelShadow: ((props.panelShadow as string) === "yes" ? "yes" : "no"),
         showDividers: ((props.showDividers as string) === "no" ? "no" : "yes"),
         dividerColor: (props.dividerColor as string) || "#E8E4DF",
         stackBreakpoint: Number(props.stackBreakpoint) || 900,
@@ -3426,7 +3614,7 @@ const ContactLocationsMap: Config["components"][string] = {
         centerLat: Number(props.centerLat) || DEFAULT_DUBAI_LAT,
         centerLng: Number(props.centerLng) || 55.2708,
         zoom: Number(props.zoom) || 10,
-        mapHeight: (props.mapHeight as string) || "640px",
+        mapHeight: (props.mapHeight as string) || "100vh",
         mapStyleJson: (props.mapStyleJson as string) || "",
         mapId: (props.mapId as string) || "",
 

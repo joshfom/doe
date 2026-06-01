@@ -137,6 +137,29 @@ export function middleware(request: NextRequest) {
     timestamp: new Date().toISOString(),
   };
 
+  // Auto-register UTM link if all required UTM params are present (fire-and-forget)
+  if (hasUtm && utms.utm_source && utms.utm_medium && utms.utm_campaign) {
+    try {
+      const registrationPromise = import("@/lib/analytics/utm-auto-register").then(
+        ({ autoRegisterUtmLink }) =>
+          autoRegisterUtmLink({
+            utmSource: utms.utm_source!,
+            utmMedium: utms.utm_medium!,
+            utmCampaign: utms.utm_campaign!,
+            utmTerm: utms.utm_term ?? null,
+            utmContent: utms.utm_content ?? null,
+            landingPath: request.nextUrl.pathname,
+          })
+      );
+      // Fire-and-forget: never block the response
+      void registrationPromise.catch((err) => {
+        console.error("[utm-auto-register] Failed to auto-register UTM link:", err);
+      });
+    } catch (err) {
+      console.error("[utm-auto-register] Failed to initiate auto-registration:", err);
+    }
+  }
+
   // Read existing attribution data
   let attribution = readAttributionData(request);
 

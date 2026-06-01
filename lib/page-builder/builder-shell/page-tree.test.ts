@@ -230,4 +230,164 @@ describe("buildPageTree", () => {
     expect(tree.byId.size).toBe(5);
     expect(tree.parentOf.size).toBe(5);
   });
+
+  // ─── Inline slot model (Puck 0.21+) ───────────────────────────────────────
+
+  it("traverses inline slot children stored in component props", () => {
+    // Puck 0.21+ stores children in props under the slot field name
+    const data = {
+      content: [
+        {
+          type: "Section",
+          props: {
+            id: "s1",
+            "section-content": [
+              { type: "Heading", props: { id: "h1", text: "Hello" } },
+              { type: "Text", props: { id: "t1" } },
+            ],
+          },
+        },
+      ],
+    } as unknown as Data;
+
+    const config = {
+      components: {
+        Section: {
+          label: "Section",
+          fields: { "section-content": { type: "slot" } },
+        },
+        Heading: { label: "Heading" },
+        Text: { label: "Text" },
+      },
+    } as unknown as Config;
+
+    const tree = buildPageTree(data, config);
+
+    expect(tree.roots).toHaveLength(1);
+    expect(tree.byId.size).toBe(3); // Section + Heading + Text
+
+    const section = tree.byId.get("s1")!;
+    expect(section.childrenByZone["section-content"]).toHaveLength(2);
+    expect(section.childrenByZone["section-content"][0].id).toBe("h1");
+    expect(section.childrenByZone["section-content"][0].label).toBe("Heading");
+    expect(section.childrenByZone["section-content"][1].id).toBe("t1");
+
+    expect(tree.parentOf.get("h1")).toBe("s1");
+    expect(tree.parentOf.get("t1")).toBe("s1");
+  });
+
+  it("traverses deeply nested slots (Columns with slot children)", () => {
+    const data = {
+      content: [
+        {
+          type: "Section",
+          props: {
+            id: "s1",
+            "section-content": [
+              {
+                type: "Columns",
+                props: {
+                  id: "col1",
+                  "column-0": [
+                    { type: "Heading", props: { id: "h1", text: "Left" } },
+                  ],
+                  "column-1": [
+                    { type: "Image", props: { id: "img1" } },
+                    { type: "Text", props: { id: "t1" } },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    } as unknown as Data;
+
+    const config = {
+      components: {
+        Section: {
+          label: "Section",
+          fields: { "section-content": { type: "slot" } },
+        },
+        Columns: {
+          label: "Columns",
+          fields: {
+            "column-0": { type: "slot" },
+            "column-1": { type: "slot" },
+          },
+        },
+        Heading: { label: "Heading" },
+        Image: { label: "Image" },
+        Text: { label: "Text" },
+      },
+    } as unknown as Config;
+
+    const tree = buildPageTree(data, config);
+
+    // Section + Columns + Heading + Image + Text = 5
+    expect(tree.byId.size).toBe(5);
+
+    const section = tree.byId.get("s1")!;
+    expect(section.childrenByZone["section-content"]).toHaveLength(1);
+
+    const columns = tree.byId.get("col1")!;
+    expect(columns.childrenByZone["column-0"]).toHaveLength(1);
+    expect(columns.childrenByZone["column-0"][0].id).toBe("h1");
+    expect(columns.childrenByZone["column-1"]).toHaveLength(2);
+    expect(columns.childrenByZone["column-1"][0].id).toBe("img1");
+    expect(columns.childrenByZone["column-1"][1].id).toBe("t1");
+
+    // Verify parent chain
+    expect(tree.parentOf.get("col1")).toBe("s1");
+    expect(tree.parentOf.get("h1")).toBe("col1");
+    expect(tree.parentOf.get("img1")).toBe("col1");
+    expect(tree.parentOf.get("t1")).toBe("col1");
+  });
+
+  it("handles mixed slot and legacy zone data", () => {
+    // Some items in slots, some in zones (migration mid-state)
+    const data = {
+      content: [
+        {
+          type: "Section",
+          props: {
+            id: "s1",
+            "section-content": [
+              { type: "Heading", props: { id: "h1" } },
+            ],
+          },
+        },
+        { type: "Section", props: { id: "s2" } },
+      ],
+      zones: {
+        "s2:section-content": [
+          { type: "Text", props: { id: "t1" } },
+        ],
+      },
+    } as unknown as Data;
+
+    const config = {
+      components: {
+        Section: {
+          label: "Section",
+          fields: { "section-content": { type: "slot" } },
+        },
+        Heading: { label: "Heading" },
+        Text: { label: "Text" },
+      },
+    } as unknown as Config;
+
+    const tree = buildPageTree(data, config);
+
+    // s1 + h1 (from slot) + s2 + t1 (from zone) = 4
+    expect(tree.byId.size).toBe(4);
+
+    const s1 = tree.byId.get("s1")!;
+    expect(s1.childrenByZone["section-content"]).toHaveLength(1);
+    expect(s1.childrenByZone["section-content"][0].id).toBe("h1");
+
+    const s2 = tree.byId.get("s2")!;
+    expect(s2.childrenByZone["section-content"]).toHaveLength(1);
+    expect(s2.childrenByZone["section-content"][0].id).toBe("t1");
+  });
 });

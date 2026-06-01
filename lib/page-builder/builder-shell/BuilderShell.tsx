@@ -386,40 +386,87 @@ export function BuilderShell({
  * CanvasViewport — constrains the canvas preview width to mimic the active
  * breakpoint's viewport (Req 12.2).
  *
- *   desktop → unconstrained
- *   tablet  → 1024px
- *   mobile  → 640px
+ *   desktop → renders at 1440px virtual width, scaled to fit the available
+ *             pane so a 50px headline still looks like 50px relative to a
+ *             real desktop layout (instead of a giant blob in a half-width
+ *             editor pane).
+ *   tablet  → 1024px (unscaled if pane allows, scaled if not)
+ *   mobile  → 640px  (unscaled if pane allows, scaled if not)
  *
  * Lives inside `BreakpointProvider` so it can read the active breakpoint
  * via `useBreakpoint()` without prop-drilling.
  */
+const VIRTUAL_WIDTHS: Record<string, number> = {
+  desktop: 1440,
+  tablet: 1024,
+  mobile: 640,
+};
+
 function CanvasViewport({ children }: { children: React.ReactNode }) {
   const { activeBreakpoint } = useBreakpoint();
-  const maxWidth =
-    activeBreakpoint === "tablet"
-      ? 1024
-      : activeBreakpoint === "mobile"
-        ? 640
-        : undefined;
+  const virtualWidth = VIRTUAL_WIDTHS[activeBreakpoint] ?? 1440;
+
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = React.useState(1);
+
+  // Recompute scale whenever the container resizes. We render at the
+  // breakpoint's "true" viewport width and scale visually so the preview
+  // always reflects realistic typography / spacing.
+  React.useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const update = () => {
+      const available = node.clientWidth;
+      if (available <= 0) return;
+      const next = Math.min(1, available / virtualWidth);
+      setScale(next);
+    };
+    update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (ro) ro.observe(node);
+    window.addEventListener("resize", update);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [virtualWidth]);
+
   return (
     <div
+      ref={containerRef}
       data-testid="ora-canvas-viewport"
       data-breakpoint={activeBreakpoint}
       style={{
-        // height: 100% so the nested Puck.Preview iframe (CSS rule
-        // `._PuckPreview-frame { height: 100%; width: 100%; }`) gets a
-        // definite size — otherwise the iframe collapses to its
-        // intrinsic size and the canvas appears empty / clipped.
         height: "100%",
-        maxWidth,
-        margin: maxWidth ? "0 auto" : undefined,
         width: "100%",
-        transition: "max-width 200ms ease",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
     >
-      {children}
+      <div
+        style={{
+          // Render the inner stage at the breakpoint's "real" width so
+          // typography and spacing look correct, then visually scale to
+          // fit the available pane. We use the legacy `zoom` property
+          // (rather than `transform: scale`) so `position: fixed` inside
+          // the canvas iframe still anchors to the viewport — that keeps
+          // the floating element header working.
+          width: virtualWidth,
+          // `zoom` is a non-standard but widely supported CSS property
+          // that scales layout dimensions including hit-testing without
+          // creating a new containing block for fixed elements.
+          ...({ zoom: scale } as React.CSSProperties),
+          flex: 1,
+          minHeight: 0,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          transition: "width 200ms ease",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

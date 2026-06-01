@@ -163,6 +163,12 @@ export function ContactLocationsMap(props: ContactLocationsMapProps) {
     showDividers,
     stackBreakpoint,
 
+    panelOffsetTop,
+    panelOffsetBottom,
+    panelOffsetSide,
+    panelBorderRadius,
+    panelShadow,
+
     apiKeyOverride,
     centerLat,
     centerLng,
@@ -232,6 +238,13 @@ export function ContactLocationsMap(props: ContactLocationsMapProps) {
         boxSizing: "border-box",
         zIndex: 1,
         position: "relative",
+        borderRadius: !isStacked && panelBorderRadius ? `${panelBorderRadius}px` : undefined,
+        boxShadow:
+          !isStacked && panelShadow === "yes"
+            ? "0 12px 32px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)"
+            : undefined,
+        maxHeight: !isStacked ? "100%" : undefined,
+        overflowY: !isStacked ? "auto" : undefined,
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: panelGap || "24px" }}>
@@ -367,7 +380,7 @@ export function ContactLocationsMap(props: ContactLocationsMapProps) {
         position: "relative",
         flex: 1,
         minWidth: 0,
-        height: isStacked ? "360px" : mapHeight || "640px",
+        height: isStacked ? "360px" : mapHeight || "100vh",
         background: "#EEE",
       }}
     >
@@ -425,23 +438,22 @@ export function ContactLocationsMap(props: ContactLocationsMapProps) {
             style={{
               position: "relative",
               width: "100%",
-              height: mapHeight || "640px",
+              height: mapHeight || "100vh",
             }}
           >
             <div style={{ position: "absolute", inset: 0 }}>{mapBox}</div>
             <div
               style={{
                 position: "absolute",
-                top: 0,
-                bottom: 0,
-                [panelSide === "right" ? "right" : "left"]: 0,
+                top: panelOffsetTop || "40px",
+                bottom: panelOffsetBottom || "40px",
+                [panelSide === "right" ? "right" : "left"]: panelOffsetSide || "40px",
                 display: "flex",
                 alignItems: "stretch",
-                maxHeight: "100%",
-                overflowY: "auto",
+                pointerEvents: "none",
               }}
             >
-              {panel}
+              <div style={{ pointerEvents: "auto", display: "flex" }}>{panel}</div>
             </div>
           </div>
         )}

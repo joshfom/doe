@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { authGuard } from "../auth";
 import { formDefinitions, formSubmissions } from "../../schema";
 import { db } from "../../db";
@@ -10,6 +10,23 @@ import { readConsentFromRequest } from "@/lib/analytics/consent-state";
 import { getPostHogServer } from "@/lib/analytics/posthog-server";
 import { hashIdentifier } from "@/lib/analytics/hash-identifier";
 import { sendConversion } from "@/lib/analytics/capi";
+import { getActiveConversionGoals } from "../../conversion-goals";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface ConversionAttribution {
+  goalId: string;
+  eventName: string;
+  displayLabel: string;
+  timestamp: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
+}
+
+const MAX_CONVERSION_ATTRIBUTIONS = 50;
 
 // ── Helper: fire-and-forget push to external endpoint ────────────────────────
 
@@ -178,6 +195,56 @@ const publicForms = new Elysia({ name: "forms-public" })
     }
     if (form.webhookUrl) {
       pushToEndpoint(form.webhookUrl, data);
+    }
+
+    // ── Conversion Goal Attribution ──────────────────────────────────────
+    try {
+      const goals = await getActiveConversionGoals();
+      const firedEventName = "lead_qualified";
+      const matchedGoal = goals.find((g) => g.eventName === firedEventName);
+
+      if (matchedGoal && lastTouch) {
+        const attribution: ConversionAttribution = {
+          goalId: matchedGoal.id,
+          eventName: matchedGoal.eventName,
+          displayLabel: matchedGoal.displayLabel || matchedGoal.eventName,
+          timestamp: new Date().toISOString(),
+          utmSource: lastTouch.utm_source || null,
+          utmMedium: lastTouch.utm_medium || null,
+          utmCampaign: lastTouch.utm_campaign || null,
+          utmTerm: lastTouch.utm_term || null,
+          utmContent: lastTouch.utm_content || null,
+        };
+
+        // Enforce max 50 entries: read existing, trim oldest if needed
+        const [current] = await db
+          .select({ conversionAttributions: formSubmissions.conversionAttributions })
+          .from(formSubmissions)
+          .where(eq(formSubmissions.id, submission.id))
+          .limit(1);
+
+        const existing: ConversionAttribution[] = Array.isArray(current?.conversionAttributions)
+          ? (current.conversionAttributions as ConversionAttribution[])
+          : [];
+
+        let updatedAttributions: ConversionAttribution[];
+        if (existing.length >= MAX_CONVERSION_ATTRIBUTIONS) {
+          // Trim oldest entries to make room
+          updatedAttributions = [...existing.slice(existing.length - MAX_CONVERSION_ATTRIBUTIONS + 1), attribution];
+        } else {
+          updatedAttributions = [...existing, attribution];
+        }
+
+        await db
+          .update(formSubmissions)
+          .set({
+            conversionAttributions: sql`${JSON.stringify(updatedAttributions)}::jsonb`,
+          })
+          .where(eq(formSubmissions.id, submission.id));
+      }
+    } catch (err) {
+      // Proceed normally if conversion goals are unavailable
+      console.error("[forms] Conversion goal attribution failed:", err);
     }
 
     set.status = 201;

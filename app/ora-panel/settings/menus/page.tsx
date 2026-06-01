@@ -42,6 +42,7 @@ import {
   ChevronRight,
   Save,
 } from 'lucide-react';
+import { SlideOverSheet } from '@/lib/cms/components/SlideOverSheet';
 
 // ── Flatten tree ────────────────────────────────────────────────────────────
 
@@ -195,152 +196,204 @@ function SortableTreeItem({
 
 // ── Item Editor Panel ───────────────────────────────────────────────────────
 
-function ItemEditorPanel({
-  item,
+// ── Menu Item Sheet (create + edit in a slide-over panel) ───────────────────
+
+function MenuItemSheet({
   menuId,
+  item,
+  parentOptions,
+  open,
   onClose,
 }: {
-  item: MenuItemTree;
   menuId: string;
+  /** If provided, we're editing; otherwise we're creating. */
+  item: MenuItemTree | null;
+  parentOptions: { id: string; label: string }[];
+  open: boolean;
   onClose: () => void;
 }) {
-  const updateItem = useUpdateMenuItem();
-  const [label, setLabel] = useState(item.label);
-  const [url, setUrl] = useState(item.url);
-  const [icon, setIcon] = useState(item.icon ?? '');
-  const [itemType, setItemType] = useState<ItemType>(item.itemType);
-
-  const handleSave = () => {
-    updateItem.mutate(
-      {
-        menuId,
-        itemId: item.id,
-        label,
-        url,
-        icon: icon || undefined,
-        itemType,
-      },
-      { onSuccess: onClose }
-    );
-  };
-
-  return (
-    <div className="border border-ora-sand/60 bg-ora-white p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-ora-charcoal">Edit Item</h3>
-        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center text-ora-charcoal-light hover:bg-ora-cream-light transition-colors">
-          <X className="h-4 w-4 stroke-1" />
-        </button>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Label</label>
-          <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">URL</label>
-          <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Icon (Lucide name)</label>
-          <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="e.g. Home, Star" className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Item Type</label>
-          <select value={itemType} onChange={(e) => setItemType(e.target.value as ItemType)} className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none">
-            <option value="link">Link</option>
-            <option value="dropdown">Dropdown</option>
-          </select>
-        </div>
-        <div className="flex gap-2 pt-2">
-          <button onClick={handleSave} disabled={updateItem.isPending || !label.trim()} className="h-10 bg-ora-charcoal px-6 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50">
-            {updateItem.isPending ? 'Saving…' : 'Save'}
-          </button>
-          <button onClick={onClose} className="h-10 border border-ora-sand bg-ora-cream px-6 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors">Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Add Menu Item Form (with Parent selector for sub-items) ─────────────────
-
-function AddMenuItemForm({
-  menuId,
-  parentOptions,
-  onAdded,
-}: {
-  menuId: string;
-  parentOptions: { id: string; label: string }[];
-  onAdded?: () => void;
-}) {
   const createItem = useCreateMenuItem();
+  const updateItem = useUpdateMenuItem();
+
   const [label, setLabel] = useState('');
+  const [labelAr, setLabelAr] = useState('');
   const [url, setUrl] = useState('');
+  const [icon, setIcon] = useState('');
   const [itemType, setItemType] = useState<ItemType>('link');
   const [parentId, setParentId] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Reset form when item changes or sheet opens
+  useEffect(() => {
+    if (open) {
+      if (item) {
+        setLabel(item.label);
+        setLabelAr(item.translations?.ar ?? '');
+        setUrl(item.url);
+        setIcon(item.icon ?? '');
+        setItemType(item.itemType);
+        setParentId(item.parentId ?? '');
+      } else {
+        setLabel('');
+        setLabelAr('');
+        setUrl('');
+        setIcon('');
+        setItemType('link');
+        setParentId('');
+      }
+    }
+  }, [open, item]);
+
+  const isEditing = !!item;
+  const isPending = createItem.isPending || updateItem.isPending;
+
+  const handleSave = () => {
     if (!label.trim()) return;
 
-    createItem.mutate(
-      {
-        menuId,
-        label: label.trim(),
-        url: url.trim() || '#',
-        itemType,
-        parentId: parentId || null,
-      },
-      {
-        onSuccess: () => {
-          setLabel('');
-          setUrl('');
-          setItemType('link');
-          setParentId('');
-          onAdded?.();
+    const translations: Record<string, string> = {};
+    if (labelAr.trim()) translations.ar = labelAr.trim();
+    const translationsPayload = Object.keys(translations).length > 0 ? translations : null;
+
+    if (isEditing) {
+      updateItem.mutate(
+        {
+          menuId,
+          itemId: item.id,
+          label: label.trim(),
+          url: url.trim() || '#',
+          icon: icon || undefined,
+          itemType,
+          translations: translationsPayload,
         },
-      }
-    );
+        { onSuccess: onClose }
+      );
+    } else {
+      createItem.mutate(
+        {
+          menuId,
+          label: label.trim(),
+          url: url.trim() || '#',
+          itemType,
+          parentId: parentId || null,
+          translations: translationsPayload,
+        },
+        { onSuccess: onClose }
+      );
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border border-ora-sand/60 bg-ora-white p-6">
-      <h3 className="mb-4 text-lg font-semibold text-ora-charcoal">Add Menu Item</h3>
-      <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Label *</label>
-            <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Menu item label" required className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
+    <SlideOverSheet
+      open={open}
+      onClose={onClose}
+      title={isEditing ? 'Edit Menu Item' : 'Add Menu Item'}
+    >
+      <div className="space-y-6">
+        {/* Labels section */}
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-medium text-ora-charcoal border-b border-ora-sand/60 pb-2 w-full">Labels &amp; Translations</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Label (English) *</label>
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Menu item label"
+                className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Label (العربية)</label>
+              <input
+                type="text"
+                dir="rtl"
+                value={labelAr}
+                onChange={(e) => setLabelAr(e.target.value)}
+                placeholder="الترجمة العربية"
+                className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+              />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">URL</label>
-            <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="/page or https://..." className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
+        </fieldset>
+
+        {/* URL & Icon */}
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-medium text-ora-charcoal border-b border-ora-sand/60 pb-2 w-full">Link &amp; Display</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">URL</label>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="/page or https://..."
+                className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Icon (Lucide name)</label>
+              <input
+                type="text"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                placeholder="e.g. Home, Star"
+                className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+              />
+            </div>
           </div>
+        </fieldset>
+
+        {/* Type & Parent */}
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-medium text-ora-charcoal border-b border-ora-sand/60 pb-2 w-full">Behaviour</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Item Type</label>
+              <select
+                value={itemType}
+                onChange={(e) => setItemType(e.target.value as ItemType)}
+                className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+              >
+                <option value="link">Link</option>
+                <option value="dropdown">Dropdown</option>
+              </select>
+            </div>
+            {!isEditing && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Parent (for sub-items)</label>
+                <select
+                  value={parentId}
+                  onChange={(e) => setParentId(e.target.value)}
+                  className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none"
+                >
+                  <option value="">— Root level —</option>
+                  {parentOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </fieldset>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-4 border-t border-ora-sand/60">
+          <button
+            onClick={handleSave}
+            disabled={isPending || !label.trim()}
+            className="h-10 bg-ora-charcoal px-8 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50"
+          >
+            {isPending ? 'Saving…' : isEditing ? 'Save Changes' : 'Add Item'}
+          </button>
+          <button
+            onClick={onClose}
+            className="h-10 border border-ora-sand bg-ora-cream px-6 text-sm text-ora-charcoal hover:bg-ora-cream-dark transition-colors"
+          >
+            Cancel
+          </button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Item Type</label>
-            <select value={itemType} onChange={(e) => setItemType(e.target.value as ItemType)} className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none">
-              <option value="link">Link</option>
-              <option value="dropdown">Dropdown</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">Parent (for sub-items)</label>
-            <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none">
-              <option value="">— Root level —</option>
-              {parentOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <button type="submit" disabled={createItem.isPending || !label.trim()} className="h-10 bg-ora-charcoal px-6 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50">
-          {createItem.isPending ? 'Adding…' : 'Add Item'}
-        </button>
       </div>
-    </form>
+    </SlideOverSheet>
   );
 }
 
@@ -351,6 +404,8 @@ function CtaSettingsPanel() {
   const updateSettings = useUpdateSettings();
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaUrl, setCtaUrl] = useState('');
+  const [ctaLabelAr, setCtaLabelAr] = useState('');
+  const [ctaUrlAr, setCtaUrlAr] = useState('');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -361,6 +416,8 @@ function CtaSettingsPanel() {
       }
       setCtaLabel(map.nav_cta_label ?? '');
       setCtaUrl(map.nav_cta_url ?? '');
+      setCtaLabelAr(map.nav_cta_label_ar ?? '');
+      setCtaUrlAr(map.nav_cta_url_ar ?? '');
     }
   }, [settings]);
 
@@ -374,6 +431,8 @@ function CtaSettingsPanel() {
     }
     current.nav_cta_label = ctaLabel;
     current.nav_cta_url = ctaUrl;
+    current.nav_cta_label_ar = ctaLabelAr;
+    current.nav_cta_url_ar = ctaUrlAr;
     await updateSettings.mutateAsync(current);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -386,12 +445,20 @@ function CtaSettingsPanel() {
       <h3 className="mb-3 text-sm font-medium text-ora-charcoal">Navigation CTA Button</h3>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA Label</label>
+          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA Label (English)</label>
           <input type="text" value={ctaLabel} onChange={(e) => setCtaLabel(e.target.value)} placeholder="e.g. Register Interest" className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA URL</label>
+          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA URL (English)</label>
           <input type="text" value={ctaUrl} onChange={(e) => setCtaUrl(e.target.value)} placeholder="#register-interest or /page" className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
+        </div>
+        <div className="border-t border-ora-sand/40 pt-3">
+          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA Label (العربية)</label>
+          <input type="text" dir="rtl" value={ctaLabelAr} onChange={(e) => setCtaLabelAr(e.target.value)} placeholder="e.g. سجل اهتمامك" className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ora-charcoal-light">CTA URL (العربية)</label>
+          <input type="text" dir="rtl" value={ctaUrlAr} onChange={(e) => setCtaUrlAr(e.target.value)} placeholder="#register-interest or /ar/page" className="h-10 w-full border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
         </div>
         <button onClick={handleSave} disabled={updateSettings.isPending} className="inline-flex h-9 items-center gap-2 bg-ora-charcoal px-4 text-xs text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50">
           <Save className="h-3.5 w-3.5 stroke-1" />
@@ -424,10 +491,12 @@ export default function MenuBuilderPage() {
 
   const [selectedMenuId, setSelectedMenuId] = useState<string>('');
   const [newMenuName, setNewMenuName] = useState('');
+  const [newMenuLocale, setNewMenuLocale] = useState('en');
   const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
   const [editingMenuName, setEditingMenuName] = useState('');
   const [confirmDeleteMenuId, setConfirmDeleteMenuId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<MenuItemTree | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [confirmingDeleteItemId, setConfirmingDeleteItemId] = useState<string | null>(null);
 
   const effectiveMenuId = selectedMenuId || (menus?.[0]?.id ?? '');
@@ -451,10 +520,11 @@ export default function MenuBuilderPage() {
   const handleCreateMenu = () => {
     if (!newMenuName.trim()) return;
     createMenu.mutate(
-      { name: newMenuName.trim() },
+      { name: newMenuName.trim(), locale: newMenuLocale },
       {
         onSuccess: (data: any) => {
           setNewMenuName('');
+          setNewMenuLocale('en');
           if (data?.id) setSelectedMenuId(data.id);
         },
       }
@@ -528,6 +598,10 @@ export default function MenuBuilderPage() {
             <h3 className="mb-3 text-sm font-medium text-ora-charcoal">Create Menu</h3>
             <div className="flex gap-2">
               <input type="text" value={newMenuName} onChange={(e) => setNewMenuName(e.target.value)} placeholder="Menu name" onKeyDown={(e) => e.key === 'Enter' && handleCreateMenu()} className="h-10 flex-1 border border-ora-stone bg-ora-white px-3 text-sm text-ora-charcoal placeholder:text-ora-muted focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none" />
+              <select value={newMenuLocale} onChange={(e) => setNewMenuLocale(e.target.value)} className="h-10 w-20 border border-ora-stone bg-ora-white px-2 text-sm text-ora-charcoal focus-visible:ring-1 focus-visible:ring-ora-gold focus-visible:outline-none">
+                <option value="en">EN</option>
+                <option value="ar">AR</option>
+              </select>
               <button onClick={handleCreateMenu} disabled={createMenu.isPending || !newMenuName.trim()} className="h-10 bg-ora-charcoal px-4 text-sm text-ora-white hover:bg-ora-graphite transition-colors disabled:opacity-50">
                 <Plus className="h-4 w-4 stroke-1" />
               </button>
@@ -575,7 +649,14 @@ export default function MenuBuilderPage() {
                         </div>
                       ) : (
                         <>
-                          <span className="flex-1 text-sm text-ora-charcoal truncate">{menu.name}</span>
+                          <span className="flex-1 text-sm text-ora-charcoal truncate">
+                            {menu.name}
+                            <span className={`ml-2 inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
+                              menu.locale === 'ar' ? 'bg-ora-info/10 text-ora-info' : 'bg-ora-sand text-ora-charcoal-light'
+                            }`}>
+                              {menu.locale || 'en'}
+                            </span>
+                          </span>
                           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => handleSetActive(menu.id)} className={`flex h-8 w-8 items-center justify-center transition-colors ${activeMenuId === menu.id ? 'text-ora-gold' : setActiveMenu.isPending ? 'opacity-50 text-ora-muted' : 'text-ora-muted hover:text-ora-gold'}`} title={activeMenuId === menu.id ? 'Active menu' : 'Set as active menu'}><Star className={`h-3.5 w-3.5 ${activeMenuId === menu.id ? 'fill-ora-gold stroke-ora-gold' : 'stroke-1'}`} /></button>
                             <button onClick={() => { setEditingMenuId(menu.id); setEditingMenuName(menu.name); }} className="flex h-8 w-8 items-center justify-center text-ora-charcoal-light hover:bg-ora-cream-light transition-colors" title="Edit name"><Pencil className="h-3.5 w-3.5 stroke-1" /></button>
@@ -605,14 +686,19 @@ export default function MenuBuilderPage() {
         <div className="lg:col-span-2 space-y-4">
           {effectiveMenuId ? (
             <>
-              <AddMenuItemForm menuId={effectiveMenuId} parentOptions={parentOptions} />
-
               <div className="border border-ora-sand/60 bg-ora-white">
-                <div className="border-b border-ora-sand px-4 py-3">
+                <div className="border-b border-ora-sand px-4 py-3 flex items-center justify-between">
                   <h3 className="text-sm font-medium text-ora-charcoal">
                     Menu Items
                     {menuData && <span className="ml-2 text-xs text-ora-muted">({flatItems.length} items)</span>}
                   </h3>
+                  <button
+                    onClick={() => { setSelectedItem(null); setSheetOpen(true); }}
+                    className="inline-flex h-8 items-center gap-1.5 bg-ora-charcoal px-3 text-xs text-ora-white hover:bg-ora-graphite transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5 stroke-1" />
+                    Add Item
+                  </button>
                 </div>
 
                 {menuLoading ? (
@@ -623,7 +709,7 @@ export default function MenuBuilderPage() {
                   </div>
                 ) : !flatItems.length ? (
                   <div className="p-8 text-center">
-                    <p className="text-sm text-ora-muted">No items yet. Add one above.</p>
+                    <p className="text-sm text-ora-muted">No items yet. Click "Add Item" to get started.</p>
                   </div>
                 ) : (
                   <div className="p-4 space-y-1">
@@ -634,7 +720,7 @@ export default function MenuBuilderPage() {
                             key={flatItem.id}
                             flatItem={flatItem}
                             isSelected={selectedItem?.id === flatItem.id}
-                            onSelect={setSelectedItem}
+                            onSelect={(item) => { setSelectedItem(item); setSheetOpen(true); }}
                             onDelete={handleDeleteItem}
                             confirmingDeleteId={confirmingDeleteItemId}
                             setConfirmingDeleteId={setConfirmingDeleteItemId}
@@ -646,9 +732,13 @@ export default function MenuBuilderPage() {
                 )}
               </div>
 
-              {selectedItem && (
-                <ItemEditorPanel key={selectedItem.id} item={selectedItem} menuId={effectiveMenuId} onClose={() => setSelectedItem(null)} />
-              )}
+              <MenuItemSheet
+                menuId={effectiveMenuId}
+                item={selectedItem}
+                parentOptions={parentOptions}
+                open={sheetOpen}
+                onClose={() => { setSheetOpen(false); setSelectedItem(null); }}
+              />
             </>
           ) : (
             <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">

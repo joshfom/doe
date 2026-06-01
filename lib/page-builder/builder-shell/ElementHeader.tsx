@@ -86,10 +86,25 @@ const MIN_TOP = 60;
 
 function computePosition(anchorEl: HTMLElement): Position {
   const rect = anchorEl.getBoundingClientRect();
-  const top = Math.max(MIN_TOP, rect.top - OFFSET_ABOVE_ANCHOR);
+  // When the anchor is inside an iframe, its bounding rect is relative
+  // to the iframe's own viewport. Translate the rect into the parent
+  // document's coordinate space by adding the iframe's bounding rect
+  // origin. We detect "in iframe" by comparing ownerDocument with the
+  // top-level document via a defaultView round trip.
+  const ownerDoc = anchorEl.ownerDocument;
+  const frameWin = ownerDoc?.defaultView;
+  const isInIframe = !!frameWin && frameWin !== window && !!frameWin.frameElement;
+  let offsetTop = 0;
+  let offsetLeft = 0;
+  if (isInIframe && frameWin?.frameElement) {
+    const frameRect = (frameWin.frameElement as Element).getBoundingClientRect();
+    offsetTop = frameRect.top;
+    offsetLeft = frameRect.left;
+  }
+  const top = Math.max(MIN_TOP, rect.top + offsetTop - OFFSET_ABOVE_ANCHOR);
   return {
     top,
-    left: rect.left,
+    left: rect.left + offsetLeft,
     width: rect.width,
   };
 }
@@ -171,6 +186,17 @@ function useAnchoredPosition(anchorEl: HTMLElement | null): Position | null {
       window.addEventListener("scroll", schedule, true);
       window.addEventListener("resize", schedule);
 
+      // When the anchor lives inside an iframe (Puck v0.21 default), also
+      // listen for scroll/resize on the iframe's own window so the toolbar
+      // tracks scrolling within the canvas viewport.
+      const ownerDoc = anchorEl.ownerDocument;
+      const frameWin = ownerDoc?.defaultView ?? null;
+      const inIframe = !!frameWin && frameWin !== window;
+      if (inIframe && frameWin) {
+        frameWin.addEventListener("scroll", schedule, true);
+        frameWin.addEventListener("resize", schedule);
+      }
+
       let resizeObserver: ResizeObserver | null = null;
       if (typeof ResizeObserver !== "undefined") {
         resizeObserver = new ResizeObserver(schedule);
@@ -180,6 +206,10 @@ function useAnchoredPosition(anchorEl: HTMLElement | null): Position | null {
       return () => {
         window.removeEventListener("scroll", schedule, true);
         window.removeEventListener("resize", schedule);
+        if (inIframe && frameWin) {
+          frameWin.removeEventListener("scroll", schedule, true);
+          frameWin.removeEventListener("resize", schedule);
+        }
         if (resizeObserver) resizeObserver.disconnect();
         if (rafId !== null) cancelAnimationFrame(rafId);
       };
@@ -240,13 +270,15 @@ export function ElementHeader({
         height: HEADER_HEIGHT,
         display: "inline-flex",
         alignItems: "stretch",
-        background: ORA_THEME.charcoal,
-        color: ORA_THEME.white,
-        border: `1px solid ${ORA_THEME.gold}`,
-        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.18)",
+        background: ORA_THEME.white,
+        color: ORA_THEME.charcoal,
+        border: `1px solid ${ORA_THEME.border}`,
+        borderRadius: 6,
+        boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08)",
         fontFamily: "system-ui, sans-serif",
         fontSize: 12,
         zIndex: 9999,
+        overflow: "hidden",
         // The bar is chrome, never part of the block being edited.
         pointerEvents: "auto",
         userSelect: "none",
@@ -259,13 +291,13 @@ export function ElementHeader({
           style={{
             display: "inline-flex",
             alignItems: "center",
-            padding: "0 8px",
+            padding: "0 10px",
             fontSize: 10,
             fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.06em",
             background: ORA_THEME.gold,
-            color: ORA_THEME.charcoal,
+            color: ORA_THEME.white,
           }}
         >
           Hidden on {hiddenAtBreakpoint}
@@ -360,7 +392,7 @@ function IconButton({
           ? ORA_THEME.muted
           : tone === "danger"
             ? ORA_THEME.danger
-            : ORA_THEME.white,
+            : ORA_THEME.charcoal,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
       }}
@@ -375,35 +407,35 @@ function IconButton({
 const labelStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  padding: "0 10px",
+  padding: "0 12px",
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: "0.04em",
   textTransform: "uppercase",
-  color: ORA_THEME.gold,
+  color: ORA_THEME.charcoal,
   maxWidth: 220,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  background: ORA_THEME.creamLight,
 };
 
 const dividerStyle: React.CSSProperties = {
   width: 1,
   alignSelf: "stretch",
-  background: ORA_THEME.gold,
-  opacity: 0.4,
+  background: ORA_THEME.border,
 };
 
 const iconButtonBaseStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 28,
+  width: 30,
   height: "100%",
   padding: 0,
   background: "transparent",
   border: "none",
-  borderLeft: `1px solid rgba(184, 149, 107, 0.25)`, // ORA_THEME.gold @ 25%
+  borderLeft: `1px solid ${ORA_THEME.border}`,
   borderRadius: 0,
   fontFamily: "inherit",
   outlineOffset: -2,

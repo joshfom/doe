@@ -445,6 +445,15 @@ const protectedPages = new Elysia({ name: "pages-protected" })
       };
     }
 
+    // If there's an active pending approval request with pendingData, use
+    // that as the source content — it represents the user's latest edits
+    // that haven't been committed to pages.data yet (approval-gated save).
+    const activeRequest = await getActiveApprovalRequest(db, id, "pages");
+    const cloneData =
+      (activeRequest?.pendingData as Record<string, unknown> | null) ??
+      source.data ??
+      { root: { props: {} }, content: [] };
+
     // Multilingual slug strategy:
     //   /en/about  + /ar/about    ← preferred (same slug per locale)
     //   /en/about  + /ar/about-2  ← fallback only if AR already used "about"
@@ -477,7 +486,7 @@ const protectedPages = new Elysia({ name: "pages-protected" })
             namespace: source.namespace,
             status: "draft",
             isSystem: source.isSystem,
-            data: source.data ?? { root: { props: {} }, content: [] },
+            data: cloneData,
             metaTitle: source.metaTitle,
             metaDescription: source.metaDescription,
             metaKeywords: source.metaKeywords,

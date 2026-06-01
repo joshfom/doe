@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Globe } from "lucide-react";
 import type { MenuItemTree } from "@/lib/cms/types";
+import type { LocaleConfig } from "@/lib/cms/config/locales";
+import {
+  getLocaleFromPathname,
+  buildLocalePath,
+} from "@/lib/cms/config/locales";
 
 interface MobileMenuOverlayProps {
   items: MenuItemTree[];
@@ -13,6 +19,7 @@ interface MobileMenuOverlayProps {
   open: boolean;
   onClose: () => void;
   onCtaClick: (e: React.MouseEvent) => void;
+  enabledLocales: LocaleConfig[];
 }
 
 /**
@@ -26,8 +33,11 @@ export function MobileMenuOverlay({
   open,
   onClose,
   onCtaClick,
+  enabledLocales,
 }: MobileMenuOverlayProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const pathname = usePathname();
+  const currentLocale = getLocaleFromPathname(pathname);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -72,6 +82,25 @@ export function MobileMenuOverlay({
               >
                 {ctaLabel}
               </Link>
+            </div>
+          )}
+
+          {/* Mobile language switcher */}
+          {enabledLocales.length > 1 && (
+            <div className="border-t border-ora-sand/60 px-4 py-3 flex items-center gap-2">
+              <Globe className="h-4 w-4 text-ora-charcoal-light" />
+              {enabledLocales
+                .filter((l) => l.code !== currentLocale)
+                .map((target) => (
+                  <Link
+                    key={target.code}
+                    href={buildLocalePath(pathname, currentLocale, target.code)}
+                    onClick={onClose}
+                    className="px-3 py-2 text-sm text-ora-charcoal hover:text-ora-gold transition-colors"
+                  >
+                    {target.label}
+                  </Link>
+                ))}
             </div>
           )}
         </motion.div>

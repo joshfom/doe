@@ -11,6 +11,7 @@ import {
   RefreshCw,
   AlertTriangle,
   ShieldAlert,
+  Target,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
 
@@ -29,8 +30,17 @@ interface CampaignMetric {
   roas: string;
 }
 
+interface ConversionGoalBreakdown {
+  goalId: string;
+  eventName: string;
+  displayLabel: string;
+  conversions: number;
+  value: number;
+}
+
 interface DashboardData {
   topCampaigns: CampaignMetric[];
+  conversionBreakdown?: ConversionGoalBreakdown[];
   conversionRate: string;
   cac: string;
   roas: string;
@@ -309,6 +319,54 @@ function DashboardContent() {
               </div>
             )}
           </div>
+
+          {/* Conversions by Goal */}
+          {dashboardData.conversionBreakdown &&
+            dashboardData.conversionBreakdown.length > 0 && (
+              <div className="mt-6 border border-ora-sand/60 bg-ora-white p-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <Target className="h-4 w-4 text-emerald-600" />
+                  <h2 className="text-sm font-semibold text-ora-charcoal">
+                    Conversions by Goal
+                  </h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-ora-sand/60 text-ora-charcoal-light">
+                        <th className="pb-2 pr-4 font-medium">Goal</th>
+                        <th className="pb-2 pr-4 font-medium">Event</th>
+                        <th className="pb-2 pr-4 text-right font-medium">
+                          Conversions
+                        </th>
+                        <th className="pb-2 text-right font-medium">Value (AED)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardData.conversionBreakdown.map((goal) => (
+                        <tr
+                          key={goal.goalId || goal.eventName}
+                          className="border-b border-ora-sand/30 last:border-0"
+                        >
+                          <td className="py-2.5 pr-4 font-medium text-ora-charcoal">
+                            {goal.displayLabel || goal.eventName}
+                          </td>
+                          <td className="py-2.5 pr-4 text-ora-charcoal-light">
+                            {goal.eventName}
+                          </td>
+                          <td className="py-2.5 pr-4 text-right text-ora-charcoal">
+                            {goal.conversions}
+                          </td>
+                          <td className="py-2.5 text-right text-ora-charcoal">
+                            {goal.value.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
         </>
       )}
     </div>

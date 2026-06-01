@@ -142,9 +142,12 @@ export function SelectedElementHeader() {
   }, [appState.data, selector]);
 
   // Live DOM anchor lookup — scan for `[data-puck-component="{id}"]` which
-  // Puck attaches to each rendered block's root element. The retry loop
-  // handles the race where Puck has emitted the block into the tree but
-  // not yet attached the attribute; a handful of rAF ticks is plenty.
+  // Puck attaches to each rendered block's root element. Puck v0.21 renders
+  // the canvas inside an iframe (`#preview-frame`), so we look in the
+  // iframe's document first and fall back to the parent document when the
+  // canvas is rendered inline. The retry loop handles the race where Puck
+  // has emitted the block into the tree but not yet attached the
+  // attribute; a handful of rAF ticks is plenty.
   const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
   React.useEffect(() => {
     if (!selectedId || typeof document === "undefined") {
@@ -153,7 +156,7 @@ export function SelectedElementHeader() {
     }
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 16;
+    const maxAttempts = 32;
     // `CSS.escape` is not a global in some test environments (jsdom does
     // not hoist it off `window`); when missing we fall back to a minimal
     // escape that covers the characters our generated ids can actually
@@ -169,11 +172,26 @@ export function SelectedElementHeader() {
       }
       return raw.replace(/([^a-zA-Z0-9_-])/g, "\\$1");
     };
+    const findAnchor = (id: string): HTMLElement | null => {
+      const selector = `[data-puck-component="${escapeSelector(id)}"]`;
+      // 1) parent document (when iframe rendering is disabled)
+      const direct = document.querySelector<HTMLElement>(selector);
+      if (direct) return direct;
+      // 2) Puck v0.21+ renders inside #preview-frame iframe — query its
+      //    contentDocument for the same selector. We tolerate a missing
+      //    contentDocument (cross-origin / not-yet-loaded) by returning
+      //    null; the retry loop below will tick again.
+      const iframe = document.getElementById("preview-frame") as HTMLIFrameElement | null;
+      const innerDoc = iframe?.contentDocument ?? null;
+      if (innerDoc) {
+        const inFrame = innerDoc.querySelector<HTMLElement>(selector);
+        if (inFrame) return inFrame;
+      }
+      return null;
+    };
     const tick = () => {
       if (cancelled) return;
-      const el = document.querySelector<HTMLElement>(
-        `[data-puck-component="${escapeSelector(selectedId)}"]`,
-      );
+      const el = findAnchor(selectedId);
       if (el) {
         setAnchorEl(el);
         return;

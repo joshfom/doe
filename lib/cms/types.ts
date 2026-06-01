@@ -210,6 +210,8 @@ export interface MenuItemTree {
   label: string;
   url: string;
   icon: string | null;
+  /** Translated labels per locale, e.g. { "ar": "اتصل بنا" } */
+  translations?: Record<string, string> | null;
   itemType: ItemType;
   dropdownType: DropdownType | null;
   megaColumns: number;
@@ -222,6 +224,7 @@ export interface MenuWithItems {
   id: string;
   name: string;
   slug: string;
+  locale: string;
   createdAt: string;
   updatedAt: string;
   items: MenuItemTree[];

@@ -44,6 +44,10 @@
   --color-ora-gold: #EA8B6E;                 /* brand Sun 2434 C */
   --color-ora-gold-dark: #C76A4D;            /* dark Sun */
 
+  /* ── Teal accent ── (property filter active state) */
+  --color-ora-teal: #1A8A8A;
+  --color-ora-teal-dark: #14706F;
+
   /* ── Auxiliary status palette ── (engineering, not in brand guide) */
   --color-ora-success: #5C8A6B;
   --color-ora-warning: #C4A35A;
@@ -141,8 +145,15 @@ html {
 
 /* ── Tiptap Editor Styles ── */
 
+/* Override any min-height on tiptap/ProseMirror editors inside accordion bodies */
+.ora-accordion-body .tiptap,
+.ora-accordion-body .ProseMirror {
+  min-height: 0 !important;
+}
+
+/* Tiptap editors in the Puck config panel fields need reasonable min-height */
 .tiptap {
-  min-height: 300px;
+  min-height: 128px;
 }
 
 .tiptap:focus {

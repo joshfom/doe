@@ -169,6 +169,41 @@
       "when": 1779254380138,
       "tag": "0023_salty_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779351321136,
+      "tag": "0024_daffy_raider",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779352450523,
+      "tag": "0025_conversion_goals_and_attributions",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779353418151,
+      "tag": "0026_natural_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1779353856699,
+      "tag": "0027_panoramic_speedball",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779356624801,
+      "tag": "0028_loving_redwing",
+      "breakpoints": true
     }
   ]
 }

@@ -99,6 +99,13 @@ export type ContactLocationsMapProps = {
   showDividers: "yes" | "no";
   stackBreakpoint: number;       // px below which the layout stacks (panel above map)
 
+  // Floating-overlay positioning (panel sits on top of the map)
+  panelOffsetTop: string;        // distance from map top edge (e.g. "40px")
+  panelOffsetBottom: string;     // distance from map bottom edge (e.g. "40px")
+  panelOffsetSide: string;       // distance from chosen side (e.g. "40px")
+  panelBorderRadius: number;     // corner radius for the floating card
+  panelShadow: "yes" | "no";     // drop shadow toggle
+
   // Map
   apiKeyOverride?: string;
   centerLat: number;

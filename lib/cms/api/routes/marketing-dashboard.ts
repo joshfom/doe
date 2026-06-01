@@ -3,12 +3,34 @@ import { sql, desc, sum } from "drizzle-orm";
 import { authGuard } from "../auth";
 import { marketingSpend } from "../../schema";
 import { db } from "../../db";
+import {
+  getActiveConversionGoals,
+  getConversionEventNames,
+} from "../../conversion-goals";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface PostHogQueryResult {
   results?: unknown[][];
   columns?: string[];
+}
+
+interface ConversionGoalBreakdown {
+  goalId: string;
+  eventName: string;
+  displayLabel: string;
+  conversions: number;
+  value: number;
+}
+
+// ── Helpers: Sanitization ────────────────────────────────────────────────────
+
+/**
+ * Sanitize an event name for safe inclusion in HogQL queries.
+ * Only allows alphanumeric characters and underscores to prevent injection.
+ */
+function sanitizeEventName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_]/g, "");
 }
 
 // ── Route ────────────────────────────────────────────────────────────────────
@@ -34,7 +56,11 @@ export const marketingDashboardRoutes = new Elysia({
     const endDateStr = new Date().toISOString().split("T")[0];
 
     try {
-      // 1. Query marketing_spend for campaign spend data
+      // 1. Fetch active conversion goals (with fallback on failure)
+      const goals = await getActiveConversionGoals();
+      const eventNames = getConversionEventNames(goals);
+
+      // 2. Query marketing_spend for campaign spend data
       const spendRows = await db
         .select({
           campaignId: marketingSpend.campaignId,
@@ -51,10 +77,10 @@ export const marketingDashboardRoutes = new Elysia({
         .orderBy(desc(sum(marketingSpend.spend)))
         .limit(10);
 
-      // 2. Query PostHog for conversion metrics via HogQL
-      const posthogMetrics = await fetchPostHogMetrics(days);
+      // 3. Query PostHog for conversion metrics via HogQL
+      const posthogMetrics = await fetchPostHogMetrics(days, eventNames);
 
-      // 3. Compute dashboard metrics
+      // 4. Compute dashboard metrics
       const totalSpend = spendRows.reduce(
         (acc, r) => acc + parseFloat(r.totalSpend || "0"),
         0
@@ -81,7 +107,7 @@ export const marketingDashboardRoutes = new Elysia({
           ? ((aiConversions / totalConversions) * 100).toFixed(1)
           : "0.0";
 
-      // 4. Build top campaigns with ROAS
+      // 5. Build top campaigns with ROAS
       const topCampaigns = spendRows.map((row) => {
         const spend = parseFloat(row.totalSpend || "0");
         const campaignConversions =
@@ -99,9 +125,28 @@ export const marketingDashboardRoutes = new Elysia({
         };
       });
 
+      // 6. Build conversion breakdown per goal
+      const conversionBreakdown: ConversionGoalBreakdown[] = eventNames.map(
+        (eventName) => {
+          const goal = goals.find((g) => g.eventName === eventName);
+          const eventMetrics = posthogMetrics.perEventMetrics[eventName] || {
+            conversions: 0,
+            value: 0,
+          };
+          return {
+            goalId: goal?.id || "",
+            eventName,
+            displayLabel: goal?.displayLabel || eventName,
+            conversions: eventMetrics.conversions,
+            value: eventMetrics.value,
+          };
+        }
+      );
+
       return {
         data: {
           topCampaigns,
+          conversionBreakdown,
           conversionRate,
           cac,
           roas,
@@ -146,17 +191,21 @@ async function checkAnalyticsAccess(userId: string): Promise<boolean> {
 /**
  * Fetch conversion metrics from PostHog Query API (HogQL).
  * Returns total conversions, conversion value, visitors, AI conversions,
- * and per-campaign breakdowns.
+ * per-campaign breakdowns, and per-event breakdowns.
  */
-async function fetchPostHogMetrics(days: number): Promise<{
+async function fetchPostHogMetrics(
+  days: number,
+  eventNames: string[]
+): Promise<{
   totalConversions: number;
   totalConversionValue: number;
   totalVisitors: number;
   aiConversions: number;
   campaignConversions: Record<string, number>;
   campaignValues: Record<string, number>;
+  perEventMetrics: Record<string, { conversions: number; value: number }>;
 }> {
-  const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const posthogKey = process.env.POSTHOG_PERSONAL_API_KEY;
   const posthogHost = process.env.POSTHOG_HOST || "https://eu.i.posthog.com";
 
   if (!posthogKey) {
@@ -167,18 +216,23 @@ async function fetchPostHogMetrics(days: number): Promise<{
       aiConversions: 0,
       campaignConversions: {},
       campaignValues: {},
+      perEventMetrics: {},
     };
   }
 
   try {
+    // Sanitize event names and build the IN clause
+    const sanitizedEvents = eventNames.map(sanitizeEventName).filter(Boolean);
+    const inClause = sanitizedEvents.map((e) => `'${e}'`).join(", ");
+
     // Query 1: Total conversions and conversion value by campaign
     const conversionsQuery = `
       SELECT
         properties.$utm_campaign AS campaign,
         count() AS conversions,
-        sum(toFloat64OrZero(properties.conversion_value_aed)) AS value
+        sum(coalesce(properties.conversion_value_aed, 0)) AS value
       FROM events
-      WHERE event IN ('lead_qualified', 'reservation_completed', 'form_submitted')
+      WHERE event IN (${inClause})
         AND timestamp >= now() - interval ${days} day
       GROUP BY campaign
     `;
@@ -195,7 +249,7 @@ async function fetchPostHogMetrics(days: number): Promise<{
     const aiQuery = `
       SELECT count() AS ai_conversions
       FROM events
-      WHERE event IN ('lead_qualified', 'reservation_completed', 'form_submitted')
+      WHERE event IN (${inClause})
         AND timestamp >= now() - interval ${days} day
         AND person_id IN (
           SELECT DISTINCT person_id
@@ -205,11 +259,25 @@ async function fetchPostHogMetrics(days: number): Promise<{
         )
     `;
 
-    const [conversionsResult, visitorsResult, aiResult] = await Promise.all([
-      queryPostHog(posthogHost, posthogKey, conversionsQuery),
-      queryPostHog(posthogHost, posthogKey, visitorsQuery),
-      queryPostHog(posthogHost, posthogKey, aiQuery),
-    ]);
+    // Query 4: Per-event breakdown (conversions and value per event name)
+    const perEventQuery = `
+      SELECT
+        event AS event_name,
+        count() AS conversions,
+        sum(coalesce(properties.conversion_value_aed, 0)) AS value
+      FROM events
+      WHERE event IN (${inClause})
+        AND timestamp >= now() - interval ${days} day
+      GROUP BY event_name
+    `;
+
+    const [conversionsResult, visitorsResult, aiResult, perEventResult] =
+      await Promise.all([
+        queryPostHog(posthogHost, posthogKey, conversionsQuery),
+        queryPostHog(posthogHost, posthogKey, visitorsQuery),
+        queryPostHog(posthogHost, posthogKey, aiQuery),
+        queryPostHog(posthogHost, posthogKey, perEventQuery),
+      ]);
 
     // Parse conversions result
     const campaignConversions: Record<string, number> = {};
@@ -241,6 +309,19 @@ async function fetchPostHogMetrics(days: number): Promise<{
     const aiConversions =
       aiResult?.results?.[0]?.[0] ? Number(aiResult.results[0][0]) : 0;
 
+    // Parse per-event breakdown
+    const perEventMetrics: Record<string, { conversions: number; value: number }> = {};
+    if (perEventResult?.results) {
+      for (const row of perEventResult.results) {
+        const eventName = String(row[0] || "");
+        const conversions = Number(row[1] || 0);
+        const value = Number(row[2] || 0);
+        if (eventName) {
+          perEventMetrics[eventName] = { conversions, value };
+        }
+      }
+    }
+
     return {
       totalConversions,
       totalConversionValue,
@@ -248,6 +329,7 @@ async function fetchPostHogMetrics(days: number): Promise<{
       aiConversions,
       campaignConversions,
       campaignValues,
+      perEventMetrics,
     };
   } catch (err) {
     console.error("[marketing-dashboard] PostHog query failed:", err);
@@ -258,6 +340,7 @@ async function fetchPostHogMetrics(days: number): Promise<{
       aiConversions: 0,
       campaignConversions: {},
       campaignValues: {},
+      perEventMetrics: {},
     };
   }
 }
