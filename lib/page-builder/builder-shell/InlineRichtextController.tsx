@@ -26,7 +26,7 @@ import React, { createContext, useContext, useRef, useState, useEffect, useCallb
 import type { Editor } from "@tiptap/react";
 import { usePuckStore } from "../use-puck-store";
 import { isRichtextField } from "./richtext-fields";
-import { sanitizeRichTextHtml } from "../config";
+import { sanitizeRichTextHtml } from "../richtext/sanitize";
 import { INLINE_TOOLBAR_HIDE_DELAY_MS } from "./InlineToolbar";
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -106,13 +106,7 @@ function findPuckBlockTarget(target: EventTarget | null): {
 
 interface TiptapModules {
   Editor: typeof import("@tiptap/react").Editor;
-  StarterKit: typeof import("@tiptap/starter-kit").default;
-  Underline: typeof import("@tiptap/extension-underline").default;
-  TextStyle: typeof import("@tiptap/extension-text-style").TextStyle;
-  Color: typeof import("@tiptap/extension-color").default;
-  Highlight: typeof import("@tiptap/extension-highlight").default;
-  TextAlign: typeof import("@tiptap/extension-text-align").default;
-  Link: typeof import("@tiptap/extension-link").default;
+  createEditorExtensions: typeof import("../richtext/tiptap-extensions").createEditorExtensions;
 }
 
 let tiptapModulesCache: TiptapModules | null = null;
@@ -120,27 +114,15 @@ let tiptapModulesCache: TiptapModules | null = null;
 async function loadTiptapModules(): Promise<TiptapModules> {
   if (tiptapModulesCache) return tiptapModulesCache;
 
-  const [
-    { Editor },
-    { default: StarterKit },
-    { default: Underline },
-    { TextStyle },
-    { default: Color },
-    { default: Highlight },
-    { default: TextAlign },
-    { default: Link },
-  ] = await Promise.all([
+  // Lazily import both the editor runtime and the shared extension module so
+  // the tiptap extension packages (statically imported by the shared module)
+  // stay out of the main builder chunk and only load on first promotion.
+  const [{ Editor }, { createEditorExtensions }] = await Promise.all([
     import("@tiptap/react"),
-    import("@tiptap/starter-kit"),
-    import("@tiptap/extension-underline"),
-    import("@tiptap/extension-text-style"),
-    import("@tiptap/extension-color"),
-    import("@tiptap/extension-highlight"),
-    import("@tiptap/extension-text-align"),
-    import("@tiptap/extension-link"),
+    import("../richtext/tiptap-extensions"),
   ]);
 
-  tiptapModulesCache = { Editor, StarterKit, Underline, TextStyle, Color, Highlight, TextAlign, Link };
+  tiptapModulesCache = { Editor, createEditorExtensions };
   return tiptapModulesCache;
 }
 
@@ -289,19 +271,7 @@ export function InlineRichtextController({ children }: { children?: React.ReactN
 
         const newEditor = new modules.Editor({
           element,
-          extensions: [
-            modules.StarterKit,
-            modules.Underline,
-            modules.TextStyle,
-            modules.Color,
-            modules.Highlight.configure({ multicolor: true }),
-            modules.TextAlign.configure({
-              types: ["heading", "paragraph"],
-            }),
-            modules.Link.configure({
-              openOnClick: false,
-            }),
-          ],
+          extensions: modules.createEditorExtensions(),
           content: initialHtml,
           autofocus: true,
           editorProps: {

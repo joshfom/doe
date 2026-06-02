@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
+import { createEditorExtensions } from "@/lib/page-builder/richtext/tiptap-extensions";
 import { MediaPickerModal } from "./MediaPickerModal";
 import {
   Bold,
@@ -229,10 +229,23 @@ export function TiptapEditor({ content, onChange }: TiptapEditorProps) {
 
   const editor = useEditor({
     immediatelyRender: false,
+    // Consume the shared editor extension set (single source of truth shared
+    // with the inline editor) so the blog editor's marks/nodes stay in sync,
+    // then layer the blog-specific decorations on top to preserve formatting
+    // parity. The shared set already includes StarterKit (default heading
+    // levels are 1–6) plus Underline/TextStyle/Color/Highlight/TextAlign.
+    //
+    // Two blog-specific overrides are kept local:
+    // - Link: re-added with the `text-ora-gold underline` admin-editor styling
+    //   (the shared Link is plain), replacing the shared `link` mark by name.
+    // - Image: not part of the shared set; the blog editor needs it with its
+    //   `max-w-full h-auto` sizing class.
+    //
+    // Note: these `HTMLAttributes` classes decorate the in-editor surface only.
+    // Stored content is Tiptap JSON rendered publicly via `ssrExtensions`
+    // (`renderTiptapToHtml`), so this wiring does not change published output.
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-      }),
+      ...createEditorExtensions().filter((ext) => ext.name !== "link"),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { class: "text-ora-gold underline" },

@@ -166,7 +166,7 @@ export default function PageEditorPage({
   return (
     <div className="-m-8" style={{ height: '100vh', width: 'calc(100% + 4rem)' }}>
       <BuilderShell
-          config={pageBuilderConfig as never}
+          config={pageBuilderConfig}
           document={{
             id,
             title: (page?.title as string) ?? 'Untitled',

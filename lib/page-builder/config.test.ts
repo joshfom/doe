@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
 import React from "react";
+import { renderBlock } from "./test-utils";
 
 // Polyfill ResizeObserver for jsdom — must be set before importing config
 globalThis.ResizeObserver ??= class ResizeObserver {
@@ -50,9 +50,12 @@ describe("Section refactor", () => {
       id: "test-section",
     };
 
-    // Section.render returns React elements; render them via @testing-library/react
-    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    // Section.render returns React elements; render them via the BreakpointProvider helper
+    const element = React.createElement(
+      Section.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     // The Section renders a <section> with an inner <div> wrapping the DropZone
     const sectionEl = container.querySelector("section");
@@ -97,8 +100,11 @@ describe("Section refactor", () => {
       maxHeight: "100vh",
     };
 
-    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Section.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
     const sectionEl = container.querySelector("section") as HTMLElement | null;
 
     expect(sectionEl).toBeTruthy();
@@ -118,8 +124,11 @@ describe("Section refactor", () => {
       bgImage: "",
     };
 
-    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Section.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
     const sectionEl = container.querySelector("section") as HTMLElement | null;
 
     expect(sectionEl).toBeTruthy();
@@ -135,8 +144,11 @@ describe("Section refactor", () => {
       bgImage: "https://placehold.co/1200x600",
     };
 
-    const element = (Section.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Section.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     expect(container.querySelector("video")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeFalsy();
@@ -360,8 +372,11 @@ describe("Text rich content rendering", () => {
       content: "<p>Intro</p><ul><li>Item one</li><li>Item two</li></ul>",
     };
 
-    const element = (Text.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Text.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     const list = container.querySelector("ul");
     const items = container.querySelectorAll("li");
@@ -381,8 +396,11 @@ describe("Video component rendering", () => {
       src: "https://player.vimeo.com/video/1101785637?muted=1&autoplay=1&controls=0&loop=1",
     };
 
-    const element = (Video.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Video.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     expect(container.querySelector("iframe")).toBeTruthy();
   });
@@ -410,8 +428,11 @@ describe("Button hover rendering", () => {
       _icon: { name: "star", position: "left", size: "16", gap: "8px" },
     };
 
-    const element = (Button.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      Button.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     const anchor = container.querySelector("a") as HTMLAnchorElement | null;
     expect(anchor).toBeTruthy();
@@ -441,8 +462,11 @@ describe("StatsGrid rendering", () => {
       ],
     };
 
-    const element = (StatsGrid.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      StatsGrid.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     expect(container.textContent).toContain("4.8M²");
     expect(container.textContent).toContain("Total Land Area");
@@ -459,8 +483,11 @@ describe("StatsGrid rendering", () => {
       ],
     };
 
-    const element = (StatsGrid.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      StatsGrid.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     // styledRender wraps in a div (container → styledRender-wrapper → grid → stat-item)
     // container is itself a div, so we need 4 levels deep to reach the stat item
@@ -485,8 +512,11 @@ describe("AccordionGroup content rendering", () => {
       ],
     };
 
-    const element = (AccordionGroup.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      AccordionGroup.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     expect(container.querySelector("li")).toBeTruthy();
     expect(container.textContent).toContain("Airport transfer");
@@ -505,8 +535,11 @@ describe("AccordionGroup content rendering", () => {
       ],
     };
 
-    const element = (AccordionGroup.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      AccordionGroup.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     expect(container.textContent).toContain("Accordion Title");
     expect(container.textContent).toContain("Accordion Body");
@@ -525,8 +558,11 @@ describe("LocationMap registration", () => {
       id: "loc-map-test",
       puck: { renderDropZone: () => null, isEditing: false },
     };
-    const element = (LocationMap.render as (p: Record<string, unknown>) => React.ReactElement)(props);
-    const { container } = render(element);
+    const element = React.createElement(
+      LocationMap.render as React.ComponentType<Record<string, unknown>>,
+      props,
+    );
+    const { container } = renderBlock(element);
 
     // Title from defaultProps is "Location"
     expect(container.textContent).toContain("Location");

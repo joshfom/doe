@@ -1,9 +1,14 @@
 "use client";
 
-import type { Config } from "@puckeditor/core";
+import type { OraComponentConfig, OraConfig } from "./config-types";
 import { motion } from "framer-motion";
 import React from "react";
 import { stylePropsToCSS } from "./style-fields";
+import { sanitizeRichTextHtml } from "./richtext/sanitize";
+// Re-export so existing importers of `../config` (e.g. InlineRichtextController
+// tests and the richtext-roundtrip property test) keep resolving to the single
+// isomorphic, fail-closed sanitizer source of truth in `./richtext/sanitize`.
+export { sanitizeRichTextHtml };
 import {
   typographyFields,
   typographyDefaultsHeading,
@@ -349,35 +354,6 @@ const RICH_TEXT_EMBEDDED_STYLES = `
 }
 `;
 
-export function sanitizeRichTextHtml(html: string): string {
-  // Rich text originates from the editor, but sanitize before innerHTML render.
-  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    return html;
-  }
-
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("script, iframe, object, embed").forEach((node) => node.remove());
-
-  doc.querySelectorAll("*").forEach((element) => {
-    for (const attr of Array.from(element.attributes)) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value;
-
-      if (name.startsWith("on")) {
-        element.removeAttribute(attr.name);
-        continue;
-      }
-
-      const isUrlAttr = name === "href" || name === "src" || name === "xlink:href";
-      if (isUrlAttr && /^\s*javascript:/i.test(value)) {
-        element.removeAttribute(attr.name);
-      }
-    }
-  });
-
-  return doc.body.innerHTML;
-}
-
 function parseUrlSafe(raw: string): URL | null {
   try {
     return new URL(raw);
@@ -624,7 +600,7 @@ const imageUploadField = {
 // ─── Section ─────────────────────────────────────────────────────────────────
 // The primary container. Has background color/image/opacity, contains a slot.
 
-const Section: Config["components"][string] = {
+const Section: OraComponentConfig = {
   label: "Section",
   fields: {
     "section-content": { type: "slot", disallow: ["Section"] },
@@ -988,7 +964,7 @@ export function mapLegacySpacing(item: Record<string, string>): {
   };
 }
 
-const Columns: Config["components"][string] = {
+const Columns: OraComponentConfig = {
   label: "Columns",
   responsiveDefaults: {
     layoutDirection: { mobile: "column" },
@@ -1172,7 +1148,7 @@ const CONTAINER_BG_COLORS = ORA_SOLID_BG_OPTIONS;
 
 const CONTAINER_GRADIENT_COLORS = ORA_GRADIENT_OPTIONS;
 
-const Container: Config["components"][string] = {
+const Container: OraComponentConfig = {
   label: "Container",
   fields: {
     "container-content": { type: "slot", disallow: ["Section"] },
@@ -1272,7 +1248,7 @@ const Container: Config["components"][string] = {
 
 // ─── Quote/Blockquote — Styled quote with accent border ──────────────────────
 
-const Quote: Config["components"][string] = {
+const Quote: OraComponentConfig = {
   label: "Quote",
   fields: {
     text: { type: "textarea", label: "Quote Text", contentEditable: true },
@@ -1308,7 +1284,7 @@ const Quote: Config["components"][string] = {
 
 // ─── Link — Inline text link ─────────────────────────────────────────────────
 
-const InlineLink: Config["components"][string] = {
+const InlineLink: OraComponentConfig = {
   label: "Link",
   fields: {
     text: { type: "text", label: "Link Text", contentEditable: true },
@@ -1347,7 +1323,7 @@ const InlineLink: Config["components"][string] = {
 
 // ─── Heading ─────────────────────────────────────────────────────────────────
 
-const Heading: Config["components"][string] = {
+const Heading: OraComponentConfig = {
   label: "Heading",
   fields: {
     text: { type: "text", label: "Text", contentEditable: true },
@@ -1372,7 +1348,7 @@ const Heading: Config["components"][string] = {
 
 // ─── Text ────────────────────────────────────────────────────────────────────
 
-const Text: Config["components"][string] = {
+const Text: OraComponentConfig = {
   label: "Text",
   fields: {
     content: {
@@ -1843,7 +1819,7 @@ const BUTTON_HOVER_CSS = `
 }
 `;
 
-const Button: Config["components"][string] = {
+const Button: OraComponentConfig = {
   label: "Button",
   fields: {
     // ── Content ────────────────────────────────────────────────────────────
@@ -2016,7 +1992,7 @@ const Button: Config["components"][string] = {
 
 // ─── Image ───────────────────────────────────────────────────────────────────
 
-const Image: Config["components"][string] = {
+const Image: OraComponentConfig = {
   label: "Image",
   fields: {
     src: imageUploadField,
@@ -2051,7 +2027,7 @@ const VIDEO_RATIO_OPTIONS = [
   { label: "21:9", value: "21:9" },
 ];
 
-const Video: Config["components"][string] = {
+const Video: OraComponentConfig = {
   label: "Video",
   fields: {
     src: { type: "text", label: "Video URL (file, YouTube, Vimeo)" },
@@ -2136,7 +2112,7 @@ const Video: Config["components"][string] = {
 
 // ─── Spacer ──────────────────────────────────────────────────────────────────
 
-const Spacer: Config["components"][string] = {
+const Spacer: OraComponentConfig = {
   label: "Spacer",
   fields: {
     height: { type: "select", label: "Height", options: [
@@ -2151,7 +2127,7 @@ const Spacer: Config["components"][string] = {
 
 // ─── Divider ─────────────────────────────────────────────────────────────────
 
-const Divider: Config["components"][string] = {
+const Divider: OraComponentConfig = {
   label: "Divider",
   fields: {
     color: { type: "select", label: "Color", options: [
@@ -2167,7 +2143,7 @@ const Divider: Config["components"][string] = {
 
 // ─── Icon ────────────────────────────────────────────────────────────────────
 
-const Icon: Config["components"][string] = {
+const Icon: OraComponentConfig = {
   label: "Icon",
   fields: {
     icon: { type: "select", label: "Icon", options: [
@@ -2230,7 +2206,7 @@ const Icon: Config["components"][string] = {
 
 // ─── FilterTabs — Horizontal tabs with superscript counts ────────────────────
 
-const FilterTabs: Config["components"][string] = {
+const FilterTabs: OraComponentConfig = {
   label: "Filter Tabs",
   fields: {
     tabs: { type: "array", label: "Tabs", arrayFields: {
@@ -2302,7 +2278,7 @@ function extractIconFeatureLabel(value: unknown, seen = new WeakSet<object>(), d
   return "";
 }
 
-const IconFeatureList: Config["components"][string] = {
+const IconFeatureList: OraComponentConfig = {
   label: "Icon Feature List",
   responsiveDefaults: {
     layoutDirection: { mobile: "column" },
@@ -2466,7 +2442,7 @@ const IconFeatureList: Config["components"][string] = {
   },
 };
 
-const AccordionGroup: Config["components"][string] = {
+const AccordionGroup: OraComponentConfig = {
   label: "Accordion Group",
   responsiveDefaults: {
     layoutDirection: { mobile: "column" },
@@ -2711,7 +2687,7 @@ const AccordionGroup: Config["components"][string] = {
 
 // ─── Accordion — Expandable section with slot content ────────────────────
 
-const Accordion: Config["components"][string] = {
+const Accordion: OraComponentConfig = {
   label: "Accordion",
   fields: {
     "accordion-content": { type: "slot", disallow: ["Section"] },
@@ -2741,7 +2717,7 @@ const Accordion: Config["components"][string] = {
 // Absolutely positioned within a Section. Shows an animated arrow + label.
 // Set vertical = bottom/top/center and horizontal = left/center/right.
 
-const ScrollIndicator: Config["components"][string] = {
+const ScrollIndicator: OraComponentConfig = {
   label: "Scroll Indicator",
   fields: {
     label: createFreeInputField("Label Text", "", [], "Short text shown above/below the indicator.", "SCROLL TO EXPLORE"),
@@ -3043,7 +3019,7 @@ const STATS_BORDER_SIDES_FIELD = {
   borderBottom: createToggleField("Bottom Border", [{ label: "On", value: "yes" }, { label: "Off", value: "no" }]),
 };
 
-const StatsGrid: Config["components"][string] = {
+const StatsGrid: OraComponentConfig = {
   label: "Stats Grid",
   responsiveDefaults: {
     columns: { mobile: "1" },
@@ -3245,7 +3221,7 @@ const contactLocationPickerField = {
   },
 };
 
-const LocationMap: Config["components"][string] = {
+const LocationMap: OraComponentConfig = {
   label: "Location Map",
   fields: {
     mapTitle: { type: "text", label: "Title", contentEditable: true },
@@ -3426,7 +3402,7 @@ const LocationMap: Config["components"][string] = {
 // CONTACT LOCATIONS MAP — Side-by-side address panel + Google Map
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const ContactLocationsMap: Config["components"][string] = {
+const ContactLocationsMap: OraComponentConfig = {
   label: "Contact Locations Map",
   responsiveDefaults: {
     layoutDirection: { mobile: "column" },
@@ -3649,7 +3625,7 @@ const ContactLocationsMap: Config["components"][string] = {
 // FEATURED PROJECTS — pulls cards from /api/projects/public
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FeaturedProjects: Config["components"][string] = {
+const FeaturedProjects: OraComponentConfig = {
   responsiveDefaults: {
     columns: { mobile: 1 },
   },
@@ -3708,7 +3684,7 @@ const FeaturedProjects: Config["components"][string] = {
 // FEATURED COMMUNITIES — cards from /api/communities/public
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FeaturedCommunities: Config["components"][string] = {
+const FeaturedCommunities: OraComponentConfig = {
   responsiveDefaults: {
     columns: { mobile: 1 },
   },
@@ -3777,7 +3753,7 @@ const PROJECT_SECTION_OPTIONS: Array<{ label: string; value: ProjectSectionKind 
   { label: "Payment Plan", value: "payment" },
 ];
 
-const ProjectSection: Config["components"][string] = {
+const ProjectSection: OraComponentConfig = {
   fields: {
     projectSlug: { type: "text", label: "Project slug" },
     section: {
@@ -3811,7 +3787,7 @@ const ProjectSection: Config["components"][string] = {
 // Full-width image carousel with autoplay, dots, and overlay support.
 // Designed for hero sections in project landing pages.
 
-const ImageCarousel: Config["components"][string] = {
+const ImageCarousel: OraComponentConfig = {
   label: "Image Carousel",
   fields: {
     images: {
@@ -3976,7 +3952,7 @@ const ImageCarousel: Config["components"][string] = {
 // Multi-image gallery with grid and carousel display modes, configurable
 // columns/items-per-view, gap, image sizing, and a built-in lightbox overlay.
 
-const Gallery: Config["components"][string] = {
+const Gallery: OraComponentConfig = {
   label: "Gallery",
   fields: {
     images: {
@@ -4155,7 +4131,7 @@ const Gallery: Config["components"][string] = {
 // etc.). The embedded app owns its own navigation — we don't try to observe or
 // drive it across origins.
 
-const ExperienceLauncher: Config["components"][string] = {
+const ExperienceLauncher: OraComponentConfig = {
   label: "3D Experience Launcher",
   fields: {
     // ── Content ────────────────────────────────────────────────────────────
@@ -4280,11 +4256,11 @@ const ExperienceLauncher: Config["components"][string] = {
  * instead of scalar strings.
  */
 function wrapAllRenders(
-  components: Config["components"],
-): Config["components"] {
-  const wrapped: Config["components"] = {};
+  components: Record<string, OraComponentConfig>,
+): Record<string, OraComponentConfig> {
+  const wrapped: Record<string, OraComponentConfig> = {};
   for (const [name, component] of Object.entries(components)) {
-    const responsiveDefaults = (component as any).responsiveDefaults;
+    const responsiveDefaults = component.responsiveDefaults;
 
     // Registration-time validation: fail fast if responsiveDefaults is invalid
     if (responsiveDefaults) {
@@ -4490,7 +4466,7 @@ const analyticsRootDefaults: { _analytics: PageAnalyticsConfig & { surveyTrigger
   } as any,
 };
 
-export const pageBuilderConfig: Config = {
+export const pageBuilderConfig: OraConfig = {
   categories: {
     layout: {
       components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider"],
