@@ -63,10 +63,13 @@ describe("headlessOverrides", () => {
     // `componentItem` is intentionally NOT in this list — it now wraps each
     // rendered block with insertion-button affordances (Task 8.1, Reqs 4.1
     // through 4.3). Its behaviour is asserted separately below.
+    //
+    // `actionBar` is also NOT in this list — it now hosts the native inline
+    // rich-text formatting bubble (passed by Puck as `children` when a block's
+    // inline editor is focused). Its behaviour is asserted separately below.
     const chromeKeys = [
       "header",
       "headerActions",
-      "actionBar",
       "fields",
       "fieldLabel",
       "components",
@@ -87,6 +90,30 @@ describe("headlessOverrides", () => {
       expect(React.isValidElement(result)).toBe(true);
       expect((result as React.ReactElement).type).toBe(React.Fragment);
     }
+  });
+
+  it("renders the inline rich-text menu children via the actionBar slot", () => {
+    const fn = headlessOverrides.actionBar;
+    expect(typeof fn).toBe("function");
+
+    // With no children (no inline editor focused, duplicate/delete disabled
+    // via permissions), the bar renders nothing so non-text selections show
+    // no stray floating chrome.
+    // @ts-expect-error — exercising the render function with a permissive arg
+    const empty = fn?.({ children: null, parentAction: null });
+    const { container: emptyContainer } = render(empty as React.ReactElement);
+    expect(emptyContainer.querySelector("[data-ora-inline-rte-bar]")).toBeNull();
+
+    // With children (Puck's native rich-text menu), the bar renders them
+    // inside the ORA-styled toolbar container.
+    // @ts-expect-error — exercising the render function with a permissive arg
+    const withMenu = fn?.({
+      children: <span data-testid="rte-menu" />,
+      parentAction: null,
+    });
+    const { container: menuContainer } = render(withMenu as React.ReactElement);
+    expect(menuContainer.querySelector("[data-ora-inline-rte-bar]")).not.toBeNull();
+    expect(menuContainer.querySelector("[data-testid='rte-menu']")).not.toBeNull();
   });
 
   it("uses the insertion-button override for componentItem", () => {

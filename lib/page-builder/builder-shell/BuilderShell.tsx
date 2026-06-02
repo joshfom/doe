@@ -46,6 +46,7 @@ import { Puck } from "@puckeditor/core";
 import type { Config, Data } from "@puckeditor/core";
 import { BreakpointProvider, useBreakpoint } from "../breakpoint-context";
 import { headlessOverrides } from "./headless-overrides";
+import { withInlineRichtextMenu } from "./with-inline-richtext-menu";
 import { TopBar } from "./TopBar";
 import { ComponentPalette } from "./ComponentPalette";
 import { ConfigurationPanel } from "./configuration-panel/ConfigurationPanel";
@@ -89,6 +90,15 @@ const SHELL_THEME = {
   border: "#E5E1DA",
 };
 
+/**
+ * Puck permissions for the Builder Shell. Duplicate/delete are disabled so
+ * Puck does not inject its own buttons into the selection overlay's action bar
+ * — the Builder Shell owns those via `SelectedElementHeader`. With them off,
+ * the `actionBar` override slot carries ONLY the native inline rich-text menu
+ * (the floating formatting bubble). See `InlineRichtextActionBar`.
+ */
+const BUILDER_PERMISSIONS = { duplicate: false, delete: false } as const;
+
 export function BuilderShell({
   config,
   document,
@@ -96,6 +106,12 @@ export function BuilderShell({
   onPublish,
   onPreview,
 }: BuilderShellProps) {
+  // Augment the config with editor-only richtext inline menus. Done here (not
+  // in `config.ts`) so the ORA inline formatting bubble — and the editor-only
+  // `RichTextMenu` controls it pulls in — never reach the public renderer
+  // bundle. See `with-inline-richtext-menu.tsx`.
+  const editorConfig = React.useMemo(() => withInlineRichtextMenu(config), [config]);
+
   const initialData: Data = React.useMemo(() => {
     let raw: Data;
     if (document.mode === "page" && document.pageData) {
@@ -263,9 +279,10 @@ export function BuilderShell({
       <BreakpointProvider>
         <FieldControlRegistryProvider>
           <Puck
-            config={config}
+            config={editorConfig}
             data={initialData}
             overrides={headlessOverrides}
+            permissions={BUILDER_PERMISSIONS}
             onChange={handleChange}
           >
             <SelectionAnnounceProvider>

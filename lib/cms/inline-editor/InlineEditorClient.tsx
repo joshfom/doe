@@ -45,6 +45,7 @@ import {
 } from "@puckeditor/core";
 import { usePuckStore } from "@/lib/page-builder/use-puck-store";
 import { headlessOverrides } from "@/lib/page-builder/builder-shell/headless-overrides";
+import { withInlineRichtextMenu } from "@/lib/page-builder/builder-shell/with-inline-richtext-menu";
 import { pageBuilderConfig } from "@/lib/page-builder/config";
 import { migratePageData } from "@/lib/page-builder/migrate-data";
 import { useInlineSelection } from "./useInlineSelection";
@@ -61,6 +62,21 @@ interface PageDataResponse {
   slug?: string;
   data: PuckData;
 }
+
+/**
+ * Editor-only config augmentation (ORA inline rich-text menus), built once.
+ * Kept module-scoped since `pageBuilderConfig` is a stable singleton — this
+ * avoids re-augmenting on every render. See `with-inline-richtext-menu.tsx`
+ * for why this is applied at the editor layer rather than in `config.ts`.
+ */
+const editorConfig = withInlineRichtextMenu(pageBuilderConfig);
+
+/**
+ * Disable Puck's duplicate/delete so the selection overlay's action bar
+ * carries only the native inline rich-text formatting bubble (the frontend
+ * inline editor provides its own block actions). Mirrors `BuilderShell`.
+ */
+const INLINE_EDITOR_PERMISSIONS = { duplicate: false, delete: false } as const;
 
 export function InlineEditorClient({ pageId }: InlineEditorClientProps) {
   const [initialData, setInitialData] = useState<PuckData | null>(null);
@@ -184,9 +200,10 @@ export function InlineEditorClient({ pageId }: InlineEditorClientProps) {
 
   return (
     <Puck
-      config={pageBuilderConfig}
+      config={editorConfig}
       data={initialData}
       overrides={headlessOverrides}
+      permissions={INLINE_EDITOR_PERMISSIONS}
     >
       <InlineEditorInner
         pageId={pageId}
