@@ -8,6 +8,19 @@ const nextConfig: NextConfig = {
   // This is required to support PostHog trailing slash API requests
   skipTrailingSlashRedirect: true,
 
+  images: {
+    // Allow next/image to optimize/serve images hosted on Cloudflare R2.
+    // Production builds (`next start`) enforce remotePatterns and reject any
+    // unlisted remote host with a 400 — which is why R2 images failed to load
+    // in the Docker build while working in `next dev`.
+    remotePatterns: [
+      // Public R2 buckets, e.g. https://pub-<id>.r2.dev/...
+      { protocol: "https", hostname: "*.r2.dev" },
+      // Direct R2 S3 endpoint, e.g. https://<account>.r2.cloudflarestorage.com/...
+      { protocol: "https", hostname: "*.r2.cloudflarestorage.com" },
+    ],
+  },
+
   turbopack: {
     // `lib/page-builder/richtext/sanitize.ts` is isomorphic and gets pulled into
     // the CLIENT bundle via the `"use client"` `config.ts`. Its server branch

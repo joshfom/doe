@@ -1,0 +1,25 @@
+# Local reverse proxy for production-style testing over a custom .test domain.
+# {$APP_DOMAIN} is supplied by docker-compose (defaults to doe.test).
+#
+# `tls internal` makes Caddy issue a certificate signed by its own local CA.
+# Trust that CA once on the host to get green-padlock HTTPS (see Docker notes),
+# or just click through the browser warning.
+
+{$APP_DOMAIN:doe.test} {
+	encode zstd gzip
+	tls internal
+
+	reverse_proxy app:3000 {
+		# Preserve the original host + scheme so Next.js / the API see the
+		# real request as https://doe.test rather than the upstream container.
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+# Optional: redirect the bare www subdomain to the apex.
+www.{$APP_DOMAIN:doe.test} {
+	tls internal
+	redir https://{$APP_DOMAIN:doe.test}{uri}
+}
