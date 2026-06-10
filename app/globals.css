@@ -1,47 +1,84 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ── ORA Design System Tokens ── */
+  /* ──────────────────────────────────────────────────────────
+     ORA Design System Tokens
+     Source of truth: docs/ORA_BRAND_WEB.md
+     Brand guide: docs/ORA_BrandGuidelines_v1_2022.pdf §6.2, §6.3
+     ────────────────────────────────────────────────────────── */
 
-  /* Neutrals */
-  --color-ora-white: #FFFFFF;
-  --color-ora-cream-light: #F9F7F5;
-  --color-ora-cream: #F5F3F0;
-  --color-ora-cream-dark: #EBE7E2;
-  --color-ora-sand-light: #EDEAE6;
-  --color-ora-sand: #E8E4DF;
-  --color-ora-sand-dark: #D4CFC8;
-  --color-ora-stone-light: #DDD9D3;
-  --color-ora-stone: #D4CFC8;
-  --color-ora-stone-dark: #B8B3AB;
+  /* ── Brand-canonical aliases (prefer these in new code) ── */
+  --color-ora-silver: #B5B5B5;       /* Pantone Cool Gray 6 C */
+  --color-ora-sun: #EA8B6E;          /* Pantone 2434 C */
+  --color-ora-ocean: #A4E0E6;        /* Pantone 629 C */
+  --color-ora-dark-gray: #262626;    /* Pantone 446 C */
+  /* ora-white and ora-sand below are also brand-canonical names */
 
-  /* Text */
-  --color-ora-charcoal-dark: #1A1A1A;
-  --color-ora-charcoal: #2C2C2C;
-  --color-ora-charcoal-light: #4A4A4A;
-  --color-ora-graphite: #4A4A4A;
-  --color-ora-slate: #6B6B6B;
-  --color-ora-muted: #9A9A9A;
+  /* ── Neutrals ──
+     ora-white   → brand White (#FFFFFF)
+     ora-sand*   → brand Sand (#E3CBA8) + tonal variants
+     ora-cream*  → off-white tints derived from Sand (engineering, not brand)
+     ora-stone*  → brand Silver (#B5B5B5) + tonal variants
+  */
+  --color-ora-white: #FFFFFF;                /* brand White */
+  --color-ora-cream-light: #FBF8F3;          /* warm off-white (Sand-tinted) */
+  --color-ora-cream: #F7F1E6;                /* warm cream (Sand-tinted) */
+  --color-ora-cream-dark: #EFE4D0;           /* warm cream hover */
+  --color-ora-sand-light: #ECDABB;           /* light Sand */
+  --color-ora-sand: #E3CBA8;                 /* brand Sand 468 C */
+  --color-ora-sand-dark: #C9B189;            /* dark Sand */
+  --color-ora-stone-light: #D6D6D6;          /* light Silver */
+  --color-ora-stone: #B5B5B5;                /* brand Silver Cool Gray 6 C */
+  --color-ora-stone-dark: #9A9A9A;           /* dark Silver */
 
-  /* Gold Accent */
-  --color-ora-gold-light: #D4B896;
-  --color-ora-gold: #B8956B;
-  --color-ora-gold-dark: #8B7355;
+  /* ── Text ── (mapped onto brand Dark Gray) */
+  --color-ora-charcoal-dark: #1A1A1A;        /* near-black headings */
+  --color-ora-charcoal: #262626;             /* brand Dark Gray 446 C */
+  --color-ora-charcoal-light: #4A4A4A;       /* secondary text */
+  --color-ora-graphite: #4A4A4A;             /* button hover */
+  --color-ora-slate: #6B6B6B;                /* tertiary text */
+  --color-ora-muted: #9A9A9A;                /* placeholder / disabled */
 
-  /* Status */
+  /* ── Accent ── (legacy "gold" tokens mapped onto brand Sun) */
+  --color-ora-gold-light: #F2A88E;           /* light Sun */
+  --color-ora-gold: #EA8B6E;                 /* brand Sun 2434 C */
+  --color-ora-gold-dark: #C76A4D;            /* dark Sun */
+
+  /* ── Teal accent ── (property filter active state) */
+  --color-ora-teal: #1A8A8A;
+  --color-ora-teal-dark: #14706F;
+
+  /* ── Auxiliary status palette ── (engineering, not in brand guide) */
   --color-ora-success: #5C8A6B;
   --color-ora-warning: #C4A35A;
   --color-ora-error: #B85C5C;
   --color-ora-info: #5C7A8A;
 
-  /* Shadows */
-  --shadow-ora-sm: 0 1px 2px rgba(44,44,44,0.04);
-  --shadow-ora-md: 0 4px 6px rgba(44,44,44,0.06);
-  --shadow-ora-lg: 0 10px 15px rgba(44,44,44,0.08);
+  /* ── Shadows ── */
+  --shadow-ora-sm: 0 1px 2px rgba(38,38,38,0.04);
+  --shadow-ora-md: 0 4px 6px rgba(38,38,38,0.06);
+  --shadow-ora-lg: 0 10px 15px rgba(38,38,38,0.08);
 
-  /* Fonts */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* ── Fonts ──
+     Primary brand: URW Geometric (self-hosted via next/font/local —
+       see app/fonts/urw-geometric.ts). next/font auto-generates a
+       size-adjusted "URW Geometric Fallback" face to reduce CLS while
+       the brand font swaps in (display: swap).
+     Fallback: system-ui, sans-serif (terminal fallback when font files
+       are unavailable or still loading).
+     Mono: Geist Mono (engineering, not in brand guide).
+  */
+  --font-sans: var(--font-urw-geometric), system-ui, sans-serif;
+  --font-display: var(--font-urw-geometric), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* ── Legacy font-variable aliases ──
+   Keep older `var(--font-geist-sans)` references resolving after the brand
+   font swap (see docs/ORA_BRAND_WEB.md §2).
+   New code should use --font-sans / --font-display instead. */
+:root {
+  --font-geist-sans: var(--font-public-sans);
 }
 
 body {
@@ -55,6 +92,7 @@ body {
 html {
   margin: 0;
   padding: 0;
+  scroll-behavior: smooth;
 }
 
 /* Nav item bold-on-hover without layout shift.
@@ -107,8 +145,15 @@ html {
 
 /* ── Tiptap Editor Styles ── */
 
+/* Override any min-height on tiptap/ProseMirror editors inside accordion bodies */
+.ora-accordion-body .tiptap,
+.ora-accordion-body .ProseMirror {
+  min-height: 0 !important;
+}
+
+/* Tiptap editors in the Puck config panel fields need reasonable min-height */
 .tiptap {
-  min-height: 300px;
+  min-height: 128px;
 }
 
 .tiptap:focus {

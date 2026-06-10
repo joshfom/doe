@@ -33,6 +33,13 @@ import {
   getTicketApprovals,
   listPendingApprovals,
 } from "../../tickets/approvals";
+import { readAttributionFromRequest } from "@/lib/analytics/attribution";
+import { readConsentFromRequest } from "@/lib/analytics/consent-state";
+import { getPostHogServer } from "@/lib/analytics/posthog-server";
+import { hashIdentifier } from "@/lib/analytics/hash-identifier";
+import { sendConversion } from "@/lib/analytics/capi";
+import { tickets } from "../../schema";
+import { eq } from "drizzle-orm";
 
 // ── Module-level rate limiter (single instance, not per-request) ─────────────
 
@@ -43,7 +50,7 @@ const publicRateLimiter = new RateLimiter(5, 15 * 60 * 1000);
 const publicTickets = new Elysia({ name: "tickets-public" })
 
   // POST /tickets/public — create ticket from public form (unauthenticated, rate-limited)
-  .post("/tickets/public", async ({ body, set, request }) => {
+  .post("/tickets/public", async ({ body, set, request, cookie }) => {
     // Extract IP from request headers or connection
     const forwarded = request.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
@@ -75,6 +82,65 @@ const publicTickets = new Elysia({ name: "tickets-public" })
       createdBy: null,
     });
 
+    // Read attribution and consent — skip if cookie absent/malformed or marketing consent not granted
+    const cookieAdapter = {
+      get(name: string) {
+        const c = (cookie as Record<string, { value: string | undefined }>)[name];
+        if (c && c.value) return { value: c.value };
+        return undefined;
+      },
+    };
+    const consent = readConsentFromRequest(cookieAdapter);
+    const attribution = readAttributionFromRequest(cookieAdapter);
+
+    const hasMarketingConsent = consent?.marketing === true;
+
+    if (hasMarketingConsent && attribution) {
+      // Persist attribution to the ticket row
+      await db
+        .update(tickets)
+        .set({
+          firstTouchAttribution: attribution.first_touch,
+          lastTouchAttribution: attribution.last_touch,
+        })
+        .where(eq(tickets.id, result.ticketId));
+
+      // Fire PostHog server-side event
+      const posthog = getPostHogServer();
+      if (posthog) {
+        posthog.capture({
+          distinctId: hashIdentifier(parsed.data.contactEmail),
+          event: "viewing_requested",
+          properties: {
+            ticket_id: result.ticketId,
+            ticket_number: result.ticketNumber,
+            request_type: parsed.data.requestType ?? "general_inquiry",
+            first_touch_source: attribution.first_touch.utm_source,
+            first_touch_medium: attribution.first_touch.utm_medium,
+            first_touch_campaign: attribution.first_touch.utm_campaign,
+            last_touch_source: attribution.last_touch.utm_source,
+            last_touch_medium: attribution.last_touch.utm_medium,
+            last_touch_campaign: attribution.last_touch.utm_campaign,
+          },
+        });
+      }
+    }
+
+    // Fire CAPI conversion event for viewing (fire-and-forget)
+    sendConversion(
+      {
+        event: "viewing_confirmed",
+        email: parsed.data.contactEmail,
+        phone: (parsed.data as Record<string, unknown>).contactPhone as string | undefined,
+        attribution: attribution ?? undefined,
+        conversionValue: undefined,
+        currency: "AED",
+      },
+      consent
+    ).catch((err) => {
+      console.error("[tickets] CAPI sendConversion failed:", err);
+    });
+
     set.status = 201;
     return { data: { ticketId: result.ticketId, ticketNumber: result.ticketNumber } };
   });
@@ -86,7 +152,7 @@ const protectedTickets = new Elysia({ name: "tickets-protected" })
 
   // POST /tickets — create ticket (authenticated, requires tickets:create)
   .use(requirePermission("tickets:create"))
-  .post("/tickets", async ({ body, userId, set }) => {
+  .post("/tickets", async ({ body, userId, set, cookie }) => {
     const parsed = createTicketSchema.safeParse(body);
     if (!parsed.success) {
       set.status = 400;
@@ -101,6 +167,65 @@ const protectedTickets = new Elysia({ name: "tickets-protected" })
     const result = await createTicket(db, {
       ...parsed.data,
       createdBy: userId,
+    });
+
+    // Read attribution and consent — skip if cookie absent/malformed or marketing consent not granted
+    const cookieAdapter = {
+      get(name: string) {
+        const c = (cookie as Record<string, { value: string | undefined }>)[name];
+        if (c && c.value) return { value: c.value };
+        return undefined;
+      },
+    };
+    const consent = readConsentFromRequest(cookieAdapter);
+    const attribution = readAttributionFromRequest(cookieAdapter);
+
+    const hasMarketingConsent = consent?.marketing === true;
+
+    if (hasMarketingConsent && attribution) {
+      // Persist attribution to the ticket row
+      await db
+        .update(tickets)
+        .set({
+          firstTouchAttribution: attribution.first_touch,
+          lastTouchAttribution: attribution.last_touch,
+        })
+        .where(eq(tickets.id, result.ticketId));
+
+      // Fire PostHog server-side event
+      const posthog = getPostHogServer();
+      if (posthog) {
+        posthog.capture({
+          distinctId: hashIdentifier(parsed.data.contactEmail),
+          event: "viewing_requested",
+          properties: {
+            ticket_id: result.ticketId,
+            ticket_number: result.ticketNumber,
+            request_type: parsed.data.requestType ?? "general_inquiry",
+            first_touch_source: attribution.first_touch.utm_source,
+            first_touch_medium: attribution.first_touch.utm_medium,
+            first_touch_campaign: attribution.first_touch.utm_campaign,
+            last_touch_source: attribution.last_touch.utm_source,
+            last_touch_medium: attribution.last_touch.utm_medium,
+            last_touch_campaign: attribution.last_touch.utm_campaign,
+          },
+        });
+      }
+    }
+
+    // Fire CAPI conversion event for viewing (fire-and-forget)
+    sendConversion(
+      {
+        event: "viewing_confirmed",
+        email: parsed.data.contactEmail,
+        phone: (parsed.data as Record<string, unknown>).contactPhone as string | undefined,
+        attribution: attribution ?? undefined,
+        conversionValue: undefined,
+        currency: "AED",
+      },
+      consent
+    ).catch((err) => {
+      console.error("[tickets] CAPI sendConversion failed:", err);
     });
 
     set.status = 201;

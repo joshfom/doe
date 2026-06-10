@@ -14,6 +14,26 @@ import {
   resetDecisions,
   createApprovalRequestWithDraft,
 } from "../../approval/service";
+import {
+  hasPermission,
+  loadUserRoles,
+  resolvePermissions,
+} from "../../rbac/engine";
+
+/**
+ * Slice 2 (custom-branded-page-builder) — Property 9 / Req 9.4, 9.5, 19.3.
+ *
+ * Re-evaluates `pages:edit` against the database on every save request,
+ * regardless of any client-side cache or feature flag. The Inline Frontend
+ * Editor relies on this server-side gate so a user whose permission is
+ * revoked mid-session immediately receives 403 on the very next save —
+ * the client uses that signal to exit edit mode (Req 9.5).
+ */
+async function userCanEditPages(userId: string): Promise<boolean> {
+  const roles = await loadUserRoles(db, userId);
+  const perms = await resolvePermissions(db, roles);
+  return hasPermission(perms, "pages:edit");
+}
 
 // ── Public routes (no auth) ──────────────────────────────────────────────────
 
@@ -119,6 +139,13 @@ const protectedPages = new Elysia({ name: "pages-protected" })
 
   // PUT /pages/:id — Update page + create revision (or route to pending draft)
   .put("/pages/:id", async ({ params, body, userId, set }) => {
+    // Slice 2 (custom-branded-page-builder) Req 9.4 / 19.3 — server-side
+    // re-check of `pages:edit` so the inline editor's client cache cannot
+    // grant access on its own.
+    if (!(await userCanEditPages(userId))) {
+      set.status = 403;
+      return { error: "Forbidden" };
+    }
     const { id } = params;
     const { title, slug, data, metaTitle, metaDescription } = body as {
       title?: string;
@@ -418,6 +445,15 @@ const protectedPages = new Elysia({ name: "pages-protected" })
       };
     }
 
+    // If there's an active pending approval request with pendingData, use
+    // that as the source content — it represents the user's latest edits
+    // that haven't been committed to pages.data yet (approval-gated save).
+    const activeRequest = await getActiveApprovalRequest(db, id, "pages");
+    const cloneData =
+      (activeRequest?.pendingData as Record<string, unknown> | null) ??
+      source.data ??
+      { root: { props: {} }, content: [] };
+
     // Multilingual slug strategy:
     //   /en/about  + /ar/about    ← preferred (same slug per locale)
     //   /en/about  + /ar/about-2  ← fallback only if AR already used "about"
@@ -450,7 +486,7 @@ const protectedPages = new Elysia({ name: "pages-protected" })
             namespace: source.namespace,
             status: "draft",
             isSystem: source.isSystem,
-            data: source.data ?? { root: { props: {} }, content: [] },
+            data: cloneData,
             metaTitle: source.metaTitle,
             metaDescription: source.metaDescription,
             metaKeywords: source.metaKeywords,

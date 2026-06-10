@@ -1,5 +1,4 @@
 // Components
-export { PageEditor } from "./components/PageEditor";
 export { PageRenderer } from "./components/PageRenderer";
 
 // Config

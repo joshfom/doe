@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { usePuck } from "@puckeditor/core";
+import { usePuckStore } from "../../use-puck-store";
 import type { Field } from "@puckeditor/core";
 import { InspectorFieldRenderer } from "./InspectorFieldRenderer";
 import { classifyField, INSPECTOR_SECTIONS, type InspectorSection } from "./sections";
@@ -46,7 +46,10 @@ function writeSectionState(state: Record<InspectorSection, boolean>) {
 }
 
 export function Inspector() {
-  const { selectedItem, config, dispatch, getSelectorForId } = usePuck();
+  const selectedItem = usePuckStore((s) => s.selectedItem);
+  const config = usePuckStore((s) => s.config);
+  const dispatch = usePuckStore((s) => s.dispatch);
+  const getSelectorForId = usePuckStore((s) => s.getSelectorForId);
   const [sectionOpen, setSectionOpen] = React.useState(readSectionState);
 
   const toggleSection = (section: InspectorSection) => {

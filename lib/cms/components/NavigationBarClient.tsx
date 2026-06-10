@@ -6,21 +6,25 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Menu as MenuIcon, X, ChevronDown } from "lucide-react";
 import type { MenuItemTree } from "@/lib/cms/types";
+import type { LocaleConfig } from "@/lib/cms/config/locales";
 import { isActiveUrl } from "@/lib/cms/utils/menu-tree";
 import { DropdownPanel } from "./DropdownPanel";
 import { MobileMenuOverlay } from "./MobileMenuOverlay";
 import { RegisterInterestDialog } from "./RegisterInterestDialog";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 interface NavigationBarClientProps {
   items: MenuItemTree[];
   ctaLabel: string;
   ctaUrl: string;
+  enabledLocales: LocaleConfig[];
 }
 
 export function NavigationBarClient({
   items,
   ctaLabel,
   ctaUrl,
+  enabledLocales,
 }: NavigationBarClientProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -139,8 +143,10 @@ export function NavigationBarClient({
             })}
           </ul>
 
-          {/* Right side: CTA + hamburger */}
+          {/* Right side: Language switcher + CTA + hamburger */}
           <div className="flex items-center gap-3">
+            <LanguageSwitcher locales={enabledLocales} />
+
             {ctaLabel && (
               <Link
                 href={ctaUrl || "#"}
@@ -175,6 +181,7 @@ export function NavigationBarClient({
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         onCtaClick={handleCtaClick}
+        enabledLocales={enabledLocales}
       />
 
       {/* Register Interest dialog */}

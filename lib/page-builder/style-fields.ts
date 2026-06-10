@@ -67,9 +67,13 @@ export function stylePropsToCSS(props: Record<string, unknown>): CSSProperties {
 
   const mt = normalizeLength(props.marginTop, "px");
   const mb = normalizeLength(props.marginBottom, "px");
-  if (mt || mb) {
-    css.marginTop = mt || undefined;
-    css.marginBottom = mb || undefined;
+  const ml = normalizeLength(props.marginLeft, "px");
+  const mr = normalizeLength(props.marginRight, "px");
+  if (mt || mb || ml || mr) {
+    if (mt) css.marginTop = mt;
+    if (mb) css.marginBottom = mb;
+    if (ml) css.marginLeft = ml;
+    if (mr) css.marginRight = mr;
   }
 
   const bw = Number(props.borderWidth) || 0;

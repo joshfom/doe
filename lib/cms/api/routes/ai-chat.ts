@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../../db";
 import { handleChatMessage } from "../../ai/chat";
 import { validateSession, SESSION_COOKIE_NAME } from "../auth";
+import { readAttributionFromRequest } from "@/lib/analytics/attribution";
 
 // ── Request validation schema ────────────────────────────────────────────────
 
@@ -52,6 +53,12 @@ export const aiChatRoutes = new Elysia({ name: "ai-chat" })
       phone,
       email,
       userId,
+      attribution: readAttributionFromRequest({
+        get: (name: string) => {
+          const val = cookie[name]?.value as string | undefined;
+          return val ? { value: val } : undefined;
+        },
+      }),
     });
 
     return { data: response };

@@ -40,6 +40,14 @@ import { aiAnalyticsRoutes } from "./routes/ai-analytics";
 import { aiConfigRoutes } from "./routes/ai-config";
 import { calendarRoutes } from "./routes/calendar";
 import { interestRoutes } from "./routes/interest";
+import { analyticsSettingsRoutes } from "./routes/analytics-settings";
+import { utmLinksRoutes } from "./routes/utm-links";
+import { marketingDashboardRoutes } from "./routes/marketing-dashboard";
+import { marketingSpendRoutes } from "./routes/marketing-spend";
+import { customEventsRoutes } from "./routes/custom-events";
+import { conversionGoalsRoutes } from "./routes/conversion-goals";
+import { utmAnalyticsRoutes } from "./routes/utm-analytics";
+import { sitemapRoutes } from "./routes/sitemap";
 
 // ── One-time RBAC init ───────────────────────────────────────────────────────
 // When running under `next dev`, the standalone server.ts entry never executes,
@@ -123,4 +131,12 @@ export const api = new Elysia({ prefix: "/api" })
   .use(aiAnalyticsRoutes)
   .use(aiConfigRoutes)
   .use(calendarRoutes)
-  .use(interestRoutes);
+  .use(interestRoutes)
+  .use(analyticsSettingsRoutes)
+  .use(utmLinksRoutes)
+  .use(marketingDashboardRoutes)
+  .use(marketingSpendRoutes)
+  .use(customEventsRoutes)
+  .use(conversionGoalsRoutes)
+  .use(utmAnalyticsRoutes)
+  .use(sitemapRoutes);

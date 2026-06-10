@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { fetchPublicPage, fetchSiteSettings, fetchPageById } from "@/lib/cms/utils/fetch-page";
 import { generatePageMetadata } from "@/lib/cms/utils/seo";
 import { PageRenderer } from "@/lib/page-builder/components/PageRenderer";
+import { InlineEditorProvider } from "@/app/(en)/_components/InlineEditorProvider";
+import { canMountInlineEditor } from "@/lib/cms/inline-editor/server-gate";
 
 async function getHomePage() {
   const settings = await fetchSiteSettings();
@@ -37,9 +39,12 @@ export default async function EnHomePage() {
     notFound();
   }
 
+  const editMode = await canMountInlineEditor();
+
   return (
     <main>
-      <PageRenderer data={page.data ?? page} />
+      <PageRenderer data={page.data ?? page} editMode={editMode} />
+      {page.id ? <InlineEditorProvider pageId={page.id} /> : null}
     </main>
   );
 }

@@ -37,6 +37,29 @@ export {
   settingsKeys,
 } from "./use-settings";
 
+// Sitemap hooks
+export {
+  useSitemapManager,
+  useUpdateSitemapConfig,
+  useRobotsTxt,
+  useUpdateRobotsTxt,
+  sitemapKeys,
+  type SitemapCandidate,
+  type SitemapManagerData,
+} from "./use-sitemap";
+
+// Feature flag hooks
+export {
+  useFeatureFlag,
+  useFeatureFlags,
+  parseFeatureFlag,
+  resolveFeatureFlag,
+  resolveFeatureFlags,
+  FEATURE_FLAGS,
+  FEATURE_FLAG_DEFAULT,
+  type FeatureFlag,
+} from "./use-feature-flags";
+
 // Audit hooks
 export { useAuditLog, auditKeys } from "./use-audit";
 

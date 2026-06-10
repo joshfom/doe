@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { fetchPublicPage } from "@/lib/cms/utils/fetch-page";
 import { generatePageMetadata } from "@/lib/cms/utils/seo";
 import { PageRenderer } from "@/lib/page-builder/components/PageRenderer";
+import { InlineEditorProvider } from "@/app/ar/_components/InlineEditorProvider";
+import { canMountInlineEditor } from "@/lib/cms/inline-editor/server-gate";
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await fetchPublicPage("ar", "/");
@@ -27,9 +29,12 @@ export default async function ArHomePage() {
     notFound();
   }
 
+  const editMode = await canMountInlineEditor();
+
   return (
     <main>
-      <PageRenderer data={page.data ?? page} />
+      <PageRenderer data={page.data ?? page} editMode={editMode} />
+      {page.id ? <InlineEditorProvider pageId={page.id} /> : null}
     </main>
   );
 }

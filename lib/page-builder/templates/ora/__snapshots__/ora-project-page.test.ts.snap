@@ -1,0 +1,878 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`oraProjectPageTemplate > snapshot stability > materialised template (with ids stripped) matches snapshot 1`] = `
+{
+  "content": [
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "hero",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=2200&q=80",
+        "bgMediaType": "image",
+        "bgMode": "solid",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "center",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#1A1A1A",
+        "gradientTo": "#2C2C2C",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "hero",
+        "textColor": "#FFFFFF",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "split-content",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "split-content",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "quote-feature",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "quote-feature",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "image+text",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "project-overview",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "text+image",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "flex-start",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#F9F7F5",
+        "gradientTo": "#EBE7E2",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "sustainability",
+        "textColor": "auto",
+      },
+      "type": "Section",
+    },
+    {
+      "props": {
+        "_animation": {
+          "delay": "0",
+          "duration": "0.5",
+          "entrance": "none",
+          "hover": "none",
+        },
+        "_archetype": "cta",
+        "_border": {
+          "desktop": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+          "mobile": {
+            "borderColor": "#E8E4DF",
+            "borderRadius": "0",
+            "borderWidth": "0",
+          },
+        },
+        "_margin": {
+          "desktop": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+          "mobile": {
+            "marginBottom": "0",
+            "marginTop": "0",
+          },
+        },
+        "_padding": {
+          "desktop": {
+            "paddingBottom": "96",
+            "paddingLeft": "64",
+            "paddingRight": "64",
+            "paddingTop": "96",
+          },
+          "mobile": {
+            "paddingBottom": "64",
+            "paddingLeft": "16",
+            "paddingRight": "16",
+            "paddingTop": "64",
+          },
+        },
+        "bgColor": "transparent",
+        "bgImage": "",
+        "bgMediaType": "none",
+        "bgMode": "gradient",
+        "bgOpacity": "1",
+        "bgPosition": "center center",
+        "bgVideoAutoplay": "yes",
+        "bgVideoControls": "no",
+        "bgVideoFit": "cover",
+        "bgVideoLoop": "yes",
+        "bgVideoPosition": "center center",
+        "bgVideoPoster": "",
+        "bgVideoSound": "off",
+        "bgVideoUrl": "",
+        "contentAlign": "center",
+        "gradientDirection": "to bottom",
+        "gradientFrom": "#2C2C2C",
+        "gradientTo": "#1A1A1A",
+        "id": "<uuid>",
+        "maxHeight": "auto",
+        "minHeight": "auto",
+        "section-content": [],
+        "sectionId": "cta",
+        "textColor": "#FFFFFF",
+      },
+      "type": "Section",
+    },
+  ],
+  "root": {
+    "props": {
+      "title": "Project showcase",
+    },
+  },
+  "zones": {
+    "<uuid>:column-0": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#1A1A1A",
+          "fontSize": {
+            "desktop": 40,
+            "mobile": 28,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "700",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "level": "h2",
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "text": "Sustainability",
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Heading",
+      },
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#4A4A4A",
+          "content": "Built with responsible materials and energy-efficient systems, every home is designed to minimise environmental impact while maximising comfort.",
+          "fontSize": {
+            "desktop": 18,
+            "mobile": 16,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "400",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Text",
+      },
+    ],
+    "<uuid>:column-1": [
+      {
+        "props": {
+          "_animation": {
+            "delay": "0",
+            "duration": "0.5",
+            "entrance": "none",
+            "hover": "none",
+          },
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "alignment": "center",
+          "alt": "Sustainable living",
+          "aspectRatio": {
+            "desktop": "4 / 5",
+            "mobile": "16 / 9",
+          },
+          "filter": "none",
+          "hoverEffect": "none",
+          "id": "<uuid>",
+          "imgBorderRadius": "0",
+          "imgHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "imgWidth": {
+            "desktop": "100%",
+            "mobile": "100%",
+          },
+          "maxWidth": "100%",
+          "objectFit": "cover",
+          "opacity": "1",
+          "shadow": "none",
+          "src": "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=1400&q=80",
+          "xAlign": "50%",
+          "yAlign": "50%",
+        },
+        "type": "Image",
+      },
+    ],
+    "<uuid>:container-content": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#1A1A1A",
+          "fontSize": {
+            "desktop": 40,
+            "mobile": 28,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "700",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "level": "h2",
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "text": "Reserve your project",
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Heading",
+      },
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "color": "#4A4A4A",
+          "content": "Secure your place in a community designed for those who value quality, space, and connection.",
+          "fontSize": {
+            "desktop": 18,
+            "mobile": 16,
+          },
+          "fontStyle": "normal",
+          "fontWeight": "400",
+          "id": "<uuid>",
+          "letterSpacing": {
+            "desktop": "normal",
+            "mobile": "normal",
+          },
+          "lineHeight": {
+            "desktop": "auto",
+            "mobile": "auto",
+          },
+          "textAlign": "left",
+          "textDecoration": "none",
+          "textTransform": "none",
+        },
+        "type": "Text",
+      },
+      {
+        "props": {
+          "_icon": {
+            "gap": "8px",
+            "name": "",
+            "position": "right",
+            "size": "16",
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_typography": {
+            "fontSize": "14px",
+            "fontWeight": "600",
+            "letterSpacing": "0.05em",
+            "textTransform": "uppercase",
+          },
+          "alignment": "left",
+          "bgColor": "#B8956B",
+          "bgColorHover": "#A07D5A",
+          "borderColor": "#2C2C2C",
+          "borderColorHover": "#2C2C2C",
+          "borderRadius": "0",
+          "borderSize": "0",
+          "btnPadding": {
+            "desktop": {
+              "bottom": 12,
+              "left": 24,
+              "right": 24,
+              "top": 12,
+            },
+            "mobile": {
+              "bottom": 12,
+              "left": 24,
+              "right": 24,
+              "top": 12,
+            },
+          },
+          "fullWidth": "no",
+          "id": "<uuid>",
+          "text": "Reserve now",
+          "textColor": "#FFFFFF",
+          "textColorHover": "#FFFFFF",
+          "url": "#reserve",
+        },
+        "type": "Button",
+      },
+    ],
+    "<uuid>:section-content": [
+      {
+        "props": {
+          "_border": {
+            "desktop": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+            "mobile": {
+              "borderColor": "#E8E4DF",
+              "borderRadius": "0",
+              "borderWidth": "0",
+            },
+          },
+          "_margin": {
+            "desktop": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+            "mobile": {
+              "marginBottom": "0",
+              "marginTop": "0",
+            },
+          },
+          "_padding": {
+            "desktop": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+            "mobile": {
+              "paddingBottom": "0",
+              "paddingLeft": "0",
+              "paddingRight": "0",
+              "paddingTop": "0",
+            },
+          },
+          "bgColor": "transparent",
+          "bgMode": "solid",
+          "container-content": [],
+          "contentAlign": "center",
+          "gradientDirection": "to bottom",
+          "gradientFrom": "#F9F7F5",
+          "gradientTo": "#EBE7E2",
+          "id": "<uuid>",
+          "maxWidth": "1200",
+          "textColor": "auto",
+        },
+        "type": "Container",
+      },
+    ],
+  },
+}
+`;

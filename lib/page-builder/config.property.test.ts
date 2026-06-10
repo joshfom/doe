@@ -53,7 +53,7 @@ describe("All component fields have default values", () => {
 });
 
 import fc from "fast-check";
-import { render, cleanup } from "@testing-library/react";
+import { renderBlock } from "./test-utils";
 import React from "react";
 
 const { ICON_MAP } = await import("./config");
@@ -83,15 +83,18 @@ describe("Icon renders valid SVG for any predefined icon name", () => {
         fc.constantFrom("16", "20", "24", "32", "40", "48", "64"),
         fc.constantFrom("#000000", "#FFFFFF", "#B8956B", "#2C2C2C", "#FF0000", "#00FF00", "#0000FF"),
         (iconName, size, color) => {
-          const element = Icon.render({
-            ...Icon.defaultProps,
-            id: "test-icon",
-            icon: iconName,
-            size,
-            color,
-          });
+          const element = React.createElement(
+            Icon.render as React.ComponentType<Record<string, unknown>>,
+            {
+              ...Icon.defaultProps,
+              id: "test-icon",
+              icon: iconName,
+              size,
+              color,
+            },
+          );
 
-          const { container, unmount } = render(element as React.ReactElement);
+          const { container, unmount } = renderBlock(element);
           const svg = container.querySelector("svg");
 
           expect(svg).not.toBeNull();
@@ -288,14 +291,17 @@ describe("Heading renders correct HTML tag for any level", () => {
   it.each(levels)(
     "renders <%s> element when level is %s",
     (level) => {
-      const element = (Heading.render as (p: Record<string, unknown>) => React.ReactElement)({
-        ...Heading.defaultProps,
-        id: "test-heading",
-        text: "Test Heading",
-        level,
-      });
+      const element = React.createElement(
+        Heading.render as React.ComponentType<Record<string, unknown>>,
+        {
+          ...Heading.defaultProps,
+          id: "test-heading",
+          text: "Test Heading",
+          level,
+        },
+      );
 
-      const { container, unmount } = render(element);
+      const { container, unmount } = renderBlock(element);
       const headingEl = container.querySelector(level);
       expect(headingEl).not.toBeNull();
       expect(headingEl!.textContent).toBe("Test Heading");
@@ -308,19 +314,27 @@ describe("Heading renders correct HTML tag for any level", () => {
 /**
  * Feature: atomic-component-architecture, Property 2: Typography fields present on text-bearing atomic components
  *
- * Validates: Requirements 5.5
+ * Validates: Requirements 5.5, 5.2
  *
  * For any text-bearing atomic component that uses direct typography styling
  * (Heading, Text, InlineLink, Quote), its field definitions SHALL include
- * fontFamily, fontSize, fontWeight, color, textAlign, letterSpacing, and lineHeight.
+ * fontSize, fontWeight, color, textAlign, letterSpacing, and lineHeight.
+ *
+ * `fontFamily` is INTENTIONALLY ABSENT: the branded-font-enforcement spec
+ * removed the user-selectable font-family control so components always inherit
+ * the single brand typeface (URW Geometric) via CSS inheritance from the
+ * canvas/renderer root. This test asserts that absence (matching the
+ * "Configuration panel exposes no fontFamily field" suite in config.test.ts),
+ * so it does NOT regress back into a user-selectable font. See spec:
+ * branded-font-enforcement (Requirements 2.3, 2.5, 2.6).
  *
  * Note: Button is excluded — it uses variant/size-based styling rather than
  * direct typography fields, so typography is not applicable per Requirement 5.5.
  */
 describe("Typography fields present on text-bearing atomic components", () => {
   const textBearingComponents = ["Heading", "Text", "InlineLink", "Quote"];
+  // fontFamily is deliberately NOT in this list — see absence assertion below.
   const requiredTypoFields = [
-    "fontFamily",
     "fontSize",
     "fontWeight",
     "color",
@@ -341,6 +355,19 @@ describe("Typography fields present on text-bearing atomic components", () => {
           `${componentName} missing typography field "${typoField}"`,
         ).toContain(typoField);
       }
+    },
+  );
+
+  it.each(textBearingComponents)(
+    "%s — does NOT expose a fontFamily field (branded-font-enforcement)",
+    (componentName) => {
+      const component = pageBuilderConfig.components[componentName];
+      expect(component).toBeDefined();
+      const fieldKeys = Object.keys(component.fields ?? {});
+      expect(
+        fieldKeys,
+        `${componentName} should not expose a user-selectable "fontFamily" field — the brand typeface is enforced via CSS inheritance`,
+      ).not.toContain("fontFamily");
     },
   );
 });

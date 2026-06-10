@@ -8,6 +8,7 @@ export interface FlatMenuItem {
   label: string;
   url: string;
   icon: string | null;
+  translations?: Record<string, string> | null;
   itemType: ItemType;
   dropdownType: DropdownType | null;
   megaColumns: number;
@@ -41,6 +42,7 @@ export function buildMenuTree(flatItems: FlatMenuItem[]): MenuItemTree[] {
       label: item.label,
       url: item.url,
       icon: item.icon,
+      translations: item.translations ?? null,
       itemType: item.itemType,
       dropdownType: item.dropdownType,
       megaColumns: item.megaColumns,

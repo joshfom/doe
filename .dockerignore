@@ -1,0 +1,35 @@
+# deps & build output (rebuilt inside the image)
+node_modules
+.next
+out
+build
+coverage
+
+# local env — provided at runtime via docker-compose env_file / environment
+.env*
+!.env.example
+
+# vcs & editor
+.git
+.gitignore
+.github
+.vscode
+.kiro
+
+# os junk
+.DS_Store
+**/.DS_Store
+
+# docs / scratch
+scratch
+*.md
+!README.md
+
+# uploaded media (mounted as a volume at runtime)
+public/uploads
+
+# misc
+*.pem
+*.tsbuildinfo
+npm-debug.log*
+.vercel

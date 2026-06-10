@@ -11,6 +11,8 @@ import {
 } from "@/lib/cms/utils/fetch-page";
 import { generatePageMetadata } from "@/lib/cms/utils/seo";
 import { PageRenderer } from "@/lib/page-builder/components/PageRenderer";
+import { InlineEditorProvider } from "@/app/ar/_components/InlineEditorProvider";
+import { canMountInlineEditor } from "@/lib/cms/inline-editor/server-gate";
 import { ProjectLanding } from "@/lib/page-builder/components/project/ProjectLanding";
 import {
   ProjectIndex,
@@ -278,10 +280,11 @@ export default async function ArDynamicPage({ params, searchParams }: Props) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("better-auth.session_token");
   const isAuthenticated = !!sessionCookie?.value;
+  const editMode = await canMountInlineEditor();
 
   return (
     <main>
-      <PageRenderer data={page.data ?? page} />
+      <PageRenderer data={page.data ?? page} editMode={editMode} />
       {isAuthenticated && page.id && (
         <a
           href={`/ora-panel/pages/${page.id}/edit`}
@@ -290,6 +293,7 @@ export default async function ArDynamicPage({ params, searchParams }: Props) {
           تعديل الصفحة
         </a>
       )}
+      {page.id ? <InlineEditorProvider pageId={page.id} /> : null}
     </main>
   );
 }

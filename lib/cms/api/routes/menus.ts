@@ -54,6 +54,7 @@ const publicMenus = new Elysia({ name: "menus-public" })
         label: item.label,
         url: item.url,
         icon: item.icon,
+        translations: item.translations as Record<string, string> | null,
         itemType: item.itemType as ItemType,
         dropdownType: item.dropdownType as "simple" | "mega" | null,
         megaColumns: item.megaColumns,
@@ -66,6 +67,7 @@ const publicMenus = new Elysia({ name: "menus-public" })
         id: menu.id,
         name: menu.name,
         slug: menu.slug,
+        locale: menu.locale,
         createdAt: menu.createdAt.toISOString(),
         updatedAt: menu.updatedAt.toISOString(),
         items: tree,
@@ -101,6 +103,7 @@ const publicMenus = new Elysia({ name: "menus-public" })
         label: item.label,
         url: item.url,
         icon: item.icon,
+        translations: item.translations as Record<string, string> | null,
         itemType: item.itemType as ItemType,
         dropdownType: item.dropdownType as "simple" | "mega" | null,
         megaColumns: item.megaColumns,
@@ -113,6 +116,7 @@ const publicMenus = new Elysia({ name: "menus-public" })
         id: menu.id,
         name: menu.name,
         slug: menu.slug,
+        locale: menu.locale,
         createdAt: menu.createdAt.toISOString(),
         updatedAt: menu.updatedAt.toISOString(),
         items: tree,
@@ -136,6 +140,7 @@ const readMenus = new Elysia({ name: "menus-read" })
         id: menu.id,
         name: menu.name,
         slug: menu.slug,
+        locale: menu.locale,
         createdAt: menu.createdAt.toISOString(),
         updatedAt: menu.updatedAt.toISOString(),
       })),
@@ -150,12 +155,14 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
 
   // POST /menus — Create menu
   .post("/menus", async ({ body, userId, set }) => {
-    const { name } = body as { name?: string };
+    const { name, locale } = body as { name?: string; locale?: string };
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       set.status = 400;
       return { error: "Name is required" };
     }
+
+    const menuLocale = locale || "en";
 
     // Check for duplicate name
     const [existing] = await db
@@ -176,6 +183,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
       .values({
         name: name.trim(),
         slug,
+        locale: menuLocale,
       })
       .returning();
 
@@ -193,6 +201,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
         id: created.id,
         name: created.name,
         slug: created.slug,
+        locale: created.locale,
         createdAt: created.createdAt.toISOString(),
         updatedAt: created.updatedAt.toISOString(),
       },
@@ -202,7 +211,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
   // PUT /menus/:id — Update menu name, regenerate slug
   .put("/menus/:id", async ({ params, body, userId, set }) => {
     const { id } = params;
-    const { name } = body as { name?: string };
+    const { name, locale } = body as { name?: string; locale?: string };
 
     const [existing] = await db
       .select()
@@ -234,13 +243,16 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
 
     const slug = generateSlug(name.trim());
 
+    const updates: Record<string, unknown> = {
+      name: name.trim(),
+      slug,
+      updatedAt: new Date(),
+    };
+    if (locale) updates.locale = locale;
+
     const [updated] = await db
       .update(menus)
-      .set({
-        name: name.trim(),
-        slug,
-        updatedAt: new Date(),
-      })
+      .set(updates)
       .where(eq(menus.id, id))
       .returning();
 
@@ -257,6 +269,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
         id: updated.id,
         name: updated.name,
         slug: updated.slug,
+        locale: updated.locale,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
       },
@@ -302,6 +315,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
       itemType,
       parentId,
       megaColumns,
+      translations,
     } = body as {
       label?: string;
       url?: string;
@@ -309,6 +323,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
       itemType?: string;
       parentId?: string | null;
       megaColumns?: number;
+      translations?: Record<string, string> | null;
     };
 
     // Verify menu exists
@@ -366,6 +381,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
         label: label.trim(),
         url: url ?? "#",
         icon: icon ?? null,
+        translations: translations ?? null,
         itemType: resolvedItemType,
         dropdownType,
         megaColumns: megaColumns ?? 3,
@@ -394,12 +410,14 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
       icon,
       itemType,
       megaColumns,
+      translations,
     } = body as {
       label?: string;
       url?: string;
       icon?: string;
       itemType?: string;
       megaColumns?: number;
+      translations?: Record<string, string> | null;
     };
 
     // Verify menu exists
@@ -434,6 +452,7 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
     if (url !== undefined) updates.url = url;
     if (icon !== undefined) updates.icon = icon;
     if (megaColumns !== undefined) updates.megaColumns = megaColumns;
+    if (translations !== undefined) updates.translations = translations;
 
     // Handle item type change with dropdown_type consistency
     if (itemType !== undefined) {
@@ -612,21 +631,24 @@ const protectedMenus = new Elysia({ name: "menus-protected" })
       return { error: "Menu not found" };
     }
 
-    // Upsert active_menu_id in site_settings
+    // Use locale-specific setting key: active_menu_id for "en", active_menu_id_ar for "ar"
+    const settingKey = menu.locale === "en" ? "active_menu_id" : `active_menu_id_${menu.locale}`;
+
+    // Upsert active menu setting
     const [existing] = await db
       .select()
       .from(siteSettings)
-      .where(eq(siteSettings.key, "active_menu_id"))
+      .where(eq(siteSettings.key, settingKey))
       .limit(1);
 
     if (existing) {
       await db
         .update(siteSettings)
         .set({ value: menuId, updatedAt: new Date() })
-        .where(eq(siteSettings.key, "active_menu_id"));
+        .where(eq(siteSettings.key, settingKey));
     } else {
       await db.insert(siteSettings).values({
-        key: "active_menu_id",
+        key: settingKey,
         value: menuId,
       });
     }

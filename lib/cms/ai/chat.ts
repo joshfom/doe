@@ -17,6 +17,9 @@ import type { ChatMessage } from "./gateway";
 import { handleOtpGate } from "./otp";
 import type { OtpVerificationState } from "./otp";
 import { runAgent, loadConversationContact } from "./agent";
+import { getPostHogServer } from "@/lib/analytics/posthog-server";
+import { hashIdentifier } from "@/lib/analytics/hash-identifier";
+import type { AttributionData } from "@/lib/analytics/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +29,8 @@ export interface ChatInput {
   phone?: string;
   email?: string;
   userId?: string;
+  /** Attribution data from the ora_attribution cookie, passed by the route handler. */
+  attribution?: AttributionData | null;
 }
 
 export interface ChatResponse {
@@ -336,6 +341,36 @@ async function handleChatMessageInner(
       .returning({ id: aiConversations.id });
 
     conversationId = newConversation.id;
+
+    // Task 19.1: Capture ai_conversation_started on first message
+    try {
+      const posthog = getPostHogServer();
+      if (posthog) {
+        const attribution = input.attribution;
+        posthog.capture({
+          distinctId: input.email ? hashIdentifier(input.email) : input.phone ? hashIdentifier(input.phone) : conversationId,
+          event: "ai_conversation_started",
+          properties: {
+            conversationId,
+            ...(attribution?.first_touch && {
+              first_touch_source: attribution.first_touch.utm_source,
+              first_touch_medium: attribution.first_touch.utm_medium,
+              first_touch_campaign: attribution.first_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch && {
+              last_touch_source: attribution.last_touch.utm_source,
+              last_touch_medium: attribution.last_touch.utm_medium,
+              last_touch_campaign: attribution.last_touch.utm_campaign,
+            }),
+            ...(attribution?.last_touch?.utm_campaign && {
+              utm_campaign: attribution.last_touch.utm_campaign,
+            }),
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[chat] ai_conversation_started capture failed", err);
+    }
   }
 
   // ── Step 2: Resolve identity ─────────────────────────────────────────────
@@ -440,6 +475,7 @@ async function handleChatMessageInner(
     identity,
     language,
     contact: conversationContact,
+    attribution: input.attribution,
   });
 
   // Upgrade the working identity if the agent learned more about the user.
@@ -540,6 +576,11 @@ async function handleChatMessageInner(
           conversationHistory,
           identityContext: verifiedIdentity,
           otpVerified: true,
+          analyticsContext: {
+            distinctId: conversationId!,
+            traceId: conversationId!,
+            conversationId: conversationId!,
+          },
         });
 
         const combined = `${otpGateResult.response!}\n\n${rag.response}`;
@@ -678,6 +719,11 @@ async function handleChatMessageInner(
     identityContext,
     paymentContext,
     otpVerified: otpVerificationState === "verified",
+    analyticsContext: {
+      distinctId: conversationId!,
+      traceId: conversationId!,
+      conversationId: conversationId!,
+    },
   });
 
   // Build response (no user-visible source attribution — internal metadata only)

@@ -1,10 +1,14 @@
 "use client";
 
-import type { Config } from "@puckeditor/core";
-import { DropZone } from "@puckeditor/core";
+import type { OraComponentConfig, OraConfig } from "./config-types";
 import { motion } from "framer-motion";
 import React from "react";
 import { stylePropsToCSS } from "./style-fields";
+import { sanitizeRichTextHtml } from "./richtext/sanitize";
+// Re-export so existing importers of `../config` (e.g. InlineRichtextController
+// tests and the richtext-roundtrip property test) keep resolving to the single
+// isomorphic, fail-closed sanitizer source of truth in `./richtext/sanitize`.
+export { sanitizeRichTextHtml };
 import {
   typographyFields,
   typographyDefaultsHeading,
@@ -14,15 +18,33 @@ import {
 } from "./typography-fields";
 import { imageFields, imageDefaults, imagePropsToCSS } from "./image-fields";
 import { animationFields, animationDefaults } from "./animation-fields";
+import { trackingFields, trackingDefaults } from "@/lib/analytics/tracking-fields";
 import { createCustomSelectField, createToggleField, createFreeInputField } from "./shared-field-controls";
+import { buttonFields, buttonFieldDefaults, renderButtonAnchor, isExternalButtonUrl } from "./blocks/button-fields";
+import { responsiveColumnsField, gridStyle, COLUMNS_FIELD_NAME } from "./blocks/grid";
+import { renderStarRating } from "./blocks/star-rating";
+import { SOCIAL_ICONS } from "./blocks/social-icons";
+import type { TestimonialItem, LogoItem, PricingPlan, SocialItem, BreadcrumbItem } from "./blocks/block-item-types";
+import { EVENT_VOCABULARY } from "@/lib/analytics/events";
+import type { PageAnalyticsConfig } from "@/lib/analytics/types";
+import { resolveBreakpointValue, type BreakpointValue } from "./breakpoints";
+import { withBreakpointResolution } from "./with-breakpoint-resolution";
+import { validateResponsiveDefaults } from "./responsive-defaults";
 import { LocationMap as LocationMapRuntime } from "./components/LocationMap/LocationMap";
 import { ContactLocationsMap as ContactLocationsMapRuntime } from "./components/LocationMap/ContactLocationsMap";
 import { PinMapPicker } from "./components/LocationMap/PinMapPicker";
+import { ContactLocationPicker } from "./components/LocationMap/ContactLocationPicker";
 import type { LocationMapPin, LocationMapCard, ContactLocationItem } from "./components/LocationMap/types";
 import { FeaturedProjectsRuntime } from "./components/project/FeaturedProjectsRuntime";
 import { FeaturedCommunitiesRuntime } from "./components/project/FeaturedCommunitiesRuntime";
 import { ProjectSectionRuntime, type ProjectSectionKind } from "./components/project/ProjectSectionRuntime";
 import { ImageCarouselRuntime } from "./components/ImageCarouselRuntime";
+import { TestimonialRuntime } from "./components/TestimonialRuntime";
+import { TabGroupRuntime } from "./components/TabGroupRuntime";
+import { CountdownRuntime } from "./components/CountdownRuntime";
+import { GalleryRuntime } from "./components/GalleryRuntime";
+import type { GalleryImage } from "./components/GalleryRuntime";
+import { MediaLibraryPicker } from "./components/MediaLibraryPicker";
 import { ExperienceLauncherRuntime, type LauncherStyle } from "./components/ExperienceLauncherRuntime";
 import {
   Home, Phone, Mail, MapPin, Star, Heart, Check, ArrowRight,
@@ -43,6 +65,8 @@ export const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color
   building: Building, palmtree: Palmtree, waves: Waves, sun: Sun,
   shield: Shield, car: Car, bed: Bed, bath: Bath,
   eye: Eye, download: Download, "external-link": ExternalLink, quote: QuoteIcon,
+  // Brand icons for the SocialLinks block (inline SVGs; lucide lacks these).
+  ...SOCIAL_ICONS,
 };
 
 // ─── Shared Style Helpers ────────────────────────────────────────────────────
@@ -74,22 +98,120 @@ function renderSimpleStepper(
   );
 }
 
+// Compact 4-side editor (Top / Right / Bottom / Left) with a link-all toggle.
+// Used for both padding and margin so users get full per-side control.
+function renderFourSideEditor(
+  current: Record<string, string>,
+  prefix: "padding" | "margin",
+  onChange: (next: Record<string, string>) => void,
+  step = 4,
+) {
+  const top = asNumber(current[`${prefix}Top`]);
+  const right = asNumber(current[`${prefix}Right`]);
+  const bottom = asNumber(current[`${prefix}Bottom`]);
+  const left = asNumber(current[`${prefix}Left`]);
+  const allEqual = top === right && right === bottom && bottom === left;
+
+  // We persist link state inside the value object using a synthetic key
+  // (`__link__`) so the UI remembers the user's choice across renders.
+  // The runtime only consumes `${prefix}Top/Right/Bottom/Left`, so the
+  // extra key is ignored downstream.
+  const linkKey = `__${prefix}Link__`;
+  const linked = current[linkKey] != null ? current[linkKey] === "1" : allEqual;
+
+  const setAll = (v: number) =>
+    onChange({
+      ...current,
+      [`${prefix}Top`]: String(v),
+      [`${prefix}Right`]: String(v),
+      [`${prefix}Bottom`]: String(v),
+      [`${prefix}Left`]: String(v),
+      [linkKey]: "1",
+    });
+
+  const setSide = (side: "Top" | "Right" | "Bottom" | "Left", v: number) =>
+    onChange({
+      ...current,
+      [`${prefix}${side}`]: String(Math.max(0, v)),
+      [linkKey]: "0",
+    });
+
+  const toggleLinked = () => {
+    if (linked) {
+      onChange({ ...current, [linkKey]: "0" });
+    } else {
+      // Going from unlinked → linked: snap all sides to current Top.
+      onChange({
+        ...current,
+        [`${prefix}Right`]: String(top),
+        [`${prefix}Bottom`]: String(top),
+        [`${prefix}Left`]: String(top),
+        [linkKey]: "1",
+      });
+    }
+  };
+
+  const linkButton = React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: toggleLinked,
+      title: linked ? "Sides are linked — click to unlink" : "Sides are unlinked — click to link",
+      style: {
+        height: 22,
+        padding: "0 8px",
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        border: "1px solid #E8E4DF",
+        background: linked ? "#2C2C2C" : "#F9F7F5",
+        color: linked ? "#FFF" : "#2C2C2C",
+        cursor: "pointer",
+      },
+    },
+    linked ? "Linked" : "Per-side",
+  );
+
+  if (linked) {
+    return React.createElement(
+      "div",
+      { style: { display: "flex", flexDirection: "column", gap: 6 } },
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "flex-end" } },
+        linkButton,
+      ),
+      renderSimpleStepper("All sides", top, setAll, step),
+    );
+  }
+
+  return React.createElement(
+    "div",
+    { style: { display: "flex", flexDirection: "column", gap: 6 } },
+    React.createElement(
+      "div",
+      { style: { display: "flex", justifyContent: "flex-end" } },
+      linkButton,
+    ),
+    renderSimpleStepper("Top", top, (v) => setSide("Top", v), step),
+    renderSimpleStepper("Right", right, (v) => setSide("Right", v), step),
+    renderSimpleStepper("Bottom", bottom, (v) => setSide("Bottom", v), step),
+    renderSimpleStepper("Left", left, (v) => setSide("Left", v), step),
+  );
+}
+
 function paddingField() {
   return {
     type: "custom" as const,
     label: "Padding",
     render: ({ value, onChange }: { value: unknown; onChange: (v: Record<string, string>) => void }) => {
       const current = (value as Record<string, string>) ?? {};
-      const all = asNumber(current.paddingTop);
-      const setAll = (next: number) => onChange({
-        paddingTop: String(next),
-        paddingBottom: String(next),
-        paddingLeft: String(next),
-        paddingRight: String(next),
-      });
-      return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+      return React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: 6 } },
         React.createElement("div", { style: { fontSize: 12, color: "#6B6B6B" } }, "Area padding"),
-        renderSimpleStepper("All sides", all, setAll),
+        renderFourSideEditor(current, "padding", onChange),
       );
     },
   };
@@ -101,11 +223,11 @@ function marginField() {
     label: "Margin",
     render: ({ value, onChange }: { value: unknown; onChange: (v: Record<string, string>) => void }) => {
       const current = (value as Record<string, string>) ?? {};
-      const mt = asNumber(current.marginTop);
-      const mb = asNumber(current.marginBottom);
-      return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-        renderSimpleStepper("Top", mt, (next) => onChange({ ...current, marginTop: String(next), marginBottom: String(mb) })),
-        renderSimpleStepper("Bottom", mb, (next) => onChange({ ...current, marginTop: String(mt), marginBottom: String(next) })),
+      return React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: 6 } },
+        React.createElement("div", { style: { fontSize: 12, color: "#6B6B6B" } }, "Area margin"),
+        renderFourSideEditor(current, "margin", onChange),
       );
     },
   };
@@ -150,7 +272,7 @@ const spacingBorderFields = {
 };
 const spacingBorderDefaults = {
   _padding: { paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0" },
-  _margin: { marginTop: "0", marginBottom: "0" },
+  _margin: { marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0" },
   _border: { borderWidth: "0", borderColor: "#E8E4DF", borderRadius: "0" },
 };
 
@@ -241,35 +363,6 @@ const RICH_TEXT_EMBEDDED_STYLES = `
   margin: 0.15rem 0;
 }
 `;
-
-function sanitizeRichTextHtml(html: string): string {
-  // Rich text originates from the editor, but sanitize before innerHTML render.
-  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    return html;
-  }
-
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("script, iframe, object, embed").forEach((node) => node.remove());
-
-  doc.querySelectorAll("*").forEach((element) => {
-    for (const attr of Array.from(element.attributes)) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value;
-
-      if (name.startsWith("on")) {
-        element.removeAttribute(attr.name);
-        continue;
-      }
-
-      const isUrlAttr = name === "href" || name === "src" || name === "xlink:href";
-      if (isUrlAttr && /^\s*javascript:/i.test(value)) {
-        element.removeAttribute(attr.name);
-      }
-    }
-  });
-
-  return doc.body.innerHTML;
-}
 
 function parseUrlSafe(raw: string): URL | null {
   try {
@@ -364,8 +457,9 @@ const imageUploadField = {
   label: "Image",
   render: ({ value, onChange, readOnly }: { value: unknown; onChange: (v: string) => void; readOnly?: boolean }) => {
     const currentSrc = (value as string) || "";
-    const [mode, setMode] = React.useState<"upload" | "url">("upload");
+    const [mode, setMode] = React.useState<"upload" | "url" | "library">("upload");
     const [urlInput, setUrlInput] = React.useState("");
+    const [showLibrary, setShowLibrary] = React.useState(false);
 
     const uploadFile = async (file: File) => {
       const form = new FormData();
@@ -394,6 +488,14 @@ const imageUploadField = {
       }
     };
 
+    const modeButtonStyle = (isActive: boolean) => ({
+      flex: 1, height: 30, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer" as const,
+      background: isActive ? "#2C2C2C" : "#F9F7F5",
+      color: isActive ? "#FFF" : "#6B6B6B",
+      fontWeight: isActive ? 600 : 400,
+      marginLeft: isActive ? 0 : -1,
+    });
+
     if (currentSrc) {
       return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
         React.createElement("div", {
@@ -407,26 +509,20 @@ const imageUploadField = {
             "aria-label": "Remove image",
           }, "✕"),
         ),
-        // Replace controls: Upload vs URL toggle
+        // Replace controls: Upload / Library / URL
         !readOnly && React.createElement("div", { style: { display: "flex", gap: 0 } },
           React.createElement("button", {
-            type: "button",
-            onClick: triggerUpload,
-            style: {
-              flex: 1, height: 28, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
-              background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400,
-            },
-          }, "Replace (Upload)"),
+            type: "button", onClick: triggerUpload,
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer", background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400 },
+          }, "Upload"),
           React.createElement("button", {
-            type: "button",
-            onClick: () => setMode("url"),
-            style: {
-              flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
-              background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
-              color: mode === "url" ? "#FFF" : "#6B6B6B",
-              fontWeight: mode === "url" ? 600 : 400,
-            },
-          }, "Replace (URL)"),
+            type: "button", onClick: () => setShowLibrary(true),
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer", background: "#F9F7F5", color: "#6B6B6B", fontWeight: 400 },
+          }, "Library"),
+          React.createElement("button", {
+            type: "button", onClick: () => setMode("url"),
+            style: { flex: 1, height: 28, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer", background: mode === "url" ? "#2C2C2C" : "#F9F7F5", color: mode === "url" ? "#FFF" : "#6B6B6B", fontWeight: mode === "url" ? 600 : 400 },
+          }, "URL"),
         ),
         // URL input row (shown when mode is "url")
         !readOnly && mode === "url" && React.createElement("div", { style: { display: "flex", gap: 4 } },
@@ -444,31 +540,29 @@ const imageUploadField = {
             style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
           }, "Apply"),
         ),
+        // Media Library Picker
+        showLibrary && React.createElement(MediaLibraryPicker, {
+          multiple: false,
+          onSelect: (urls: string[]) => { if (urls[0]) onChange(urls[0]); setShowLibrary(false); },
+          onClose: () => setShowLibrary(false),
+        }),
       );
     }
 
     return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-      // Mode toggle: Upload vs URL
+      // Mode toggle: Upload / Library / URL
       React.createElement("div", { style: { display: "flex", gap: 0 } },
         React.createElement("button", {
-          type: "button",
-          onClick: () => setMode("upload"),
-          style: {
-            flex: 1, height: 30, border: "1px solid #E8E4DF", fontSize: 11, cursor: "pointer",
-            background: mode === "upload" ? "#2C2C2C" : "#F9F7F5",
-            color: mode === "upload" ? "#FFF" : "#6B6B6B",
-            fontWeight: mode === "upload" ? 600 : 400,
-          },
+          type: "button", onClick: () => setMode("upload"),
+          style: modeButtonStyle(mode === "upload"),
         }, "Upload"),
         React.createElement("button", {
-          type: "button",
-          onClick: () => setMode("url"),
-          style: {
-            flex: 1, height: 30, border: "1px solid #E8E4DF", borderLeft: "none", fontSize: 11, cursor: "pointer",
-            background: mode === "url" ? "#2C2C2C" : "#F9F7F5",
-            color: mode === "url" ? "#FFF" : "#6B6B6B",
-            fontWeight: mode === "url" ? 600 : 400,
-          },
+          type: "button", onClick: () => { setMode("library"); setShowLibrary(true); },
+          style: { ...modeButtonStyle(mode === "library"), borderLeft: "none" },
+        }, "Library"),
+        React.createElement("button", {
+          type: "button", onClick: () => setMode("url"),
+          style: { ...modeButtonStyle(mode === "url"), borderLeft: "none" },
         }, "URL"),
       ),
       mode === "url"
@@ -487,7 +581,8 @@ const imageUploadField = {
               style: { height: 34, padding: "0 12px", background: "#2C2C2C", color: "#FFF", border: "none", fontSize: 11, cursor: "pointer" },
             }, "Apply"),
           )
-        : React.createElement("div", {
+        : mode === "upload"
+        ? React.createElement("div", {
             onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (readOnly) return; const f = e.dataTransfer.files?.[0]; if (f?.type.startsWith("image/")) uploadFile(f); },
             onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
             onClick: triggerUpload,
@@ -495,22 +590,30 @@ const imageUploadField = {
           },
             React.createElement("div", { style: { fontSize: 20, marginBottom: 4 } }, "📁"),
             React.createElement("div", null, "Drop image or click to upload"),
-          ),
+          )
+        : null,
+      // Media Library Picker
+      showLibrary && React.createElement(MediaLibraryPicker, {
+        multiple: false,
+        onSelect: (urls: string[]) => { if (urls[0]) onChange(urls[0]); setShowLibrary(false); setMode("upload"); },
+        onClose: () => { setShowLibrary(false); setMode("upload"); },
+      }),
     );
   },
 };
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LAYOUT COMPONENTS — Containers with DropZones for nesting
+// LAYOUT COMPONENTS — Containers with slot fields for nesting
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Section ─────────────────────────────────────────────────────────────────
-// The primary container. Has background color/image/opacity, contains a DropZone.
+// The primary container. Has background color/image/opacity, contains a slot.
 
-const Section: Config["components"][string] = {
+const Section: OraComponentConfig = {
   label: "Section",
   fields: {
+    "section-content": { type: "slot", disallow: ["Section"] },
     sectionId: createFreeInputField("Section ID", "", [], "Anchor target for links (example: hero or features).", "hero"),
     bgMode: createToggleField("Background Mode", [
       { label: "Solid", value: "solid" },
@@ -561,7 +664,7 @@ const Section: Config["components"][string] = {
     bgVideoSound: createToggleField("Video Sound", [{ label: "Off", value: "off" }, { label: "On", value: "on" }], "Background videos default to muted."),
     bgVideoControls: createToggleField("Video Controls", [{ label: "Hidden", value: "no" }, { label: "Visible", value: "yes" }]),
     bgVideoFit: createCustomSelectField("Video Fit", [{ label: "Cover", value: "cover" }, { label: "Contain", value: "contain" }]),
-    bgVideoPoster: imageUploadField,
+    bgVideoPoster: { ...imageUploadField, label: "Poster Image (shown until video loads)" },
     bgOpacity: createCustomSelectField("Background Opacity", [
       { label: "100%", value: "1" }, { label: "90%", value: "0.9" }, { label: "75%", value: "0.75" },
       { label: "50%", value: "0.5" }, { label: "25%", value: "0.25" }, { label: "10%", value: "0.1" },
@@ -578,6 +681,7 @@ const Section: Config["components"][string] = {
     ...animationFields,
   },
   defaultProps: {
+    "section-content": [],
     sectionId: "",
     bgMode: "solid",
     bgMediaType: "image",
@@ -672,7 +776,9 @@ const Section: Config["components"][string] = {
     const direction = (gradientDirection as string) || "to bottom";
     const gradientValue = `linear-gradient(${direction}, ${from}, ${to})`;
     const img = mediaType === "image" ? ((bgImage as string) || "") : "";
-    const videoPoster = mediaType === "video" ? ((bgVideoPoster as string) || "") : "";
+    // Poster: use dedicated bgVideoPoster, fall back to bgImage so switching
+    // from image→video mode keeps the image as a placeholder until video loads.
+    const videoPoster = mediaType === "video" ? ((bgVideoPoster as string) || (bgImage as string) || "") : "";
     const videoResolved = mediaType === "video"
       ? resolveVideoSource((bgVideoUrl as string) || "", {
         autoplay: (bgVideoAutoplay as string) !== "no",
@@ -725,9 +831,14 @@ const Section: Config["components"][string] = {
     const alignContentValue: React.CSSProperties["alignContent"] =
       alignRaw === "center" ? "center" : alignRaw === "flex-end" ? "end" : "start";
 
-    // Video poster state management: show poster until video fires "playing" event
+    // Video poster state management: show poster until video fires "playing" event.
+    // For embeds (iframe), onLoad fires before the video is visible, so we add a
+    // short delay to let the player buffer and start rendering.
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
     const [videoReady, setVideoReady] = React.useState(false);
+    const handleEmbedLoad = React.useCallback(() => {
+      setTimeout(() => setVideoReady(true), 1200);
+    }, []);
 
     return styledRender(props, React.createElement("section", { id: sectionIdValue || undefined, style: outerStyle },
       // Background image overlay
@@ -736,40 +847,51 @@ const Section: Config["components"][string] = {
         backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: (bgPosition as string) || "center center",
         opacity,
       }}) : null,
-      // Video poster image (shows until video is playing)
-      videoPoster && videoResolved && !videoReady ? React.createElement("div", { style: {
+      // Video poster image (shows behind video — visible until video covers it)
+      videoPoster && videoResolved ? React.createElement("div", { style: {
         position: "absolute", inset: 0, zIndex: 1,
         backgroundImage: `url(${videoPoster})`, backgroundSize: "cover", backgroundPosition: "center center",
         opacity,
-        transition: "opacity 0.5s ease",
       }}) : null,
-      // Background video overlay
-      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: videoReady || !videoPoster ? 1 : 0, opacity } },
+      // Background video overlay (always z-index 2 so it layers above poster once playing)
+      videoResolved ? React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 2, opacity: videoReady ? 1 : 0, overflow: "hidden", transition: "opacity 0.6s ease" } },
         videoResolved.kind === "embed"
           ? React.createElement("iframe", {
             src: videoResolved.src,
             title: "Section background video",
             allow: "autoplay; fullscreen; picture-in-picture",
-            style: { width: "100%", height: "100%", border: "none", pointerEvents: "none" },
-            onLoad: () => setVideoReady(true),
+            style: {
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: "177.78vh", // 16:9 ratio — ensures cover behavior
+              height: "56.25vw", // inverse 16:9
+              minWidth: "100%",
+              minHeight: "100%",
+              transform: "translate(-50%, -50%)",
+              border: "none",
+              pointerEvents: "none",
+            },
+            onLoad: handleEmbedLoad,
           })
           : React.createElement("video", {
             ref: videoRef,
             src: videoResolved.src,
+            poster: videoPoster || undefined,
             autoPlay: (bgVideoAutoplay as string) !== "no",
             loop: (bgVideoLoop as string) !== "no",
             muted: (bgVideoSound as string) !== "on",
             controls: (bgVideoControls as string) === "yes",
             playsInline: true,
             onPlaying: () => setVideoReady(true),
-            style: { width: "100%", height: "100%", objectFit: videoFit, objectPosition: (bgVideoPosition as string) || "center center" },
+            style: { display: "block", position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: videoFit, objectPosition: (bgVideoPosition as string) || "center center" },
           }),
       ) : null,
       // Color/gradient overlay on top of media. Only render if there is an actual tint.
       shouldRenderTintOverlay ? React.createElement("div", { style: {
         position: "absolute",
         inset: 0,
-        zIndex: 2,
+        zIndex: 3,
         backgroundImage: hasGradientTint ? gradientValue : undefined,
         backgroundColor: hasSolidTint ? bg : undefined,
         opacity: 1 - opacity,
@@ -778,15 +900,17 @@ const Section: Config["components"][string] = {
       React.createElement("div", {
         style: {
           position: "relative",
-          zIndex: 3,
+          zIndex: 4,
           width: "100%",
           flex: 1,
-          minHeight: "100%",
+          minHeight: 0,
           display: "grid",
           alignContent: alignContentValue,
         },
       },
-        React.createElement(DropZone, { zone: "section-content", disallow: ["Section"] })
+        typeof (props as Record<string, unknown>)["section-content"] === "function"
+          ? (((props as Record<string, unknown>)["section-content"]) as () => React.ReactNode)()
+          : null
       )
     ));
   },
@@ -794,7 +918,7 @@ const Section: Config["components"][string] = {
 
 // ─── Columns ─────────────────────────────────────────────────────────────────
 // Variable number of columns. Each column has its own width / padding / margin
-// / vertical-align / horizontal-align controls and its own DropZone
+// / vertical-align / horizontal-align controls and its own slot
 // (`column-0`, `column-1`, …).
 
 const SPACING_OPTS = [
@@ -809,9 +933,69 @@ const SPACING_OPTS = [
   { label: "64px", value: "64px" },
 ];
 
-const Columns: Config["components"][string] = {
+/**
+ * Determine the effective column count from props.
+ * - If `columnCount` is present and valid (1–6), use it.
+ * - Otherwise, fall back to `columnList.length`.
+ * - Clamp to [1, 6] range.
+ */
+export function resolveColumnCount(props: Record<string, unknown>): number {
+  const explicit = props.columnCount as number | undefined;
+  if (typeof explicit === "number" && explicit >= 1 && explicit <= 6) {
+    return explicit;
+  }
+  const list = props.columnList as unknown[] | undefined;
+  return Math.max(1, Math.min(6, list?.length ?? 2));
+}
+
+/**
+ * Map a Column_Item's spacing fields to four-sided values.
+ * Prefers new fields; falls back to legacy shorthand.
+ */
+export function mapLegacySpacing(item: Record<string, string>): {
+  paddingTop: string;
+  paddingBottom: string;
+  paddingLeft: string;
+  paddingRight: string;
+  marginTop: string;
+  marginBottom: string;
+  marginLeft: string;
+  marginRight: string;
+} {
+  return {
+    paddingTop: item.paddingTop ?? item.paddingY ?? "0",
+    paddingBottom: item.paddingBottom ?? item.paddingY ?? "0",
+    paddingLeft: item.paddingLeft ?? item.paddingX ?? "0",
+    paddingRight: item.paddingRight ?? item.paddingX ?? "0",
+    marginTop: item.marginTop ?? item.marginY ?? "0",
+    marginBottom: item.marginBottom ?? item.marginY ?? "0",
+    marginLeft: item.marginLeft ?? "0",
+    marginRight: item.marginRight ?? "0",
+  };
+}
+
+const Columns: OraComponentConfig = {
   label: "Columns",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
+    columnCount: {
+      type: "number",
+      label: "Number of Columns",
+      min: 1,
+      max: 6,
+    },
+    layoutDirection: createCustomSelectField("Layout Direction", [
+      { label: "Horizontal (row)", value: "row" },
+      { label: "Vertical (stack)", value: "column" },
+    ]),
+    "column-0": { type: "slot", disallow: ["Section"] },
+    "column-1": { type: "slot", disallow: ["Section"] },
+    "column-2": { type: "slot", disallow: ["Section"] },
+    "column-3": { type: "slot", disallow: ["Section"] },
+    "column-4": { type: "slot", disallow: ["Section"] },
+    "column-5": { type: "slot", disallow: ["Section"] },
     gap: createCustomSelectField("Gap", [
       { label: "None", value: "0" }, { label: "Small", value: "sm" }, { label: "Medium", value: "md" }, { label: "Large", value: "lg" },
     ]),
@@ -822,6 +1006,14 @@ const Columns: Config["components"][string] = {
         `Column ${(i ?? 0) + 1} — ${(item?.width as string) || "auto"}`,
       defaultItemProps: {
         width: "1fr",
+        paddingTop: "0",
+        paddingBottom: "0",
+        paddingLeft: "0",
+        paddingRight: "0",
+        marginTop: "0",
+        marginBottom: "0",
+        marginLeft: "0",
+        marginRight: "0",
         paddingY: "0",
         paddingX: "0",
         marginY: "0",
@@ -840,6 +1032,14 @@ const Columns: Config["components"][string] = {
           { label: "75%", value: "75%" },
           { label: "100% (full)", value: "100%" },
         ]),
+        paddingTop: createCustomSelectField("Padding Top", SPACING_OPTS),
+        paddingBottom: createCustomSelectField("Padding Bottom", SPACING_OPTS),
+        paddingLeft: createCustomSelectField("Padding Left", SPACING_OPTS),
+        paddingRight: createCustomSelectField("Padding Right", SPACING_OPTS),
+        marginTop: createCustomSelectField("Margin Top", SPACING_OPTS),
+        marginBottom: createCustomSelectField("Margin Bottom", SPACING_OPTS),
+        marginLeft: createCustomSelectField("Margin Left", SPACING_OPTS),
+        marginRight: createCustomSelectField("Margin Right", SPACING_OPTS),
         paddingY: createCustomSelectField("Padding Y", SPACING_OPTS),
         paddingX: createCustomSelectField("Padding X", SPACING_OPTS),
         marginY: createCustomSelectField("Margin Y", SPACING_OPTS),
@@ -860,26 +1060,55 @@ const Columns: Config["components"][string] = {
     ...spacingBorderFields,
   },
   defaultProps: {
+    columnCount: 2,
+    layoutDirection: { desktop: "row", mobile: "column" },
+    "column-0": [],
+    "column-1": [],
+    "column-2": [],
+    "column-3": [],
+    "column-4": [],
+    "column-5": [],
     gap: "md",
     columnList: [
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
+      { width: "1fr", paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0",
+        marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" },
+      { width: "1fr", paddingTop: "0", paddingBottom: "0", paddingLeft: "0", paddingRight: "0",
+        marginTop: "0", marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" },
     ],
     ...spacingBorderDefaults,
   },
   render: (props) => {
     const list = (props.columnList as Array<Record<string, string>>) ?? [];
-    const cols = list.length > 0 ? list : [
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-      { width: "1fr", paddingY: "0", paddingX: "0", marginY: "0", align: "flex-start", justify: "stretch" },
-    ];
+    const count = resolveColumnCount(props);
+    const cols = list.slice(0, count);
+
+    // Fallback if list is shorter than count (shouldn't happen, but defensive)
+    while (cols.length < count) {
+      cols.push({ width: "1fr", paddingTop: "0", paddingBottom: "0",
+        paddingLeft: "0", paddingRight: "0", marginTop: "0",
+        marginBottom: "0", marginLeft: "0", marginRight: "0",
+        align: "flex-start", justify: "stretch" });
+    }
+
     const gapPx: Record<string, string> = { "0": "0", sm: "16px", md: "24px", lg: "40px" };
     const gap = gapPx[props.gap as string] ?? gapPx.md;
 
-    // Build grid-template-columns from per-column widths.
+    // Resolve desktop direction as inline default (CSS custom prop overrides per breakpoint)
+    const direction = resolveBreakpointValue(
+      props.layoutDirection as BreakpointValue<string> | undefined,
+      "desktop"
+    ) ?? "row";
+
+    // Build grid styles based on resolved direction
     const gridTemplate = cols
       .map((c) => (c.width && c.width !== "" ? c.width : "1fr"))
       .join(" ");
+
+    const gridStyle: React.CSSProperties = direction === "row"
+      ? { gridTemplateColumns: gridTemplate, gap }
+      : { gridTemplateColumns: "1fr", gridAutoRows: "auto", gap };
 
     return styledRender(
       props,
@@ -887,13 +1116,11 @@ const Columns: Config["components"][string] = {
         "div",
         {
           className: "grid",
-          style: {
-            gridTemplateColumns: gridTemplate,
-            gap,
-          },
+          style: gridStyle,
         },
-        ...cols.map((c, i) =>
-          React.createElement(
+        ...cols.map((c, i) => {
+          const spacing = mapLegacySpacing(c);
+          return React.createElement(
             "div",
             {
               key: i,
@@ -902,34 +1129,39 @@ const Columns: Config["components"][string] = {
                 flexDirection: "column",
                 justifyContent: c.align || "flex-start",
                 alignItems: c.justify || "stretch",
-                paddingTop: c.paddingY || "0",
-                paddingBottom: c.paddingY || "0",
-                paddingLeft: c.paddingX || "0",
-                paddingRight: c.paddingX || "0",
-                marginTop: c.marginY || "0",
-                marginBottom: c.marginY || "0",
+                paddingTop: spacing.paddingTop,
+                paddingBottom: spacing.paddingBottom,
+                paddingLeft: spacing.paddingLeft,
+                paddingRight: spacing.paddingRight,
+                marginTop: spacing.marginTop,
+                marginBottom: spacing.marginBottom,
+                marginLeft: spacing.marginLeft,
+                marginRight: spacing.marginRight,
                 minHeight: "60px",
                 minWidth: 0,
               },
             },
-            React.createElement(DropZone, { zone: `column-${i}`, disallow: ["Section"] })
-          )
-        )
+            typeof (props as Record<string, unknown>)[`column-${i}`] === "function"
+              ? (((props as Record<string, unknown>)[`column-${i}`]) as () => React.ReactNode)()
+              : null
+          );
+        })
       )
     );
   },
 };
 
 
-// ─── Container — Content width constraint with DropZone ──────────────────────
+// ─── Container — Content width constraint with slot ──────────────────────
 
 const CONTAINER_BG_COLORS = ORA_SOLID_BG_OPTIONS;
 
 const CONTAINER_GRADIENT_COLORS = ORA_GRADIENT_OPTIONS;
 
-const Container: Config["components"][string] = {
+const Container: OraComponentConfig = {
   label: "Container",
   fields: {
+    "container-content": { type: "slot", disallow: ["Section"] },
     maxWidth: createCustomSelectField("Max Width", [
       { label: "Small (720px)", value: "720" }, { label: "Medium (960px)", value: "960" },
       { label: "Large (1200px)", value: "1200" }, { label: "XL (1400px)", value: "1400" },
@@ -959,6 +1191,7 @@ const Container: Config["components"][string] = {
     ...spacingBorderFields,
   },
   defaultProps: {
+    "container-content": [],
     maxWidth: "1200",
     bgMode: "solid",
     bgColor: "transparent",
@@ -1016,14 +1249,16 @@ const Container: Config["components"][string] = {
         padding: mw === "100%" ? 0 : "0 16px",
       },
     },
-      React.createElement(DropZone, { zone: "container-content", disallow: ["Section"] })
+      typeof (props as Record<string, unknown>)["container-content"] === "function"
+        ? (((props as Record<string, unknown>)["container-content"]) as () => React.ReactNode)()
+        : null
     ));
   },
 };
 
 // ─── Quote/Blockquote — Styled quote with accent border ──────────────────────
 
-const Quote: Config["components"][string] = {
+const Quote: OraComponentConfig = {
   label: "Quote",
   fields: {
     text: { type: "textarea", label: "Quote Text", contentEditable: true },
@@ -1059,7 +1294,7 @@ const Quote: Config["components"][string] = {
 
 // ─── Link — Inline text link ─────────────────────────────────────────────────
 
-const InlineLink: Config["components"][string] = {
+const InlineLink: OraComponentConfig = {
   label: "Link",
   fields: {
     text: { type: "text", label: "Link Text", contentEditable: true },
@@ -1098,7 +1333,7 @@ const InlineLink: Config["components"][string] = {
 
 // ─── Heading ─────────────────────────────────────────────────────────────────
 
-const Heading: Config["components"][string] = {
+const Heading: OraComponentConfig = {
   label: "Heading",
   fields: {
     text: { type: "text", label: "Text", contentEditable: true },
@@ -1123,7 +1358,7 @@ const Heading: Config["components"][string] = {
 
 // ─── Text ────────────────────────────────────────────────────────────────────
 
-const Text: Config["components"][string] = {
+const Text: OraComponentConfig = {
   label: "Text",
   fields: {
     content: {
@@ -1594,7 +1829,7 @@ const BUTTON_HOVER_CSS = `
 }
 `;
 
-const Button: Config["components"][string] = {
+const Button: OraComponentConfig = {
   label: "Button",
   fields: {
     // ── Content ────────────────────────────────────────────────────────────
@@ -1610,16 +1845,10 @@ const Button: Config["components"][string] = {
     }},
 
     // ── Typography ─────────────────────────────────────────────────────────
+    // NOTE: `fontFamily` is intentionally omitted. URW Geometric is enforced
+    // via CSS inheritance from the canvas/renderer root.
+    // See spec: branded-font-enforcement (Requirements 2.3, 2.5, 2.6).
     _typography: { type: "object", label: "Typography", objectFields: {
-      fontFamily: makeCustomSelectField("Font Family", [
-        { label: "Inherit", value: "inherit" },
-        { label: "Sans-serif", value: "sans-serif" },
-        { label: "Serif", value: "serif" },
-        { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
-        { label: "Playfair Display", value: "'Playfair Display', serif" },
-        { label: "Inter", value: "'Inter', sans-serif" },
-        { label: "Montserrat", value: "'Montserrat', sans-serif" },
-      ], "Reusable custom dropdown, not the browser native select."),
       fontWeight: makeCustomSelectField("Font Weight", [
         { label: "Light (300)", value: "300" },
         { label: "Regular (400)", value: "400" },
@@ -1663,10 +1892,9 @@ const Button: Config["components"][string] = {
   },
   defaultProps: {
     text: "Click Me",
-    url: "#",
+    url: "",
     _icon: { name: "", position: "right", size: "16", gap: "8px" },
     _typography: {
-      fontFamily: "inherit",
       fontWeight: "600",
       fontSize: "14px",
       letterSpacing: "0.05em",
@@ -1757,18 +1985,24 @@ const Button: Config["components"][string] = {
 
     return React.createElement("div", { style: wrapStyle },
       React.createElement("style", null, BUTTON_HOVER_CSS),
-      React.createElement("a", { href: (props.url as string) || "#", style: btnStyle, className: "ora-builder-button" },
-        iconPos === "left" ? iconEl : null,
-        React.createElement("span", null, props.text as string),
-        iconPos === "right" ? iconEl : null,
-      )
+      (props.url as string) && (props.url as string) !== "#"
+        ? React.createElement("a", { href: (props.url as string), style: btnStyle, className: "ora-builder-button" },
+            iconPos === "left" ? iconEl : null,
+            React.createElement("span", null, props.text as string),
+            iconPos === "right" ? iconEl : null,
+          )
+        : React.createElement("button", { type: "button", style: btnStyle, className: "ora-builder-button" },
+            iconPos === "left" ? iconEl : null,
+            React.createElement("span", null, props.text as string),
+            iconPos === "right" ? iconEl : null,
+          )
     );
   },
 };
 
 // ─── Image ───────────────────────────────────────────────────────────────────
 
-const Image: Config["components"][string] = {
+const Image: OraComponentConfig = {
   label: "Image",
   fields: {
     src: imageUploadField,
@@ -1803,7 +2037,7 @@ const VIDEO_RATIO_OPTIONS = [
   { label: "21:9", value: "21:9" },
 ];
 
-const Video: Config["components"][string] = {
+const Video: OraComponentConfig = {
   label: "Video",
   fields: {
     src: { type: "text", label: "Video URL (file, YouTube, Vimeo)" },
@@ -1888,7 +2122,7 @@ const Video: Config["components"][string] = {
 
 // ─── Spacer ──────────────────────────────────────────────────────────────────
 
-const Spacer: Config["components"][string] = {
+const Spacer: OraComponentConfig = {
   label: "Spacer",
   fields: {
     height: { type: "select", label: "Height", options: [
@@ -1903,7 +2137,7 @@ const Spacer: Config["components"][string] = {
 
 // ─── Divider ─────────────────────────────────────────────────────────────────
 
-const Divider: Config["components"][string] = {
+const Divider: OraComponentConfig = {
   label: "Divider",
   fields: {
     color: { type: "select", label: "Color", options: [
@@ -1919,7 +2153,7 @@ const Divider: Config["components"][string] = {
 
 // ─── Icon ────────────────────────────────────────────────────────────────────
 
-const Icon: Config["components"][string] = {
+const Icon: OraComponentConfig = {
   label: "Icon",
   fields: {
     icon: { type: "select", label: "Icon", options: [
@@ -1982,7 +2216,7 @@ const Icon: Config["components"][string] = {
 
 // ─── FilterTabs — Horizontal tabs with superscript counts ────────────────────
 
-const FilterTabs: Config["components"][string] = {
+const FilterTabs: OraComponentConfig = {
   label: "Filter Tabs",
   fields: {
     tabs: { type: "array", label: "Tabs", arrayFields: {
@@ -2054,8 +2288,11 @@ function extractIconFeatureLabel(value: unknown, seen = new WeakSet<object>(), d
   return "";
 }
 
-const IconFeatureList: Config["components"][string] = {
+const IconFeatureList: OraComponentConfig = {
   label: "Icon Feature List",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
     items: {
       type: "array",
@@ -2161,15 +2398,27 @@ const IconFeatureList: Config["components"][string] = {
         const sourceType = String(row.sourceType ?? "lucide");
         const key = String(row.icon ?? "star");
         const LabelIcon = ICON_MAP[key] ?? Star;
-        const label = extractIconFeatureLabel(row.label)
-          .replace(/\s*\n+\s*/g, " ")
-          .replace(/\s{2,}/g, " ")
-          .trim() || "Feature item";
+        // `row.label` may be a React element (Puck wraps `contentEditable`
+        // text fields with InlineTextField). Pass it through to the span
+        // and only fall back to a plain "Feature item" placeholder when
+        // there's truly nothing to render.
+        const labelValue = row.label;
+        const labelIsElement = React.isValidElement(labelValue);
+        const labelText = !labelIsElement
+          ? extractIconFeatureLabel(labelValue)
+              .replace(/\s*\n+\s*/g, " ")
+              .replace(/\s{2,}/g, " ")
+              .trim() || "Feature item"
+          : null;
+        const labelNode: React.ReactNode = labelIsElement
+          ? (labelValue as React.ReactNode)
+          : labelText;
+        const accessibleLabel = labelText ?? "Feature";
 
         const iconNode = sourceType === "image" && typeof row.image === "string" && row.image.trim()
           ? React.createElement("img", {
               src: row.image,
-              alt: `${label} icon`,
+              alt: `${accessibleLabel} icon`,
               style: { width: iconSize, height: iconSize, objectFit: "contain", display: "block" },
             })
           : sourceType === "svg" && typeof row.svgMarkup === "string" && row.svgMarkup.trim()
@@ -2197,14 +2446,17 @@ const IconFeatureList: Config["components"][string] = {
             fontSize: textSize,
             fontWeight: textWeight,
           },
-        }, label));
+        }, labelNode));
       }),
     ));
   },
 };
 
-const AccordionGroup: Config["components"][string] = {
+const AccordionGroup: OraComponentConfig = {
   label: "Accordion Group",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
     heading: { type: "text", label: "Heading", contentEditable: true },
     items: {
@@ -2233,11 +2485,11 @@ const AccordionGroup: Config["components"][string] = {
     },
     defaultOpenIndex: { type: "number", label: "Default Open Index (0-based)", min: 0 },
     headingColor: makeColorField("Heading Color", "#2C2C2C"),
-    headingSize: makeFreeInputField("Heading Size", "px", ["36px", "44px", "52px", "60px"]),
+    headingSize: makeFreeInputField("Heading Size", "px", ["28px", "36px", "44px", "52px", "60px"]),
     titleColor: makeColorField("Title Color", "#2C2C2C"),
-    titleSize: makeFreeInputField("Title Size", "px", ["28px", "36px", "44px", "50px"]),
+    titleSize: makeFreeInputField("Title Size", "px", ["18px", "24px", "28px", "36px", "44px", "50px"]),
     bodyColor: makeColorField("Body Color", "#2C2C2C"),
-    bodySize: makeFreeInputField("Body Size", "px", ["18px", "20px", "24px", "28px"]),
+    bodySize: makeFreeInputField("Body Size", "px", ["14px", "16px", "18px", "20px", "24px", "28px"]),
     bodyIndent: makeFreeInputField("Body Left Indent", "px", ["0px", "8px", "12px", "16px"]),
     dividerColor: makeColorField("Divider Color", "#D9D6D1"),
     dividerWidth: makeSliderField("Divider Width", 0, 4, "px"),
@@ -2276,11 +2528,11 @@ const AccordionGroup: Config["components"][string] = {
     ],
     defaultOpenIndex: 0,
     headingColor: "#2C2C2C",
-    headingSize: "60px",
+    headingSize: "36px",
     titleColor: "#2C2C2C",
-    titleSize: "50px",
+    titleSize: "24px",
     bodyColor: "#2C2C2C",
-    bodySize: "20px",
+    bodySize: "16px",
     bodyIndent: "12px",
     dividerColor: "#D9D6D1",
     dividerWidth: "1",
@@ -2294,7 +2546,15 @@ const AccordionGroup: Config["components"][string] = {
     ...spacingBorderDefaults,
   },
   render: (props) => {
-    const heading = extractIconFeatureLabel(props.heading).trim();
+    // Puck transforms `text` fields with `contentEditable: true` into React
+    // elements (InlineTextField). Pass them straight through to React rather
+    // than coercing to strings, otherwise the inline editor's wrapper is
+    // erased and the rendered title appears empty.
+    const heading = props.heading;
+    const hasHeading =
+      typeof heading === "string"
+        ? heading.trim() !== ""
+        : React.isValidElement(heading);
     const rows = (props.items as Array<Record<string, unknown>>) ?? [];
     const defaultOpenIndex = Number(props.defaultOpenIndex) || 0;
     const headingColor = (props.headingColor as string) || "#2C2C2C";
@@ -2314,19 +2574,41 @@ const AccordionGroup: Config["components"][string] = {
     const itemPaddingY = (props.itemPaddingY as string) || "8px";
     const typoCSS = typographyPropsToCSS(props);
     const renderBody = (value: unknown) => {
+      // Puck transforms richtext fields (with `contentEditable: true`) into
+      // React elements (InlineEditorWrapper / RichTextRender) before
+      // reaching this render function. We must render those elements
+      // directly — calling sanitizeRichTextHtml/extractIconFeatureLabel
+      // on a React element would erase the body content.
+      if (React.isValidElement(value)) {
+        return React.createElement(
+          "div",
+          {
+            className: "ora-richtext ora-accordion-body",
+            style: {
+              ...typoCSS,
+              color: bodyColor,
+              fontSize: bodySize,
+              lineHeight: 1.6,
+              padding: `4px 0 8px ${bodyIndent}`,
+            },
+          },
+          value,
+        );
+      }
+
       if (typeof value === "string") {
         const safeHtml = sanitizeRichTextHtml(value);
         return React.createElement("div", {
-          className: "ora-richtext",
+          className: "ora-richtext ora-accordion-body",
           style: {
             ...typoCSS,
             color: bodyColor,
             fontSize: bodySize,
             lineHeight: 1.6,
-            padding: `8px 0 12px ${bodyIndent}`,
+            padding: `4px 0 8px ${bodyIndent}`,
           },
         },
-        React.createElement("style", null, RICH_TEXT_EMBEDDED_STYLES),
+        React.createElement("style", null, RICH_TEXT_EMBEDDED_STYLES + `\n.ora-accordion-body .tiptap, .ora-accordion-body .ProseMirror { min-height: 0 !important; }`),
         React.createElement("div", { dangerouslySetInnerHTML: { __html: safeHtml } }));
       }
 
@@ -2337,7 +2619,7 @@ const AccordionGroup: Config["components"][string] = {
           color: bodyColor,
           fontSize: bodySize,
           lineHeight: 1.6,
-          padding: `8px 0 12px ${bodyIndent}`,
+          padding: `4px 0 8px ${bodyIndent}`,
         },
       }, plain);
     };
@@ -2346,7 +2628,6 @@ const AccordionGroup: Config["components"][string] = {
     const AccordionItem = ({ row, i, isDefaultOpen }: { row: Record<string, unknown>; i: number; isDefaultOpen: boolean }) => {
       const [isOpen, setIsOpen] = React.useState(isDefaultOpen);
       return React.createElement("div", {
-        key: `${String(row.title ?? "item")}-${i}`,
         style: {
           borderBottom: dividerWidth > 0 ? `${dividerWidth}px solid ${dividerColor}` : undefined,
           padding: `${itemPaddingY} 0`,
@@ -2366,11 +2647,11 @@ const AccordionGroup: Config["components"][string] = {
           fontSize: titleSize,
           lineHeight: 1.25,
           fontWeight: 400,
-          padding: "8px 0",
+          padding: "4px 0",
           userSelect: "none",
         },
       },
-      React.createElement("span", { style: { color: titleColor, flex: 1, minWidth: 0 } }, extractIconFeatureLabel(row.title).trim()),
+      React.createElement("span", { style: { color: titleColor, flex: 1, minWidth: 0 } }, row.title as React.ReactNode),
       React.createElement(ChevronDown, {
         size: iconSize,
         color: iconColor,
@@ -2389,22 +2670,22 @@ const AccordionGroup: Config["components"][string] = {
     };
 
     return styledRender(props, React.createElement("div", {
-      style: { display: "flex", flexDirection: "column", gap: 12 },
+      style: { display: "flex", flexDirection: "column", gap: 0 },
     },
-      heading
+      hasHeading
         ? React.createElement("h3", {
             style: {
-              margin: 0,
+              margin: "0 0 12px 0",
               color: headingColor,
               fontSize: headingSize,
               lineHeight: 1.1,
               fontWeight: 400,
             },
-          }, heading)
+          }, heading as React.ReactNode)
         : null,
       ...rows.map((row, i) =>
         React.createElement(AccordionItem, {
-          key: `${String(row.title ?? "item")}-${i}`,
+          key: i,
           row,
           i,
           isDefaultOpen: i === defaultOpenIndex,
@@ -2414,16 +2695,17 @@ const AccordionGroup: Config["components"][string] = {
   },
 };
 
-// ─── Accordion — Expandable section with DropZone content ────────────────────
+// ─── Accordion — Expandable section with slot content ────────────────────
 
-const Accordion: Config["components"][string] = {
+const Accordion: OraComponentConfig = {
   label: "Accordion",
   fields: {
+    "accordion-content": { type: "slot", disallow: ["Section"] },
     title: { type: "text", label: "Title", contentEditable: true },
     defaultOpen: createCustomSelectField("Default Open", [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }]),
     ...spacingBorderFields,
   },
-  defaultProps: { title: "Light Palette", defaultOpen: "yes", ...spacingBorderDefaults },
+  defaultProps: { "accordion-content": [], title: "Light Palette", defaultOpen: "yes", ...spacingBorderDefaults },
   render: (props) => {
     const isOpen = (props.defaultOpen as string) === "yes";
     return styledRender(props, React.createElement("details", { open: isOpen || undefined, className: "group border-b border-[#E8E4DF]" },
@@ -2432,7 +2714,9 @@ const Accordion: Config["components"][string] = {
         React.createElement("span", { className: "text-[#2C2C2C] text-xl transition-transform group-open:rotate-180" }, "∧"),
       ),
       React.createElement("div", { className: "pb-6" },
-        React.createElement(DropZone, { zone: "accordion-content", disallow: ["Section"] }),
+        typeof (props as Record<string, unknown>)["accordion-content"] === "function"
+          ? (((props as Record<string, unknown>)["accordion-content"]) as () => React.ReactNode)()
+          : null,
       ),
     ));
   },
@@ -2443,9 +2727,8 @@ const Accordion: Config["components"][string] = {
 // Absolutely positioned within a Section. Shows an animated arrow + label.
 // Set vertical = bottom/top/center and horizontal = left/center/right.
 
-const ScrollIndicator: Config["components"][string] = {
+const ScrollIndicator: OraComponentConfig = {
   label: "Scroll Indicator",
-  inline: true,
   fields: {
     label: createFreeInputField("Label Text", "", [], "Short text shown above/below the indicator.", "SCROLL TO EXPLORE"),
     labelPosition: createToggleField("Label Position", [
@@ -2562,37 +2845,11 @@ const ScrollIndicator: Config["components"][string] = {
     const arrowColor    = (props.arrowColor   as string) || "#FFFFFF";
 
     const sizePx: Record<string, { w: number; h: number; arrow: number }> = {
-      sm: { w: 28, h: 48, arrow: 10 },
-      md: { w: 38, h: 62, arrow: 14 },
-      lg: { w: 50, h: 80, arrow: 18 },
+      sm: { w: 30, h: 56, arrow: 20 },
+      md: { w: 36, h: 72, arrow: 26 },
+      lg: { w: 44, h: 90, arrow: 32 },
     };
     const dim = sizePx[size] ?? sizePx.md;
-
-    // ── Absolute positioning ─────────────────────────────────────────────────
-    const containerStyle: React.CSSProperties = {
-      position: "absolute",
-      zIndex: 10,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 10,
-      textDecoration: "none",
-      cursor: "pointer",
-    };
-
-    if (vPos === "top")    { containerStyle.top = vOff; }
-    else if (vPos === "bottom") { containerStyle.bottom = vOff; }
-    else                  { containerStyle.top = "50%"; }
-
-    if (hPos === "left")   { containerStyle.left = hOff; }
-    else if (hPos === "right") { containerStyle.right = hOff; }
-    else                   { containerStyle.left = "50%"; }
-
-    const tx = hPos === "center" ? "-50%" : "0%";
-    const ty = vPos === "center" ? "-50%" : "0%";
-    if (tx !== "0%" || ty !== "0%") {
-      containerStyle.transform = `translate(${tx}, ${ty})`;
-    }
 
     // ── Capsule ──────────────────────────────────────────────────────────────
     const capsuleStyle: React.CSSProperties = {
@@ -2606,18 +2863,21 @@ const ScrollIndicator: Config["components"][string] = {
       backgroundColor: indStyle === "filled" ? indicatorColor : "transparent",
     };
 
-    // ── Chevron arrow SVG ────────────────────────────────────────────────────
+    // ── Downward arrow SVG (line + arrowhead) ───────────────────────────────
     const arrowSvg = React.createElement("svg", {
-      width: dim.arrow,
+      width: dim.arrow * 0.5,
       height: dim.arrow,
-      viewBox: "0 0 24 24",
+      viewBox: "0 0 12 24",
       fill: "none",
       stroke: arrowColor,
-      strokeWidth: 2,
+      strokeWidth: 1.5,
       strokeLinecap: "round" as const,
       strokeLinejoin: "round" as const,
       "aria-hidden": "true",
-    }, React.createElement("polyline", { points: "6 9 12 15 18 9" }));
+    },
+      React.createElement("line", { x1: "6", y1: "1", x2: "6", y2: "20" }),
+      React.createElement("polyline", { points: "2 16 6 22 10 16" }),
+    );
 
     // ── Animated capsule ─────────────────────────────────────────────────────
     let indicatorEl: React.ReactNode;
@@ -2664,11 +2924,84 @@ const ScrollIndicator: Config["components"][string] = {
       : [indicatorEl, labelEl]
     ).filter(Boolean);
 
-    return React.createElement("a", {
-      href,
-      style: containerStyle,
-      "aria-label": labelText || "Scroll",
-    }, ...children);
+    // Use a flow-based wrapper so the indicator is visible and selectable in
+    // the builder. We render two elements:
+    //   1) A static placeholder with the indicator's footprint (height = dim.h
+    //      + label gap). This gives Puck's wrapping <div> a non-zero size so
+    //      the block is clickable on the canvas and the floating toolbar can
+    //      anchor to it.
+    //   2) An absolutely-positioned visual that pins to the Section bounds
+    //      (the nearest positioned ancestor — Section sets position:relative).
+    //
+    // Both render the same content; the static one is invisible (opacity 0,
+    // pointer-events none) so the visible indicator only appears via the
+    // pinned absolute layer.
+    const visualLink = React.createElement(
+      "a",
+      {
+        href,
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+          textDecoration: "none",
+          cursor: "pointer",
+        },
+        "aria-label": labelText || "Scroll",
+      },
+      ...children,
+    );
+
+    const pinnedStyle: React.CSSProperties = {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: vPos === "bottom" ? vOff : undefined,
+      top: vPos === "top" ? vOff : undefined,
+      display: "flex",
+      justifyContent: hPos === "left" ? "flex-start" : hPos === "right" ? "flex-end" : "center",
+      paddingLeft: hPos === "left" ? hOff : undefined,
+      paddingRight: hPos === "right" ? hOff : undefined,
+      zIndex: 10,
+      pointerEvents: "auto",
+    };
+    if (vPos === "center") {
+      pinnedStyle.top = "50%";
+      pinnedStyle.transform = "translateY(-50%)";
+    }
+
+    // The placeholder gets the indicator's intrinsic size so Puck's selectable
+    // wrapper has a real footprint. Visually hidden so it doesn't duplicate
+    // the indicator. `aria-hidden` to keep it out of the AT tree.
+    const placeholderStyle: React.CSSProperties = {
+      visibility: "hidden",
+      pointerEvents: "none",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+      minHeight: dim.h + (labelText ? 30 : 0),
+    };
+
+    return React.createElement(
+      "div",
+      {
+        style: {
+          // Width: 100% so the placeholder occupies a row in the parent
+          // flex/flow, giving Puck's wrapper a visible footprint that can
+          // be clicked and anchored by the floating toolbar.
+          width: "100%",
+        },
+      },
+      React.createElement(
+        "div",
+        { style: placeholderStyle, "aria-hidden": true },
+        visualLink,
+      ),
+      React.createElement("div", { style: pinnedStyle }, visualLink),
+    );
   },
 };
 
@@ -2676,17 +3009,9 @@ const ScrollIndicator: Config["components"][string] = {
 // ─── Stats Grid ───────────────────────────────────────────────────────────────
 // A configurable stat grid. Each stat item has its own value/label typography,
 // individual border control (left / right / top / bottom), border color/width/
-// radius, and padding. The container controls columns, gap, and font family.
-
-const STATS_FONT_OPTIONS = [
-  { label: "Inherit", value: "inherit" },
-  { label: "Sans-serif", value: "sans-serif" },
-  { label: "Serif", value: "serif" },
-  { label: "Cormorant Garamond", value: "'Cormorant Garamond', serif" },
-  { label: "Playfair Display", value: "'Playfair Display', serif" },
-  { label: "Inter", value: "'Inter', sans-serif" },
-  { label: "Montserrat", value: "'Montserrat', sans-serif" },
-];
+// radius, and padding. The container controls columns and gap. Font family is
+// inherited from the canvas/renderer root (URW Geometric brand font) and is
+// not configurable per-block.
 
 const STATS_WEIGHT_OPTIONS = [
   { label: "Thin (100)", value: "100" },
@@ -2704,8 +3029,11 @@ const STATS_BORDER_SIDES_FIELD = {
   borderBottom: createToggleField("Bottom Border", [{ label: "On", value: "yes" }, { label: "Off", value: "no" }]),
 };
 
-const StatsGrid: Config["components"][string] = {
+const StatsGrid: OraComponentConfig = {
   label: "Stats Grid",
+  responsiveDefaults: {
+    columns: { mobile: "1" },
+  },
   fields: {
     // ── Container layout ───────────────────────────────────────────────────
     columns: makeCustomSelectField("Columns", [
@@ -2718,7 +3046,9 @@ const StatsGrid: Config["components"][string] = {
     ], "Number of stat columns per row."),
     gap: makeFreeInputField("Column Gap", "px", ["0px", "8px", "16px", "24px", "32px", "48px"], "Gap between stat items."),
     rowGap: makeFreeInputField("Row Gap", "px", ["0px", "8px", "16px", "24px", "32px", "48px"], "Gap between rows when stats wrap."),
-    fontFamily: makeCustomSelectField("Font Family", STATS_FONT_OPTIONS, "Applied to all stats unless overridden per-item."),
+    // NOTE: `fontFamily` is intentionally not configurable. URW Geometric is
+    // enforced via CSS inheritance from the canvas/renderer root.
+    // See spec: branded-font-enforcement (Requirements 2.4, 2.5).
 
     // ── Per-item array ─────────────────────────────────────────────────────
     items: {
@@ -2783,7 +3113,6 @@ const StatsGrid: Config["components"][string] = {
     columns: "4",
     gap: "0px",
     rowGap: "0px",
-    fontFamily: "inherit",
     items: [
       { value: "4.8M²",  label: "Total Land Area",    valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
       { value: "55%",    label: "Open Spaces",        valueColor: "#FFFFFF", valueFontSize: "52px", valueFontWeight: "300", valueLetterSpacing: "normal", labelColor: "rgba(255,255,255,0.75)", labelFontSize: "14px", labelFontWeight: "300", labelLetterSpacing: "normal", borderLeft: "yes", borderRight: "no", borderTop: "no", borderBottom: "no", borderColor: "#FFFFFF", borderWidth: "1", borderRadius: "0", paddingX: "24px", paddingY: "16px", innerGap: "8px" },
@@ -2885,7 +3214,24 @@ const pinPickerField = {
   },
 };
 
-const LocationMap: Config["components"][string] = {
+const contactLocationPickerField = {
+  type: "custom" as const,
+  label: "Locations",
+  render: ({ value, onChange, readOnly }: { value: unknown; onChange: (v: ContactLocationItem[]) => void; readOnly?: boolean }) => {
+    const apiKey = (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY : "") || "";
+    return React.createElement(ContactLocationPicker, {
+      value: (value as ContactLocationItem[]) ?? [],
+      onChange,
+      readOnly,
+      apiKey,
+      centerLat: DEFAULT_DUBAI_LAT,
+      centerLng: 55.2708,
+      zoom: 10,
+    });
+  },
+};
+
+const LocationMap: OraComponentConfig = {
   label: "Location Map",
   fields: {
     mapTitle: { type: "text", label: "Title", contentEditable: true },
@@ -3066,9 +3412,15 @@ const LocationMap: Config["components"][string] = {
 // CONTACT LOCATIONS MAP — Side-by-side address panel + Google Map
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const ContactLocationsMap: Config["components"][string] = {
+const ContactLocationsMap: OraComponentConfig = {
   label: "Contact Locations Map",
+  responsiveDefaults: {
+    layoutDirection: { mobile: "column" },
+  },
   fields: {
+    // ── Locations (custom picker — click map to add) ─────────────────────
+    locations: contactLocationPickerField,
+
     // ── Section / container ─────────────────────────────────────────────
     containerMaxWidth: makeFreeInputField("Container Max Width", "px", ["100%", "1200px", "1400px", "1600px"], "Constrains the section. Use 100% for an edge-to-edge layout."),
     containerPaddingX: makeFreeInputField("Container Padding X", "px", ["0px", "16px", "24px", "32px", "48px"]),
@@ -3085,6 +3437,14 @@ const ContactLocationsMap: Config["components"][string] = {
     panelPaddingX: makeFreeInputField("Panel Padding X", "px", ["16px", "24px", "32px", "40px", "48px"]),
     panelPaddingY: makeFreeInputField("Panel Padding Y", "px", ["16px", "24px", "32px", "40px", "48px"]),
     panelGap: makeFreeInputField("Spacing Between Locations", "px", ["12px", "16px", "20px", "24px", "32px"]),
+    panelOffsetTop: makeFreeInputField("Panel Offset Top", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the map's top edge."),
+    panelOffsetBottom: makeFreeInputField("Panel Offset Bottom", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the map's bottom edge."),
+    panelOffsetSide: makeFreeInputField("Panel Offset Side", "px", ["0px", "16px", "24px", "40px", "64px", "96px"], "Distance from the chosen side (left or right)."),
+    panelBorderRadius: makeSliderField("Panel Border Radius", 0, 32, "px"),
+    panelShadow: createToggleField("Panel Drop Shadow", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ]),
     showDividers: createToggleField("Show Dividers", [
       { label: "Yes", value: "yes" },
       { label: "No", value: "no" },
@@ -3097,46 +3457,9 @@ const ContactLocationsMap: Config["components"][string] = {
     centerLat: { type: "number", label: "Center Latitude" },
     centerLng: { type: "number", label: "Center Longitude" },
     zoom: makeSliderField("Zoom", 1, 20, ""),
-    mapHeight: makeFreeInputField("Map Height", "px", ["480px", "560px", "640px", "720px", "80vh"]),
+    mapHeight: makeFreeInputField("Map Height", "px", ["480px", "560px", "640px", "720px", "80vh", "100vh"]),
     mapStyleJson: { type: "textarea", label: "Map Style JSON (Snazzy Maps export)" },
     mapId: { type: "text", label: "Cloud Map ID (optional)" },
-
-    // ── Locations list ───────────────────────────────────────────────────
-    locations: {
-      type: "array",
-      label: "Locations",
-      getItemSummary: (item: Record<string, unknown>, i?: number) =>
-        `${(i ?? 0) + 1}. ${(item.title as string) || "Location"}`,
-      defaultItemProps: {
-        title: "Sales Office",
-        badge: "",
-        address: "Street, City, Country.",
-        hours: "",
-        lat: DEFAULT_DUBAI_LAT,
-        lng: DEFAULT_DUBAI_LNG,
-        ctaLabel: "Get Direction",
-        ctaUrl: "",
-        isHighlight: "no",
-        pinIcon: "",
-        pinIconHighlight: "",
-      },
-      arrayFields: {
-        title: { type: "text", label: "Title", contentEditable: true },
-        badge: { type: "text", label: "Badge (e.g. COMING SOON)", contentEditable: true },
-        address: { type: "textarea", label: "Address (multi-line)" },
-        hours: { type: "textarea", label: "Hours / Secondary line" },
-        lat: { type: "number", label: "Latitude" },
-        lng: { type: "number", label: "Longitude" },
-        ctaLabel: { type: "text", label: "Button Label", contentEditable: true },
-        ctaUrl: { type: "text", label: "Button URL (Google Maps link)" },
-        isHighlight: createToggleField("Highlighted", [
-          { label: "No", value: "no" },
-          { label: "Yes", value: "yes" },
-        ], "Marks this as the active location (different title color + larger pin)."),
-        pinIcon: imageUploadField,
-        pinIconHighlight: imageUploadField,
-      },
-    },
 
     // ── Per-location styling ─────────────────────────────────────────────
     titleColor: createCustomSelectField("Title Color", ORA_TEXT_COLOR_OPTIONS),
@@ -3172,6 +3495,11 @@ const ContactLocationsMap: Config["components"][string] = {
     panelPaddingX: "40px",
     panelPaddingY: "40px",
     panelGap: "24px",
+    panelOffsetTop: "40px",
+    panelOffsetBottom: "40px",
+    panelOffsetSide: "40px",
+    panelBorderRadius: 0,
+    panelShadow: "no",
     showDividers: "yes",
     dividerColor: "#E8E4DF",
     stackBreakpoint: 900,
@@ -3180,7 +3508,7 @@ const ContactLocationsMap: Config["components"][string] = {
     centerLat: DEFAULT_DUBAI_LAT,
     centerLng: 55.2708,
     zoom: 10,
-    mapHeight: "640px",
+    mapHeight: "100vh",
     mapStyleJson: "",
     mapId: "",
 
@@ -3259,6 +3587,11 @@ const ContactLocationsMap: Config["components"][string] = {
         panelPaddingX: (props.panelPaddingX as string) || "40px",
         panelPaddingY: (props.panelPaddingY as string) || "40px",
         panelGap: (props.panelGap as string) || "24px",
+        panelOffsetTop: (props.panelOffsetTop as string) || "40px",
+        panelOffsetBottom: (props.panelOffsetBottom as string) || "40px",
+        panelOffsetSide: (props.panelOffsetSide as string) || "40px",
+        panelBorderRadius: Number(props.panelBorderRadius) || 0,
+        panelShadow: ((props.panelShadow as string) === "yes" ? "yes" : "no"),
         showDividers: ((props.showDividers as string) === "no" ? "no" : "yes"),
         dividerColor: (props.dividerColor as string) || "#E8E4DF",
         stackBreakpoint: Number(props.stackBreakpoint) || 900,
@@ -3267,7 +3600,7 @@ const ContactLocationsMap: Config["components"][string] = {
         centerLat: Number(props.centerLat) || DEFAULT_DUBAI_LAT,
         centerLng: Number(props.centerLng) || 55.2708,
         zoom: Number(props.zoom) || 10,
-        mapHeight: (props.mapHeight as string) || "640px",
+        mapHeight: (props.mapHeight as string) || "100vh",
         mapStyleJson: (props.mapStyleJson as string) || "",
         mapId: (props.mapId as string) || "",
 
@@ -3302,7 +3635,10 @@ const ContactLocationsMap: Config["components"][string] = {
 // FEATURED PROJECTS — pulls cards from /api/projects/public
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FeaturedProjects: Config["components"][string] = {
+const FeaturedProjects: OraComponentConfig = {
+  responsiveDefaults: {
+    columns: { mobile: 1 },
+  },
   fields: {
     heading: { type: "text", label: "Heading" },
     subheading: { type: "text", label: "Subheading" },
@@ -3358,7 +3694,10 @@ const FeaturedProjects: Config["components"][string] = {
 // FEATURED COMMUNITIES — cards from /api/communities/public
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FeaturedCommunities: Config["components"][string] = {
+const FeaturedCommunities: OraComponentConfig = {
+  responsiveDefaults: {
+    columns: { mobile: 1 },
+  },
   fields: {
     heading: { type: "text", label: "Heading" },
     subheading: { type: "text", label: "Subheading" },
@@ -3424,7 +3763,7 @@ const PROJECT_SECTION_OPTIONS: Array<{ label: string; value: ProjectSectionKind 
   { label: "Payment Plan", value: "payment" },
 ];
 
-const ProjectSection: Config["components"][string] = {
+const ProjectSection: OraComponentConfig = {
   fields: {
     projectSlug: { type: "text", label: "Project slug" },
     section: {
@@ -3458,7 +3797,7 @@ const ProjectSection: Config["components"][string] = {
 // Full-width image carousel with autoplay, dots, and overlay support.
 // Designed for hero sections in project landing pages.
 
-const ImageCarousel: Config["components"][string] = {
+const ImageCarousel: OraComponentConfig = {
   label: "Image Carousel",
   fields: {
     images: {
@@ -3466,6 +3805,7 @@ const ImageCarousel: Config["components"][string] = {
       label: "Images",
       render: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void; readOnly?: boolean }) => {
         const items = (Array.isArray(value) ? value : []) as string[];
+        const [showLibrary, setShowLibrary] = React.useState(false);
 
         const addImage = () => {
           const inp = document.createElement("input");
@@ -3527,12 +3867,21 @@ const ImageCarousel: Config["components"][string] = {
             React.createElement("button", {
               type: "button", onClick: addImage,
               style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
-            }, "Upload Images"),
+            }, "Upload"),
+            React.createElement("button", {
+              type: "button", onClick: () => setShowLibrary(true),
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "From Library"),
             React.createElement("button", {
               type: "button", onClick: addUrl,
               style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
-            }, "Add URL"),
+            }, "URL"),
           ),
+          showLibrary && React.createElement(MediaLibraryPicker, {
+            multiple: true,
+            onSelect: (urls: string[]) => { onChange([...items, ...urls]); setShowLibrary(false); },
+            onClose: () => setShowLibrary(false),
+          }),
         );
       },
     },
@@ -3609,13 +3958,190 @@ const ImageCarousel: Config["components"][string] = {
 };
 
 
+// ─── Gallery ─────────────────────────────────────────────────────────────────
+// Multi-image gallery with grid and carousel display modes, configurable
+// columns/items-per-view, gap, image sizing, and a built-in lightbox overlay.
+
+const Gallery: OraComponentConfig = {
+  label: "Gallery",
+  fields: {
+    images: {
+      type: "custom",
+      label: "Images",
+      render: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) => {
+        const items = (Array.isArray(value) ? value : []) as GalleryImage[];
+        const [showLibrary, setShowLibrary] = React.useState(false);
+
+        const addImages = () => {
+          const inp = document.createElement("input");
+          inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+          inp.onchange = async (ev) => {
+            const files = (ev.target as HTMLInputElement).files;
+            if (!files) return;
+            const newItems: GalleryImage[] = [];
+            for (const file of Array.from(files)) {
+              const form = new FormData();
+              form.append("file", file);
+              try {
+                const res = await fetch("/api/media", { method: "POST", body: form, credentials: "include" });
+                if (!res.ok) continue;
+                const data = await res.json();
+                const url = data.data?.storageUrl ?? data.data?.storage_url ?? "";
+                if (url) newItems.push({ src: url, alt: file.name.replace(/\.[^.]+$/, "") });
+              } catch { /* skip */ }
+            }
+            if (newItems.length > 0) onChange([...items, ...newItems]);
+          };
+          inp.click();
+        };
+
+        const addUrl = () => {
+          const url = prompt("Enter image URL:");
+          if (url?.trim()) onChange([...items, { src: url.trim(), alt: "" }]);
+        };
+
+        const removeAt = (idx: number) => {
+          onChange(items.filter((_, i) => i !== idx));
+        };
+
+        const moveUp = (idx: number) => {
+          if (idx === 0) return;
+          const next = [...items];
+          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+          onChange(next);
+        };
+
+        const moveDown = (idx: number) => {
+          if (idx >= items.length - 1) return;
+          const next = [...items];
+          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+          onChange(next);
+        };
+
+        return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+          items.map((img, i) =>
+            React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 4, background: "#F9F7F5", border: "1px solid #E8E4DF", padding: 4 } },
+              React.createElement("img", { src: img.src, alt: img.alt || `Image ${i + 1}`, style: { width: 48, height: 32, objectFit: "cover" } }),
+              React.createElement("span", { style: { flex: 1, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, img.src.split("/").pop()),
+              React.createElement("button", { type: "button", onClick: () => moveUp(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move up" }, "↑"),
+              React.createElement("button", { type: "button", onClick: () => moveDown(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11 }, title: "Move down" }, "↓"),
+              React.createElement("button", { type: "button", onClick: () => removeAt(i), style: { border: "none", background: "none", cursor: "pointer", fontSize: 11, color: "#c00" }, title: "Remove" }, "✕"),
+            )
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 4 } },
+            React.createElement("button", {
+              type: "button", onClick: addImages,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "Upload"),
+            React.createElement("button", {
+              type: "button", onClick: () => setShowLibrary(true),
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "From Library"),
+            React.createElement("button", {
+              type: "button", onClick: addUrl,
+              style: { flex: 1, height: 30, border: "1px solid #E8E4DF", background: "#F9F7F5", fontSize: 11, cursor: "pointer" },
+            }, "URL"),
+          ),
+          showLibrary && React.createElement(MediaLibraryPicker, {
+            multiple: true,
+            onSelect: (urls: string[]) => {
+              const newItems = urls.map((url) => ({ src: url, alt: "" }));
+              onChange([...items, ...newItems]);
+              setShowLibrary(false);
+            },
+            onClose: () => setShowLibrary(false),
+          }),
+        );
+      },
+    },
+    mode: createToggleField("Display Mode", [
+      { label: "Grid", value: "grid" },
+      { label: "Carousel", value: "carousel" },
+    ], "Grid shows all images; Carousel scrolls horizontally."),
+    columns: createCustomSelectField("Columns (Grid)", [
+      { label: "2", value: "2" },
+      { label: "3", value: "3" },
+      { label: "4", value: "4" },
+      { label: "5", value: "5" },
+      { label: "6", value: "6" },
+    ], "Number of columns in grid mode."),
+    itemsPerView: createCustomSelectField("Items Per View (Carousel)", [
+      { label: "2", value: "2" },
+      { label: "3", value: "3" },
+      { label: "4", value: "4" },
+      { label: "5", value: "5" },
+    ], "Number of visible items in carousel mode."),
+    gap: createCustomSelectField("Gap", [
+      { label: "None", value: "0" },
+      { label: "4px", value: "4" },
+      { label: "8px", value: "8" },
+      { label: "12px", value: "12" },
+      { label: "16px", value: "16" },
+      { label: "20px", value: "20" },
+      { label: "24px", value: "24" },
+      { label: "32px", value: "32" },
+    ], "Space between images."),
+    imageHeight: createCustomSelectField("Image Height", [
+      { label: "Small (180px)", value: "180px" },
+      { label: "Medium (240px)", value: "240px" },
+      { label: "Large (320px)", value: "320px" },
+      { label: "X-Large (400px)", value: "400px" },
+      { label: "Auto", value: "auto" },
+    ], "Height of each image thumbnail."),
+    objectFit: createCustomSelectField("Image Fit", [
+      { label: "Cover", value: "cover" },
+      { label: "Contain", value: "contain" },
+    ]),
+    showArrows: createToggleField("Show Arrows", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ], "Navigation arrows for carousel mode."),
+    enableLightbox: createToggleField("Lightbox", [
+      { label: "Yes", value: "yes" },
+      { label: "No", value: "no" },
+    ], "Click image to open full-screen lightbox with navigation."),
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    images: [],
+    mode: "carousel",
+    columns: "4",
+    itemsPerView: "4",
+    gap: "12",
+    imageHeight: "280px",
+    objectFit: "cover",
+    borderRadius: "0",
+    showArrows: "yes",
+    enableLightbox: "yes",
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    const images = (Array.isArray(props.images) ? props.images : []) as GalleryImage[];
+    const mode = (props.mode as string) === "grid" ? "grid" : "carousel";
+    const columns = Number(props.columns) || 4;
+    const itemsPerView = Number(props.itemsPerView) || 4;
+    const gap = Number(props.gap) || 12;
+    const imageHeight = (props.imageHeight as string) || "280px";
+    const objectFit = (props.objectFit as string) === "contain" ? "contain" : "cover";
+    const borderRadius = Number(props.borderRadius) || 0;
+    const showArrows = (props.showArrows as string) !== "no";
+    const enableLightbox = (props.enableLightbox as string) !== "no";
+
+    return styledRender(props, React.createElement(GalleryRuntime, {
+      images, mode, columns, gap, imageHeight, objectFit,
+      borderRadius, showArrows, enableLightbox, itemsPerView,
+    }));
+  },
+};
+
+
 // ─── Experience Launcher (iframe dialog) ─────────────────────────────────────
 // Renders a styled CTA that opens a full-viewport dialog containing an iframe
 // pointing at an external interactive experience (3D walkthrough, masterplan,
 // etc.). The embedded app owns its own navigation — we don't try to observe or
 // drive it across origins.
 
-const ExperienceLauncher: Config["components"][string] = {
+const ExperienceLauncher: OraComponentConfig = {
   label: "3D Experience Launcher",
   fields: {
     // ── Content ────────────────────────────────────────────────────────────
@@ -3723,27 +4249,2187 @@ const ExperienceLauncher: Config["components"][string] = {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PUCK CONFIG
+// BLOCK LIBRARY — General-purpose marketing blocks (page-builder-block-library)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── CTA — Call-to-action band ─────────────────────────────────────────────────
+// A composed conversion band: optional eyebrow, a heading, optional subtext, and
+// a primary + optional secondary button over a solid / gradient / image
+// background. Render is fully static (no client state) so it is byte-stable.
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 1 — CTA"
+// Validates: Requirements 1.1–1.13
+
+// Foreground colors that read as "dark" backgrounds, so an "auto" text color
+// resolves to white and meets WCAG AA contrast (Req 1.11). Lower-cased for
+// comparison against the resolved hex values.
+const CTA_DARK_BG_VALUES = new Set([
+  "#2c2c2c", "#1a1a1a", "#111432", "#000000", "#b8956b",
+]);
+
+// AA-safe dark fallback painted behind an image background so the default white
+// foreground stays readable even before/if the image loads (Req 1.11).
+const CTA_IMAGE_FALLBACK_BG = "#1A1A1A";
+
+// The secondary button's namespaced field keys, used by `resolveFields` to show
+// or hide the whole group behind the `secondaryEnabled` toggle.
+const CTA_SECONDARY_FIELD_KEYS = Object.keys(buttonFields("secondary"));
+
+const CTA: OraComponentConfig = {
+  label: "CTA",
+  fields: {
+    // ── Content ──────────────────────────────────────────────────────────
+    eyebrow: { type: "text", label: "Eyebrow (optional)", contentEditable: true },
+    heading: { type: "text", label: "Heading", contentEditable: true },
+    subtext: { type: "textarea", label: "Subtext (optional)", contentEditable: true },
+
+    // ── Background ───────────────────────────────────────────────────────
+    bgMode: createToggleField("Background Mode", [
+      { label: "Solid", value: "solid" },
+      { label: "Gradient", value: "gradient" },
+      { label: "Image", value: "image" },
+    ], "Solid color, two-color gradient, or a background image."),
+    bgColor: createCustomSelectField("Background Color", ORA_SOLID_BG_OPTIONS),
+    gradientFrom: createCustomSelectField("Gradient Color 1", ORA_GRADIENT_OPTIONS),
+    gradientTo: createCustomSelectField("Gradient Color 2", ORA_GRADIENT_OPTIONS),
+    gradientDirection: createCustomSelectField("Gradient Direction", [
+      { label: "Top → Bottom", value: "to bottom" },
+      { label: "Bottom → Top", value: "to top" },
+      { label: "Left → Right", value: "to right" },
+      { label: "Right → Left", value: "to left" },
+      { label: "Top Left → Bottom Right", value: "to bottom right" },
+      { label: "Top Right → Bottom Left", value: "to bottom left" },
+    ]),
+    bgImage: imageUploadField,
+    bgPosition: createCustomSelectField("Image Position", [
+      { label: "Center", value: "center center" },
+      { label: "Top", value: "center top" },
+      { label: "Bottom", value: "center bottom" },
+      { label: "Left", value: "left center" },
+      { label: "Right", value: "right center" },
+    ], "Which part of the image stays visible when cropped by cover."),
+
+    // ── Foreground ───────────────────────────────────────────────────────
+    textColor: createCustomSelectField("Text Color", ORA_TEXT_COLOR_OPTIONS),
+    contentAlign: createCustomSelectField("Content Alignment", [
+      { label: "Left", value: "left" },
+      { label: "Center", value: "center" },
+      { label: "Right", value: "right" },
+    ], "Alignment follows reading direction (flips under RTL)."),
+
+    // ── Primary button (required) ──────────────────────────────────────────
+    ...buttonFields("primary"),
+
+    // ── Secondary button (optional) ────────────────────────────────────────
+    secondaryEnabled: createToggleField("Secondary Button", [
+      { label: "Off", value: "no" },
+      { label: "On", value: "yes" },
+    ], "Add an optional second button next to the primary."),
+    ...buttonFields("secondary"),
+
+    // ── Shared style helpers ───────────────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    eyebrow: "Get started",
+    heading: "Ready to take the next step?",
+    subtext: "Join thousands who already made the move. It only takes a minute.",
+    bgMode: "solid",
+    bgColor: "#111432",
+    gradientFrom: "#111432",
+    gradientTo: "#01A7C7",
+    gradientDirection: "to bottom right",
+    bgImage: "",
+    bgPosition: "center center",
+    textColor: "auto",
+    contentAlign: "center",
+    // Primary button: a filled ORA-cyan anchor that reads well on the dark default band.
+    ...buttonFieldDefaults("primary"),
+    primaryText: "Get Started",
+    primaryUrl: "/contact",
+    primaryBgColor: "#01A7C7",
+    primaryBgColorHover: "#018BA6",
+    primaryTextColor: "#FFFFFF",
+    primaryTextColorHover: "#FFFFFF",
+    primaryBorderColor: "#01A7C7",
+    primaryBorderColorHover: "#018BA6",
+    // Secondary button: disabled by default; styled as a white outline button.
+    secondaryEnabled: "no",
+    ...buttonFieldDefaults("secondary"),
+    secondaryText: "Learn more",
+    secondaryUrl: "#",
+    secondaryBgColor: "transparent",
+    secondaryBgColorHover: "rgba(255,255,255,0.12)",
+    secondaryTextColor: "#FFFFFF",
+    secondaryTextColorHover: "#FFFFFF",
+    secondaryBorderColor: "#FFFFFF",
+    secondaryBorderColorHover: "#FFFFFF",
+    secondaryBorderSize: "1",
+    ...typographyDefaultsHeading,
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  resolveFields: (data, params) => {
+    const nextFields = { ...(params.fields ?? {}) };
+    const setVisible = (key: string, visible: boolean) => {
+      const field = nextFields[key];
+      if (!field) return;
+      nextFields[key] = { ...field, visible };
+    };
+
+    const resolvedData = (data as Record<string, unknown>) ?? {};
+    const props = ((resolvedData.props as Record<string, unknown> | undefined) ?? resolvedData);
+    const mode = (props.bgMode as string) || "solid";
+    const secondaryOn = (props.secondaryEnabled as string) === "yes";
+
+    // Background controls follow the selected mode.
+    setVisible("bgColor", mode === "solid");
+    setVisible("gradientFrom", mode === "gradient");
+    setVisible("gradientTo", mode === "gradient");
+    setVisible("gradientDirection", mode === "gradient");
+    setVisible("bgImage", mode === "image");
+    setVisible("bgPosition", mode === "image");
+
+    // The whole secondary button group hides until the toggle is on.
+    for (const key of CTA_SECONDARY_FIELD_KEYS) setVisible(key, secondaryOn);
+
+    return nextFields;
+  },
+  render: (props) => {
+    const mode = (props.bgMode as string) || "solid";
+    const bgColorRaw = (props.bgColor as string) || "transparent";
+    const bgLower = bgColorRaw.trim().toLowerCase();
+    const from = (props.gradientFrom as string) || "#111432";
+    const to = (props.gradientTo as string) || "#01A7C7";
+    const direction = (props.gradientDirection as string) || "to bottom right";
+    const bgImage = (props.bgImage as string) || "";
+    const bgPosition = (props.bgPosition as string) || "center center";
+
+    // ── Resolve foreground color (Req 1.3, 1.11) ─────────────────────────
+    // An image background paints an AA-safe dark fallback, so it counts as dark.
+    const gradientDark =
+      mode === "gradient" &&
+      (CTA_DARK_BG_VALUES.has(from.trim().toLowerCase()) || CTA_DARK_BG_VALUES.has(to.trim().toLowerCase()));
+    const isDarkBg =
+      mode === "image" ||
+      (mode === "solid" && CTA_DARK_BG_VALUES.has(bgLower)) ||
+      gradientDark;
+    const autoColor = isDarkBg ? "#FFFFFF" : "#1A1A1A";
+    const textColorChoice = (props.textColor as string) || "auto";
+    const fg = textColorChoice !== "auto" ? textColorChoice : autoColor;
+
+    // ── Background style ─────────────────────────────────────────────────
+    const bandBg: React.CSSProperties = {};
+    if (mode === "gradient") {
+      bandBg.backgroundImage = `linear-gradient(${direction}, ${from}, ${to})`;
+    } else if (mode === "image") {
+      // AA-safe dark base behind the image keeps the default white text legible.
+      bandBg.backgroundColor = CTA_IMAGE_FALLBACK_BG;
+      if (bgImage) {
+        bandBg.backgroundImage = `url(${bgImage})`;
+        bandBg.backgroundSize = "cover";
+        bandBg.backgroundPosition = bgPosition;
+        bandBg.backgroundRepeat = "no-repeat";
+      }
+    } else if (bgLower !== "transparent" && bgLower !== "none" && bgLower !== "") {
+      bandBg.backgroundColor = bgColorRaw;
+    }
+
+    // ── Alignment (logical, so it flips correctly under RTL — Req 1.12) ───
+    const align = (props.contentAlign as string) || "center";
+    const crossAlignMap: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
+    const textAlignMap: Record<string, React.CSSProperties["textAlign"]> = { left: "start", center: "center", right: "end" };
+    const crossAlign = crossAlignMap[align] || "center";
+    const textAlign = textAlignMap[align] || "center";
+
+    // ── Typography for the heading (Req 1.3); foreground color always wins ─
+    const typoCSS = typographyPropsToCSS(props);
+    // Let the band's logical text-align govern and force the resolved fg color,
+    // so drop typography's physical text-align / color from the heading style.
+    const typoRest: React.CSSProperties = { ...typoCSS };
+    delete typoRest.textAlign;
+    delete typoRest.color;
+
+    // ── Optional text elements — omitted entirely when empty (Req 1.4) ────
+    const eyebrowText = String(props.eyebrow ?? "").trim();
+    const headingText = String(props.heading ?? "").trim();
+    const subtextText = String(props.subtext ?? "").trim();
+
+    const eyebrowEl = eyebrowText
+      ? React.createElement("div", {
+          key: "eyebrow",
+          style: {
+            margin: 0,
+            color: fg,
+            fontSize: "13px",
+            fontWeight: 600,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase" as const,
+          },
+        }, eyebrowText)
+      : null;
+
+    const headingEl = headingText
+      ? React.createElement("h2", {
+          key: "heading",
+          style: { ...typoRest, color: fg, margin: 0 },
+        }, headingText)
+      : null;
+
+    const subtextEl = subtextText
+      ? React.createElement("p", {
+          key: "subtext",
+          style: { margin: 0, color: fg, fontSize: "18px", lineHeight: 1.6, maxWidth: "60ch" },
+        }, subtextText)
+      : null;
+
+    // ── Buttons — semantic anchors with accessible names (Req 1.7, 1.8, 1.10) ─
+    const primaryBtn = renderButtonAnchor(props, { prefix: "primary", iconMap: ICON_MAP, key: "primary" });
+    const secondaryBtn =
+      (props.secondaryEnabled as string) === "yes"
+        ? renderButtonAnchor(props, { prefix: "secondary", iconMap: ICON_MAP, key: "secondary" })
+        : null;
+    const buttonRow =
+      primaryBtn || secondaryBtn
+        ? React.createElement("div", {
+            key: "buttons",
+            style: {
+              display: "flex",
+              flexWrap: "wrap" as const,
+              gap: "16px",
+              justifyContent: crossAlign,
+              alignItems: "center",
+              marginTop: "8px",
+            },
+          }, primaryBtn, secondaryBtn)
+        : null;
+
+    const band = React.createElement("div", {
+      style: {
+        ...bandBg,
+        color: fg,
+        width: "100%",
+        boxSizing: "border-box" as const,
+        padding: "64px 24px",
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: crossAlign,
+        textAlign,
+        gap: "16px",
+      },
+    }, eyebrowEl, headingEl, subtextEl, buttonRow);
+
+    return styledRender(props, band);
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TESTIMONIAL — social-proof block: quote + author + role + avatar + rating
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 2 — Testimonial". Validates Requirements 2.1–2.13.
+//
+// The block exposes a `layout` selector (single / grid / slider), a
+// breakpoint-aware `columns` field (used by the grid/slider layouts), and an
+// `items` array whose per-item shape mirrors `TestimonialItem`. It declares
+// `responsiveDefaults: { columns: { mobile: 1 } }` so a multi-column grid
+// collapses to a single column on mobile (Req 2.13, 12.x), validated at
+// construction by `validateResponsiveDefaults` inside `wrapAllRenders`.
+//
+// Rating values are stored as the string options "0".."5" (the select control's
+// value type); `renderStarRating` clamps/coerces them on render.
+
+// Rating select options ("0" = no rating → omitted on render per Req 2.3).
+const TESTIMONIAL_RATING_OPTIONS = [
+  { label: "No rating", value: "0" },
+  { label: "★ 1", value: "1" },
+  { label: "★★ 2", value: "2" },
+  { label: "★★★ 3", value: "3" },
+  { label: "★★★★ 4", value: "4" },
+  { label: "★★★★★ 5", value: "5" },
+];
+
+/**
+ * Render a single testimonial entry as a semantic `<blockquote>` (Req 2.9).
+ *
+ * Each optional part is omitted entirely when its field is empty (Req 2.3):
+ *   - rating  → `renderStarRating` only when the rating is > 0 (Req 2.7)
+ *   - avatar  → `<img>` only when a source is set; alt defaults to the author
+ *               name when no explicit alt is provided (Req 2.8)
+ *   - role    → attribution sub-line only when present
+ *
+ * `quote` is kept plain text (textarea) per the design's byte-stability note, so
+ * no `dangerouslySetInnerHTML` / sanitizer path is taken here. Layout uses
+ * logical `textAlign: "start"` so it flips correctly under RTL (Req 2.12).
+ *
+ * NOTE: this is the shared item renderer consumed by every layout (single,
+ * grid, and the slider runtime), so the blockquote markup stays identical
+ * across all three.
+ */
+function renderTestimonialItem(
+  item: Record<string, unknown>,
+  key: React.Key,
+): React.ReactElement {
+  const quote = String((item as Partial<TestimonialItem>).quote ?? "").trim();
+  const author = String((item as Partial<TestimonialItem>).author ?? "").trim();
+  const role = String((item as Partial<TestimonialItem>).role ?? "").trim();
+  const avatar = String((item as Partial<TestimonialItem>).avatar ?? "").trim();
+  const avatarAlt = String((item as Partial<TestimonialItem>).avatarAlt ?? "").trim();
+  const rating = Number((item as Partial<TestimonialItem>).rating) || 0;
+
+  // Rating (Req 2.7) — omitted when 0 / absent (Req 2.3).
+  const ratingEl = rating > 0 ? renderStarRating(rating) : null;
+
+  // Quote text (plain text — see note above).
+  const quoteEl = quote
+    ? React.createElement("p", {
+        key: "quote",
+        style: { margin: 0, fontSize: "18px", lineHeight: 1.6 },
+      }, quote)
+    : null;
+
+  // Avatar (Req 2.8) — alt defaults to the author name; omitted when absent.
+  const avatarEl = avatar
+    ? React.createElement("img", {
+        key: "avatar",
+        src: avatar,
+        alt: avatarAlt || author,
+        width: 48,
+        height: 48,
+        style: {
+          width: 48,
+          height: 48,
+          borderRadius: "9999px",
+          objectFit: "cover" as const,
+          flexShrink: 0,
+        },
+      })
+    : null;
+
+  // Attribution: author (in a <cite>) + optional role, associated with the
+  // quote inside a <footer> (Req 2.9). Omitted entirely when nothing to show.
+  const authorEl = author
+    ? React.createElement("cite", {
+        key: "author",
+        style: { fontStyle: "normal", fontWeight: 600 },
+      }, author)
+    : null;
+  const roleEl = role
+    ? React.createElement("span", {
+        key: "role",
+        style: { fontSize: "14px", opacity: 0.75 },
+      }, role)
+    : null;
+
+  const namesEl = authorEl || roleEl
+    ? React.createElement("div", {
+        key: "names",
+        style: { display: "flex", flexDirection: "column" as const },
+      }, authorEl, roleEl)
+    : null;
+
+  const attributionEl = avatarEl || namesEl
+    ? React.createElement("footer", {
+        key: "attribution",
+        style: { display: "flex", alignItems: "center", gap: 12, marginTop: 4 },
+      }, avatarEl, namesEl)
+    : null;
+
+  return React.createElement("blockquote", {
+    key,
+    style: {
+      margin: 0,
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 12,
+      textAlign: "start" as const,
+    },
+  }, ratingEl, quoteEl, attributionEl);
+}
+
+const Testimonial: OraComponentConfig = {
+  label: "Testimonial",
+  responsiveDefaults: {
+    // A multi-column grid collapses to a single column on mobile (Req 2.13).
+    columns: { mobile: 1 },
+  },
+  fields: {
+    // ── Layout (Req 2.4) ───────────────────────────────────────────────────
+    layout: createCustomSelectField("Layout", [
+      { label: "Single", value: "single" },
+      { label: "Grid", value: "grid" },
+      { label: "Slider", value: "slider" },
+    ], "A single quote, a responsive multi-column grid, or a swipeable slider."),
+
+    // ── Responsive columns (Req 2.5) — breakpoint-aware `columns` field ──────
+    [COLUMNS_FIELD_NAME]: responsiveColumnsField("Columns", 4),
+
+    // ── Per-item array (Req 2.2) ────────────────────────────────────────────
+    items: {
+      type: "array",
+      label: "Testimonials",
+      getItemSummary: (item: Record<string, unknown>, i?: number) =>
+        `${(i ?? 0) + 1}. ${(item.author as string) || "Testimonial"}`,
+      defaultItemProps: {
+        quote: "This product changed the way our team works. Highly recommended.",
+        author: "Jane Doe",
+        role: "CEO, Acme Inc.",
+        avatar: "",
+        avatarAlt: "",
+        rating: "5",
+      },
+      arrayFields: {
+        quote: { type: "textarea", label: "Quote", contentEditable: true },
+        author: { type: "text", label: "Author", contentEditable: true },
+        role: { type: "text", label: "Role / Company (optional)", contentEditable: true },
+        avatar: imageUploadField,
+        avatarAlt: { type: "text", label: "Avatar Alt Text (optional)" },
+        rating: createCustomSelectField(
+          "Rating",
+          TESTIMONIAL_RATING_OPTIONS,
+          "Star rating from 0 to 5. Choose \"No rating\" to hide stars for this item.",
+        ),
+      },
+    },
+
+    // ── Shared style helpers (Req 2.10) ─────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    layout: "grid",
+    [COLUMNS_FIELD_NAME]: "3",
+    items: [
+      {
+        quote: "This product changed the way our team works. Highly recommended.",
+        author: "Jane Doe",
+        role: "CEO, Acme Inc.",
+        avatar: "",
+        avatarAlt: "",
+        rating: "5",
+      },
+      {
+        quote: "Onboarding was effortless and support has been outstanding.",
+        author: "John Smith",
+        role: "Head of Product, Globex",
+        avatar: "",
+        avatarAlt: "",
+        rating: "5",
+      },
+      {
+        quote: "A genuine difference-maker for our day-to-day workflow.",
+        author: "Aisha Rahman",
+        role: "Operations Lead, Initech",
+        avatar: "",
+        avatarAlt: "",
+        rating: "4",
+      },
+    ],
+    ...typographyDefaultsText,
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const layout = (props.layout as string) || "single";
+    const items = (props.items as Array<Record<string, unknown>>) ?? [];
+
+    // SINGLE — render the first item as a standalone blockquote (Req 2.4).
+    if (layout === "single") {
+      const first = items[0];
+      const content = first
+        ? renderTestimonialItem(first, 0)
+        // Empty array: render an empty blockquote wrapper rather than throwing.
+        : React.createElement("blockquote", { style: { margin: 0 } });
+      return styledRender(props, content);
+    }
+
+    // SLIDER — swipeable carousel (Req 2.6). Delegates to the dedicated
+    // `"use client"` TestimonialRuntime (reusing the ImageCarousel/Gallery
+    // runtime pattern). The runtime is a pure carousel shell: it receives the
+    // already-rendered blockquote nodes from the shared `renderTestimonialItem`
+    // helper so the per-item markup is identical across all three layouts.
+    if (layout === "slider") {
+      return styledRender(
+        props,
+        React.createElement(TestimonialRuntime, {
+          slides: items.map((item, i) => renderTestimonialItem(item, i)),
+        }),
+      );
+    }
+
+    // GRID — responsive multi-column grid of blockquote cards (Req 2.5). The
+    // per-breakpoint column count comes from the breakpoint-aware `columns`
+    // field via `gridStyle`; `responsiveDefaults` collapses it to one column on
+    // mobile (Req 2.13).
+    const grid = React.createElement(
+      "div",
+      { style: { ...gridStyle(props, { gap: "24px" }) } },
+      ...items.map((item, i) => renderTestimonialItem(item, i)),
+    );
+
+    return styledRender(props, grid);
+  },
+};
+
+
+// ─── TabGroup — Real content tabs (WAI-ARIA tabs pattern) ────────────────────
+//
+// Distinct from `FilterTabs` (which renders count-annotated links and does NOT
+// switch content panels). `TabGroup` hosts arbitrary nested blocks per panel via
+// Puck slots and delegates the interactive tab shell (roles, roving tabindex,
+// keyboard nav, RTL) to the `"use client"` `TabGroupRuntime` — mirroring how the
+// other interactive blocks delegate to a dedicated runtime.
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 3 — TabGroup".
+// Validates: Requirements 3.1, 3.2, 3.3, 3.8, 3.10, 3.11, 13.2, 13.3.
+
+const TAB_GROUP_MAX_TABS = 6;
+
+/**
+ * Resolve the effective tab count from props, clamped to
+ * `[1, TAB_GROUP_MAX_TABS]` (mirrors `resolveColumnCount`). Falls back to the
+ * default of 2 when the value is missing or non-finite.
+ */
+function resolveTabCount(props: Record<string, unknown>): number {
+  const explicit = props.tabCount as number | undefined;
+  if (typeof explicit === "number" && Number.isFinite(explicit)) {
+    return Math.min(Math.max(Math.floor(explicit), 1), TAB_GROUP_MAX_TABS);
+  }
+  return 2;
+}
+
+const TabGroup: OraComponentConfig = {
+  label: "Tab Group",
+  fields: {
+    // Number of visible tabs (1..6), mirroring Columns' `columnCount`.
+    tabCount: {
+      type: "number",
+      label: "Number of Tabs",
+      min: 1,
+      max: TAB_GROUP_MAX_TABS,
+    },
+    // The author-designated default tab shown on first render (Req 3.3). The
+    // runtime clamps this into range.
+    defaultIndex: {
+      type: "number",
+      label: "Default Tab (0-based)",
+      min: 0,
+      max: TAB_GROUP_MAX_TABS - 1,
+    },
+    // Per-tab labels (Req 3.2). Kept as a fixed set of text fields (the Columns
+    // way) so each label stays paired with its panel slot (Req 3.8).
+    "tab-0-label": { type: "text", label: "Tab 1 Label" },
+    "tab-1-label": { type: "text", label: "Tab 2 Label" },
+    "tab-2-label": { type: "text", label: "Tab 3 Label" },
+    "tab-3-label": { type: "text", label: "Tab 4 Label" },
+    "tab-4-label": { type: "text", label: "Tab 5 Label" },
+    "tab-5-label": { type: "text", label: "Tab 6 Label" },
+    // Per-tab panel slots (Req 3.2) — arbitrary nested blocks, like Columns.
+    "tab-0": { type: "slot" },
+    "tab-1": { type: "slot" },
+    "tab-2": { type: "slot" },
+    "tab-3": { type: "slot" },
+    "tab-4": { type: "slot" },
+    "tab-5": { type: "slot" },
+    // Shared style helpers applied via styledRender (Req 3.10).
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    tabCount: 2,
+    defaultIndex: 0,
+    "tab-0-label": "Tab 1",
+    "tab-1-label": "Tab 2",
+    "tab-2-label": "Tab 3",
+    "tab-3-label": "Tab 4",
+    "tab-4-label": "Tab 5",
+    "tab-5-label": "Tab 6",
+    // Empty slots for every tab so Puck initializes each panel (the Columns
+    // way). Unfilled labels fall back to "Tab N" at render time.
+    "tab-0": [],
+    "tab-1": [],
+    "tab-2": [],
+    "tab-3": [],
+    "tab-4": [],
+    "tab-5": [],
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const count = resolveTabCount(props);
+
+    // Default selection from props only, so the server (default-tab) markup is
+    // deterministic and byte-stable (Req 3.3, 3.11). The runtime clamps it into
+    // range against the actual tab count.
+    const rawDefaultIndex = props.defaultIndex;
+    const defaultIndex =
+      typeof rawDefaultIndex === "number" && Number.isFinite(rawDefaultIndex)
+        ? rawDefaultIndex
+        : 0;
+
+    // Build one { label, panel } entry per visible tab. Each panel slot is
+    // invoked "the Columns way": call the slot render function when present,
+    // otherwise contribute an empty panel.
+    const tabs = Array.from({ length: count }, (_, i) => {
+      const label = (props[`tab-${i}-label`] as string) || `Tab ${i + 1}`;
+      const slot = (props as Record<string, unknown>)[`tab-${i}`];
+      const panel =
+        typeof slot === "function" ? (slot as () => React.ReactNode)() : null;
+      return { label, panel };
+    });
+
+    // Derive a stable, instance-unique id prefix from the Puck block instance
+    // id so the runtime's tab/panel ids are byte-identical across independent
+    // renders of the same props (Req 3.11 / Property 3), instead of React's
+    // per-render-tree `useId` counter which drifts between separate renders.
+    const idBase =
+      typeof props.id === "string" && props.id ? `tabgroup-${props.id}` : undefined;
+
+    return styledRender(
+      props,
+      React.createElement(TabGroupRuntime, { tabs, defaultIndex, idBase }),
+    );
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGO CLOUD — responsive strip/grid of partner/client logos with optional links
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 4 — LogoCloud". Validates Requirements 4.1–4.10.
+//
+// The block exposes an `items` array (each: `src` via `imageUploadField`, `alt`
+// text, optional `href`), a breakpoint-aware `columns` field, and a `grayscale`
+// toggle. It declares `responsiveDefaults: { columns: { mobile: 2 } }` — logos
+// stay legible at 2-up on mobile (Req 4.8) — validated at construction by
+// `validateResponsiveDefaults` inside `wrapAllRenders`.
+//
+// Layout is a static `gridStyle` grid; per-breakpoint column behaviour comes from
+// the breakpoint-css pipeline keyed off the same `columns` field. The grid auto-
+// flows in the inline direction, so logos reverse to RTL order under `dir="rtl"`
+// without any hard-coded left/right (Req 4.9).
+//
+// Grayscale (Req 4.5) is handled by a scoped CSS class — never JS — so it works
+// for visitors with scripting disabled: each logo cell is desaturated by default
+// and returns to full color on pointer hover and (for linked logos) keyboard
+// focus, via `:hover` / `:focus-within`. The rule set is a single static string
+// (mirroring the Button block's hover `<style>`), so emitting it keeps the public
+// render byte-stable (Req 4.10). It is emitted only when the toggle is on.
+
+/**
+ * Scoped, JS-free grayscale rule set for the LogoCloud (Req 4.5).
+ *
+ * Logos under a `.ora-logo-cloud--grayscale` container render desaturated by
+ * default and animate back to full color on pointer hover or keyboard focus
+ * within a logo cell. `:focus-within` covers linked logos (the anchor is
+ * focusable); plain (unlinked) logos have nothing focusable inside, so only the
+ * hover branch applies to them — which is the intended behaviour.
+ *
+ * The rule targets logo `<img>`s by class only (no instance-specific selectors),
+ * so the string is constant and can be emitted repeatedly without breaking the
+ * byte-stable public render. Uses logical, direction-agnostic properties only.
+ */
+const LOGO_CLOUD_GRAYSCALE_CSS = `
+.ora-logo-cloud--grayscale .ora-logo-cloud__item img {
+  filter: grayscale(1);
+  transition: filter 0.2s ease;
+}
+
+.ora-logo-cloud--grayscale .ora-logo-cloud__item:hover img,
+.ora-logo-cloud--grayscale .ora-logo-cloud__item:focus-within img {
+  filter: grayscale(0);
+}
+`;
+
+/**
+ * Render a single logo entry (Req 4.4, 4.6).
+ *
+ * Each logo is an `<img>` carrying the item's author-provided alt text (Req 4.6).
+ * When the item has a non-empty `href` it is wrapped in an anchor (Req 4.4);
+ * otherwise the logo renders in a plain `<div>` with no anchor. Both wrappers
+ * share the `ora-logo-cloud__item` class so the scoped grayscale rule applies
+ * uniformly. External absolute URLs get `rel="noopener noreferrer"`.
+ *
+ * Items without a usable `src` are skipped by the caller, so this helper never
+ * emits an `<img>` with an empty `src` (no broken-image).
+ */
+function renderLogoItem(
+  item: Record<string, unknown>,
+  key: React.Key,
+): React.ReactElement {
+  const src = String((item as Partial<LogoItem>).src ?? "").trim();
+  const alt = String((item as Partial<LogoItem>).alt ?? "").trim();
+  const href = String((item as Partial<LogoItem>).href ?? "").trim();
+
+  const img = React.createElement("img", {
+    src,
+    // Author-provided alt; empty string keeps the image decorative (Req 4.6, 13.1).
+    alt,
+    loading: "lazy" as const,
+    style: {
+      display: "block",
+      maxWidth: "100%",
+      maxHeight: "48px",
+      width: "auto",
+      height: "auto",
+      objectFit: "contain" as const,
+    },
+  });
+
+  // Logos with a link are wrapped in an anchor (Req 4.4); the cell is centered so
+  // logos of differing intrinsic sizes sit consistently within their grid track.
+  const cellStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  if (href) {
+    return React.createElement("a", {
+      key,
+      href,
+      className: "ora-logo-cloud__item",
+      style: cellStyle,
+      // External absolute URLs get the security rel; internal/relative omit it.
+      ...(isExternalButtonUrl(href) ? { rel: "noopener noreferrer" } : {}),
+    }, img);
+  }
+
+  // No link → plain cell, no anchor (Req 4.4).
+  return React.createElement("div", {
+    key,
+    className: "ora-logo-cloud__item",
+    style: cellStyle,
+  }, img);
+}
+
+const LogoCloud: OraComponentConfig = {
+  label: "Logo Cloud",
+  responsiveDefaults: {
+    // Logos read fine at 2-up on mobile, so the grid reduces to two columns
+    // there rather than collapsing to one (Req 4.8).
+    columns: { mobile: 2 },
+  },
+  fields: {
+    // ── Per-item array (Req 4.2) ────────────────────────────────────────────
+    items: {
+      type: "array",
+      label: "Logos",
+      getItemSummary: (item: Record<string, unknown>, i?: number) =>
+        `${(i ?? 0) + 1}. ${(item.alt as string) || "Logo"}`,
+      defaultItemProps: { src: "", alt: "", href: "" },
+      arrayFields: {
+        src: imageUploadField,
+        alt: { type: "text", label: "Alt Text" },
+        href: { type: "text", label: "Link URL (optional)" },
+      },
+    },
+
+    // ── Responsive columns (Req 4.3) — breakpoint-aware `columns` field ──────
+    [COLUMNS_FIELD_NAME]: responsiveColumnsField("Columns", 6),
+
+    // ── Grayscale toggle (Req 4.5) ──────────────────────────────────────────
+    grayscale: createToggleField("Grayscale", [
+      { label: "Off", value: "no" },
+      { label: "On", value: "yes" },
+    ], "Show logos desaturated, returning to full color on hover/focus."),
+
+    // ── Shared style helpers (Req 4.7) ──────────────────────────────────────
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    items: [
+      { src: "", alt: "Partner 1", href: "" },
+      { src: "", alt: "Partner 2", href: "" },
+      { src: "", alt: "Partner 3", href: "" },
+      { src: "", alt: "Partner 4", href: "" },
+    ],
+    [COLUMNS_FIELD_NAME]: "4",
+    grayscale: "no",
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const items = (props.items as Array<Record<string, unknown>>) ?? [];
+    const grayscaleOn = (props.grayscale as string) === "yes";
+
+    // Skip items without a usable source so we never emit a broken `<img>`.
+    const logoEls = items
+      .filter((item) => String((item as Partial<LogoItem>).src ?? "").trim() !== "")
+      .map((item, i) => renderLogoItem(item, i));
+
+    // Responsive grid (Req 4.3). The per-breakpoint column count comes from the
+    // breakpoint-aware `columns` field via `gridStyle`; `responsiveDefaults`
+    // reduces it to two columns on mobile (Req 4.8). The grid auto-flows in the
+    // inline direction, so it reverses to RTL order under `dir="rtl"` (Req 4.9).
+    const grid = React.createElement(
+      "div",
+      {
+        className: grayscaleOn ? "ora-logo-cloud ora-logo-cloud--grayscale" : "ora-logo-cloud",
+        style: {
+          ...gridStyle(props, { gap: "32px" }),
+          alignItems: "center",
+        },
+      },
+      ...logoEls,
+    );
+
+    // Emit the scoped grayscale rule only when enabled. The string is constant,
+    // so this stays byte-stable (Req 4.10).
+    const content = grayscaleOn
+      ? React.createElement(
+          React.Fragment,
+          null,
+          React.createElement("style", null, LOGO_CLOUD_GRAYSCALE_CSS),
+          grid,
+        )
+      : grid;
+
+    return styledRender(props, content);
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRICING TABLE — responsive grid of plan cards (name, price, features, CTA)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 5 — PricingTable". Validates Requirements 5.1–5.11.
+//
+// The block exposes a `plans` array (each: `name`, `price`, `period`, a
+// newline-separated `features` textarea, a `highlight` toggle, and `ctaLabel` /
+// `ctaUrl`), a breakpoint-aware `columns` field, a `highlightColor` accent picker
+// (via `makeColorField`), and the shared typography / spacing-border / animation
+// helpers (Req 5.7). It declares `responsiveDefaults: { columns: { mobile: 1 } }`
+// so the grid collapses to one column on mobile (Req 5.9), validated at
+// construction by `validateResponsiveDefaults` inside `wrapAllRenders`.
+//
+// Layout is a static `gridStyle` grid; per-breakpoint column behaviour comes from
+// the breakpoint-css pipeline keyed off the same `columns` field. The grid auto-
+// flows in the inline direction and each card aligns its content with logical
+// `textAlign: "start"`, so plan cards reverse to RTL order and align to the
+// reading direction under `dir="rtl"` without any hard-coded left/right
+// (Req 5.10).
+//
+// A highlighted plan ("most popular") gets an accent border in `highlightColor`
+// plus a "Most Popular" badge (Req 5.4). Each plan's features are split on `\n`
+// into a semantic `<ul><li>` list (Req 5.6). The per-plan CTA is a navigational
+// anchor rendered by the shared `renderButtonAnchor` helper — never a payment
+// control (Req 5.5, 5.8).
+
+// Default accent color for the highlighted plan card (ORA cyan). Used for the
+// accent border and the "Most Popular" badge background.
+const PRICING_DEFAULT_HIGHLIGHT_COLOR = "#01A7C7";
+
+/**
+ * Render a single pricing plan as a card (Req 5.2, 5.4, 5.6).
+ *
+ * The card shows the plan name, price + optional period, a semantic `<ul><li>`
+ * feature list (features split on `\n`, blank lines dropped — Req 5.6), and an
+ * optional navigational CTA anchor (Req 5.5, 5.8). When the plan's `highlight`
+ * flag is set it gains an accent border in `highlightColor` and a "Most Popular"
+ * badge (Req 5.4).
+ *
+ * Card content aligns with logical `textAlign: "start"` so it follows the
+ * reading direction under RTL (Req 5.10). Optional parts (period, features, CTA)
+ * are omitted entirely when empty so no empty wrappers are emitted.
+ *
+ * The CTA uses the namespaced `cta`-prefixed button props that `renderButtonAnchor`
+ * reads; the per-plan `ctaLabel` / `ctaUrl` are passed through the helper's
+ * `label` / `url` overrides so each card links to its own destination.
+ */
+function renderPricingPlan(
+  plan: Record<string, unknown>,
+  key: React.Key,
+  highlightColor: string,
+): React.ReactElement {
+  const name = String((plan as Partial<PricingPlan>).name ?? "").trim();
+  const price = String((plan as Partial<PricingPlan>).price ?? "").trim();
+  const period = String((plan as Partial<PricingPlan>).period ?? "").trim();
+  const featuresRaw = String((plan as Partial<PricingPlan>).features ?? "");
+  const highlighted =
+    (plan as Record<string, unknown>).highlight === true ||
+    (plan as Record<string, unknown>).highlight === "yes";
+  const ctaLabel = String((plan as Partial<PricingPlan>).ctaLabel ?? "").trim();
+  const ctaUrl = String((plan as Partial<PricingPlan>).ctaUrl ?? "").trim();
+
+  // ── "Most Popular" badge — only on the highlighted plan (Req 5.4) ────────
+  const badgeEl = highlighted
+    ? React.createElement("div", {
+        key: "badge",
+        style: {
+          alignSelf: "flex-start",
+          backgroundColor: highlightColor,
+          color: "#FFFFFF",
+          fontSize: "12px",
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase" as const,
+          padding: "4px 10px",
+          borderRadius: "9999px",
+        },
+      }, "Most Popular")
+    : null;
+
+  // ── Name ─────────────────────────────────────────────────────────────────
+  const nameEl = name
+    ? React.createElement("h3", {
+        key: "name",
+        style: { margin: 0, fontSize: "20px", fontWeight: 600 },
+      }, name)
+    : null;
+
+  // ── Price + optional period ────────────────────────────────────────────
+  const priceEl = price || period
+    ? React.createElement("div", {
+        key: "price",
+        style: { display: "flex", alignItems: "baseline", gap: 4, flexWrap: "wrap" as const },
+      },
+        price
+          ? React.createElement("span", {
+              key: "amount",
+              style: { fontSize: "32px", fontWeight: 700 },
+            }, price)
+          : null,
+        period
+          ? React.createElement("span", {
+              key: "period",
+              style: { fontSize: "14px", opacity: 0.7 },
+            }, period)
+          : null,
+      )
+    : null;
+
+  // ── Features — split on \n into a semantic <ul><li> (Req 5.6) ────────────
+  const features = featuresRaw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const featuresEl = features.length > 0
+    ? React.createElement("ul", {
+        key: "features",
+        style: {
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          display: "flex",
+          flexDirection: "column" as const,
+          gap: 8,
+        },
+      }, ...features.map((feature, i) =>
+        React.createElement("li", { key: i, style: { fontSize: "15px", lineHeight: 1.5 } }, feature),
+      ))
+    : null;
+
+  // ── CTA — navigational anchor only (Req 5.5, 5.8) ────────────────────────
+  // `renderButtonAnchor` returns null when there is no URL, so a plan without a
+  // CTA simply omits it (no empty wrapper). The button is full-width inside the
+  // card and pinned to the bottom via `marginTop: auto`.
+  const ctaEl = ctaUrl
+    ? React.createElement("div", {
+        key: "cta",
+        style: { marginTop: "auto", display: "flex" },
+      }, renderButtonAnchor(plan, {
+        prefix: "cta",
+        iconMap: ICON_MAP,
+        label: ctaLabel || "Get Started",
+        url: ctaUrl,
+        key: "cta-anchor",
+      }))
+    : null;
+
+  return React.createElement("div", {
+    key,
+    style: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 16,
+      padding: "32px 24px",
+      boxSizing: "border-box" as const,
+      height: "100%",
+      textAlign: "start" as const,
+      // Accent border on the highlighted plan; a neutral border otherwise so
+      // every card keeps the same box geometry (Req 5.4).
+      border: highlighted ? `2px solid ${highlightColor}` : "1px solid #E8E4DF",
+      borderRadius: "12px",
+    },
+  }, badgeEl, nameEl, priceEl, featuresEl, ctaEl);
+}
+
+const PricingTable: OraComponentConfig = {
+  label: "Pricing Table",
+  responsiveDefaults: {
+    // Plan cards collapse to a single column on mobile so pricing stays legible
+    // on small viewports (Req 5.9).
+    columns: { mobile: 1 },
+  },
+  fields: {
+    // ── Per-plan array (Req 5.2) ────────────────────────────────────────────
+    plans: {
+      type: "array",
+      label: "Plans",
+      getItemSummary: (item: Record<string, unknown>, i?: number) =>
+        `${(i ?? 0) + 1}. ${(item.name as string) || "Plan"}`,
+      defaultItemProps: {
+        name: "Plan",
+        price: "$0",
+        period: "/mo",
+        features: "Feature one\nFeature two\nFeature three",
+        highlight: "no",
+        ctaLabel: "Get Started",
+        ctaUrl: "/contact",
+      },
+      arrayFields: {
+        name: { type: "text", label: "Plan Name", contentEditable: true },
+        price: { type: "text", label: "Price", contentEditable: true },
+        period: { type: "text", label: "Period (optional)", contentEditable: true },
+        features: {
+          type: "textarea",
+          label: "Features (one per line)",
+          contentEditable: true,
+        },
+        highlight: createToggleField("Most Popular", [
+          { label: "Off", value: "no" },
+          { label: "On", value: "yes" },
+        ], "Emphasize this plan with an accent border and a \"Most Popular\" badge."),
+        ctaLabel: { type: "text", label: "CTA Label", contentEditable: true },
+        ctaUrl: { type: "text", label: "CTA URL" },
+      },
+    },
+
+    // ── Responsive columns (Req 5.3) — breakpoint-aware `columns` field ──────
+    [COLUMNS_FIELD_NAME]: responsiveColumnsField("Columns", 4),
+
+    // ── Highlight accent color (Req 5.4) ────────────────────────────────────
+    highlightColor: makeColorField(
+      "Highlight Color",
+      PRICING_DEFAULT_HIGHLIGHT_COLOR,
+      "Accent border + badge color for the highlighted plan.",
+    ),
+
+    // ── Shared style helpers (Req 5.7) ──────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    plans: [
+      {
+        name: "Starter",
+        price: "$0",
+        period: "/mo",
+        features: "1 project\nCommunity support\nBasic analytics",
+        highlight: "no",
+        ctaLabel: "Get Started",
+        ctaUrl: "/contact",
+      },
+      {
+        name: "Pro",
+        price: "$29",
+        period: "/mo",
+        features: "Unlimited projects\nPriority support\nAdvanced analytics\nCustom domain",
+        highlight: "yes",
+        ctaLabel: "Start Free Trial",
+        ctaUrl: "/contact",
+      },
+      {
+        name: "Enterprise",
+        price: "Contact us",
+        period: "",
+        features: "Everything in Pro\nDedicated manager\nSLA & security review\nSSO",
+        highlight: "no",
+        ctaLabel: "Contact Sales",
+        ctaUrl: "/contact",
+      },
+    ],
+    [COLUMNS_FIELD_NAME]: "3",
+    highlightColor: PRICING_DEFAULT_HIGHLIGHT_COLOR,
+    ...typographyDefaultsText,
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const plans = (props.plans as Array<Record<string, unknown>>) ?? [];
+    const highlightColor = (props.highlightColor as string) || PRICING_DEFAULT_HIGHLIGHT_COLOR;
+
+    // Responsive grid of plan cards (Req 5.3). The per-breakpoint column count
+    // comes from the breakpoint-aware `columns` field via `gridStyle`;
+    // `responsiveDefaults` collapses it to one column on mobile (Req 5.9). The
+    // grid auto-flows in the inline direction, so cards reverse to RTL order
+    // under `dir="rtl"` (Req 5.10). `alignItems: stretch` keeps every card the
+    // same height regardless of feature count.
+    const grid = React.createElement(
+      "div",
+      {
+        style: {
+          ...gridStyle(props, { gap: "24px" }),
+          alignItems: "stretch",
+        },
+      },
+      ...plans.map((plan, i) => renderPricingPlan(plan, i, highlightColor)),
+    );
+
+    return styledRender(props, grid);
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CARD — generic content card: image + title + body + optional CTA anchor
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 6 — Card". Validates Requirements 6.1–6.4, 6.9–6.13.
+//
+// A standalone content card with an optional image, a title, optional body text,
+// and an optional navigational link/button. The block lives in the `blocks`
+// palette category (registration is handled separately) and is rendered
+// statically — image + title + body + anchor, no client state.
+//
+// Optional parts are omitted entirely when empty so no empty wrappers are
+// emitted (Req 6.3): the `<img>` is dropped when there is no image source, the
+// body `<p>` when the text is blank, and the CTA anchor when there is no URL
+// (`renderButtonAnchor` returns null) or when the link toggle is off.
+//
+// The image carries author-provided alt text (Req 6.4) and the title renders in
+// a card-appropriate `h3` heading element (Req 6.4). The CTA is a semantic
+// anchor produced by the shared `renderButtonAnchor` helper (Req 6.9).
+//
+// Body text is authored as plain text (a `textarea`) per the design's default,
+// so it is rendered as plain text — there is no `dangerouslySetInnerHTML` path
+// here and therefore no sanitizer call. IF the body were ever rendered as
+// author HTML, it would first pass through `sanitizeRichTextHtml` (Req 6.11);
+// keeping it plain text avoids that path and stays byte-stable (Req 6.13).
+//
+// Card content aligns with logical `textAlign: "start"` and uses logical flow so
+// it follows the reading direction under `dir="rtl"` without any hard-coded
+// left/right (Req 6.12). Shared typography / spacing-border / animation helpers
+// are applied via `styledRender` (Req 6.10).
+
+// The CTA button's namespaced field keys, used by `resolveFields` to show or
+// hide the whole button group behind the `linkEnabled` toggle.
+const CARD_CTA_FIELD_KEYS = Object.keys(buttonFields("cta"));
+
+const Card: OraComponentConfig = {
+  label: "Card",
+  fields: {
+    // ── Content ──────────────────────────────────────────────────────────
+    image: { ...imageUploadField, label: "Image (optional)" },
+    imageAlt: { type: "text", label: "Image Alt Text" },
+    title: { type: "text", label: "Title", contentEditable: true },
+    body: { type: "textarea", label: "Body (optional)", contentEditable: true },
+
+    // ── Optional link / button (Req 6.2, 6.9) ──────────────────────────────
+    linkEnabled: createToggleField("Link / Button", [
+      { label: "Off", value: "no" },
+      { label: "On", value: "yes" },
+    ], "Add an optional link or button to the card."),
+    ...buttonFields("cta"),
+
+    // ── Shared style helpers (Req 6.10) ─────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    image: "",
+    imageAlt: "",
+    title: "Card Title",
+    body: "A short description that gives this card some context.",
+    linkEnabled: "no",
+    ...buttonFieldDefaults("cta"),
+    ctaText: "Learn more",
+    ctaUrl: "",
+    ...typographyDefaultsText,
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  resolveFields: (data, params) => {
+    const nextFields = { ...(params.fields ?? {}) };
+    const setVisible = (key: string, visible: boolean) => {
+      const field = nextFields[key];
+      if (!field) return;
+      nextFields[key] = { ...field, visible };
+    };
+
+    const resolvedData = (data as Record<string, unknown>) ?? {};
+    const props = ((resolvedData.props as Record<string, unknown> | undefined) ?? resolvedData);
+    const linkOn = (props.linkEnabled as string) === "yes";
+
+    // The whole CTA button group hides until the toggle is on.
+    for (const key of CARD_CTA_FIELD_KEYS) setVisible(key, linkOn);
+
+    return nextFields;
+  },
+  render: (props) => {
+    // ── Optional image — omitted entirely when no source (Req 6.3, 6.4) ───
+    const imageSrc = String(props.image ?? "").trim();
+    const imageAlt = String(props.imageAlt ?? "").trim();
+    const imageEl = imageSrc
+      ? React.createElement("img", {
+          key: "image",
+          src: imageSrc,
+          alt: imageAlt,
+          style: {
+            display: "block",
+            width: "100%",
+            height: "auto",
+            objectFit: "cover" as const,
+          },
+        })
+      : null;
+
+    // ── Title — always in a card-appropriate h3 (Req 6.4) ─────────────────
+    const titleText = String(props.title ?? "").trim();
+    const titleEl = titleText
+      ? React.createElement("h3", {
+          key: "title",
+          style: { margin: 0, fontSize: "20px", fontWeight: 600 },
+        }, titleText)
+      : null;
+
+    // ── Body — plain text, omitted entirely when empty (Req 6.3) ──────────
+    // Authored as plain text (textarea), so no HTML / sanitizer path is taken.
+    const bodyText = String(props.body ?? "").trim();
+    const bodyEl = bodyText
+      ? React.createElement("p", {
+          key: "body",
+          style: { margin: 0, fontSize: "16px", lineHeight: 1.6 },
+        }, bodyText)
+      : null;
+
+    // ── Optional CTA — semantic anchor; omitted when off / no URL (Req 6.9) ─
+    // `renderButtonAnchor` returns null when there is no URL, so a card without
+    // a link simply omits it (no empty wrapper).
+    const linkOn = (props.linkEnabled as string) === "yes";
+    const ctaAnchor = linkOn
+      ? renderButtonAnchor(props, { prefix: "cta", iconMap: ICON_MAP, key: "cta-anchor" })
+      : null;
+    const ctaEl = ctaAnchor
+      ? React.createElement("div", {
+          key: "cta",
+          style: { marginTop: "auto", display: "flex" },
+        }, ctaAnchor)
+      : null;
+
+    // Inner text content stacks below the image with consistent spacing. The
+    // image sits flush at the top of the card; text gets its own padding.
+    const textStack = (titleEl || bodyEl || ctaEl)
+      ? React.createElement("div", {
+          key: "text",
+          style: {
+            display: "flex",
+            flexDirection: "column" as const,
+            gap: 12,
+            padding: imageEl ? "16px" : 0,
+            flex: 1,
+            textAlign: "start" as const,
+          },
+        }, titleEl, bodyEl, ctaEl)
+      : null;
+
+    // Logical column flow + `textAlign: start` flips correctly under RTL
+    // (Req 6.12). The overflow clip keeps the image's corners within the card.
+    const card = React.createElement("div", {
+      style: {
+        display: "flex",
+        flexDirection: "column" as const,
+        height: "100%",
+        boxSizing: "border-box" as const,
+        overflow: "hidden",
+        textAlign: "start" as const,
+      },
+    }, imageEl, textStack);
+
+    return styledRender(props, card);
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CARDGRID — responsive slot host that lays nested Card blocks out in a grid
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 7 — CardGrid". Validates Requirements 6.5–6.8, 6.10, 6.12, 6.13.
+//
+// CardGrid is a container-like block in the `layout` palette category
+// (registration is handled separately). Unlike the data-array blocks
+// (Testimonial / LogoCloud / PricingTable), it owns NO `cards` array: instead it
+// nests real `Card` children through a single Puck Slot (`card-content`),
+// exactly like Section / Columns nest arbitrary children (Req 6.6). The slot
+// disallows `Section` so authors cannot nest a full-bleed section inside a card
+// grid, keeping the nesting sane and consistent with the other slot hosts.
+//
+// The children are arranged in a responsive grid driven by the shared
+// breakpoint-aware `columns` field (Req 6.7) and the `gridStyle` helper, with a
+// configurable `gap`. `responsiveDefaults` collapses the grid to a single column
+// on mobile (Req 6.8). The grid auto-flows in the inline direction, so cards
+// reverse to RTL order under `dir="rtl"` with no hard-coded left/right
+// (Req 6.12). Shared spacing-border helpers are applied via `styledRender`
+// (Req 6.10).
+//
+// Render invokes the slot "the Columns way" — `typeof props["card-content"] ===
+// "function" ? props["card-content"]() : null` — so an empty slot simply renders
+// an empty grid container (consistent with an empty Columns/Section), never
+// throwing. The markup is deterministic for fixed props, preserving the
+// byte-stable public render (Req 6.13).
+
+// Gap select values mapped to concrete CSS lengths for `gridStyle`, mirroring
+// the `Columns` block's gap scale.
+const CARDGRID_GAP_PX: Record<string, string> = {
+  "0": "0",
+  sm: "16px",
+  md: "24px",
+  lg: "40px",
+};
+
+const CardGrid: OraComponentConfig = {
+  label: "Card Grid",
+  responsiveDefaults: {
+    // Cards collapse to a single column on mobile so each card stays legible on
+    // small viewports (Req 6.8).
+    columns: { mobile: 1 },
+  },
+  fields: {
+    // ── Nested Card children via a Puck Slot (Req 6.6) ──────────────────────
+    // `disallow: ["Section"]` keeps nesting sane, matching Section / Columns.
+    "card-content": { type: "slot", disallow: ["Section"] },
+
+    // ── Responsive columns (Req 6.7) — breakpoint-aware `columns` field ──────
+    [COLUMNS_FIELD_NAME]: responsiveColumnsField("Columns", 4),
+
+    // ── Gap between cards ───────────────────────────────────────────────────
+    gap: createCustomSelectField("Gap", [
+      { label: "None", value: "0" },
+      { label: "Small", value: "sm" },
+      { label: "Medium", value: "md" },
+      { label: "Large", value: "lg" },
+    ]),
+
+    // ── Shared style helpers (Req 6.10) ─────────────────────────────────────
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    "card-content": [],
+    [COLUMNS_FIELD_NAME]: "3",
+    gap: "md",
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    const gap = CARDGRID_GAP_PX[props.gap as string] ?? CARDGRID_GAP_PX.md;
+
+    // Invoke the slot the Columns way: render the nested children when the slot
+    // is provided, otherwise render nothing (an empty grid container).
+    const children =
+      typeof (props as Record<string, unknown>)["card-content"] === "function"
+        ? (((props as Record<string, unknown>)["card-content"]) as () => React.ReactNode)()
+        : null;
+
+    // Responsive grid (Req 6.7). The per-breakpoint column count comes from the
+    // breakpoint-aware `columns` field via `gridStyle`; `responsiveDefaults`
+    // collapses it to one column on mobile (Req 6.8). `alignItems: stretch`
+    // keeps every card the same height; the grid auto-flows in the inline
+    // direction so cards reverse under `dir="rtl"` (Req 6.12).
+    const grid = React.createElement(
+      "div",
+      {
+        style: {
+          ...gridStyle(props, { gap }),
+          alignItems: "stretch",
+        },
+      },
+      children,
+    );
+
+    return styledRender(props, grid);
+  },
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SOCIAL LINKS — a row of icon anchors linking to social profiles
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 8 — SocialLinks". Validates Requirements 7.1–7.10.
+//
+// The block exposes an `items` array (each: an `icon` chosen from the social /
+// brand keys, a destination `href`, and an optional accessible-name `label`), an
+// `iconSize` slider, an `iconColor` picker (via `makeColorField`), an `align`
+// select (left/center/right), and the shared spacing-border / animation helpers
+// (Req 7.4, 7.8). Icons resolve through `ICON_MAP`, which already includes the
+// inline-SVG brand set merged from `blocks/social-icons.ts` (Req 7.3).
+//
+// Render is a static flex row of semantic anchors, each holding the resolved
+// `ICON_MAP[icon]` component sized/colored per props (Req 7.5). Because the brand
+// glyphs are `aria-hidden`, every anchor carries an explicit `aria-label` so it
+// has a discernible accessible name — the author `label` when present, otherwise
+// "Visit our {Name}" (Req 7.6). External (`http(s)://`) destinations get
+// `rel="noopener noreferrer"` via the shared `isExternalButtonUrl` (Req 7.7).
+// Alignment maps to `justifyContent`, and the row flows in the inline direction
+// with no hard-coded left/right, so icons reverse to RTL order under `dir="rtl"`
+// (Req 7.9). No breakpoint-aware fields are used, so the output is byte-stable
+// (Req 7.10).
+
+// Display names for the built-in social keys, used to build the fallback
+// accessible name ("Visit our {Name}") when an item has no explicit `label`.
+const SOCIAL_LINK_NAMES: Record<string, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  x: "X",
+  linkedin: "LinkedIn",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  whatsapp: "WhatsApp",
+};
+
+// Selectable icon options for a social item — the brand keys merged into
+// ICON_MAP from `blocks/social-icons.ts` (Req 7.3). Every value is a registered
+// ICON_MAP key so each selection resolves to a renderable icon component.
+const SOCIAL_ICON_OPTIONS = [
+  { label: "Facebook", value: "facebook" },
+  { label: "Instagram", value: "instagram" },
+  { label: "X (Twitter)", value: "x" },
+  { label: "LinkedIn", value: "linkedin" },
+  { label: "YouTube", value: "youtube" },
+  { label: "TikTok", value: "tiktok" },
+  { label: "WhatsApp", value: "whatsapp" },
+];
+
+/**
+ * Build the discernible accessible name for a social anchor (Req 7.6).
+ *
+ * Uses the author-provided `label` when present; otherwise falls back to
+ * "Visit our {Name}", where the name is the friendly display name for a known
+ * social key or the capitalized key for any other icon. Deterministic so the
+ * rendered `aria-label` stays byte-stable.
+ */
+function socialAccessibleName(icon: string, label?: string): string {
+  const trimmed = (label ?? "").trim();
+  if (trimmed) return trimmed;
+  const key = (icon ?? "").trim();
+  const name =
+    SOCIAL_LINK_NAMES[key.toLowerCase()] ||
+    (key ? key.charAt(0).toUpperCase() + key.slice(1) : "us");
+  return `Visit our ${name}`;
+}
+
+/**
+ * Render a single social link as a semantic anchor wrapping its icon (Req 7.5,
+ * 7.6, 7.7).
+ *
+ * The icon comes from `ICON_MAP[icon]` sized/colored per props; when the key
+ * has no registered component the item is skipped by the caller. The brand
+ * glyphs are `aria-hidden`, so the anchor itself carries the accessible name
+ * via `aria-label`. External destinations get `rel="noopener noreferrer"`.
+ */
+function renderSocialItem(
+  item: Record<string, unknown>,
+  key: React.Key,
+  iconSize: number,
+  iconColor: string,
+): React.ReactElement | null {
+  const icon = String((item as Partial<SocialItem>).icon ?? "").trim();
+  const href = String((item as Partial<SocialItem>).href ?? "").trim();
+  const IconComp = icon ? ICON_MAP[icon] : undefined;
+
+  // Skip items with no usable destination or no resolvable icon so we never
+  // emit an empty or broken anchor.
+  if (!href || !IconComp) return null;
+
+  const accessibleName = socialAccessibleName(icon, (item as Partial<SocialItem>).label);
+
+  return React.createElement(
+    "a",
+    {
+      key,
+      href,
+      "aria-label": accessibleName,
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: iconColor,
+        lineHeight: 0,
+        textDecoration: "none",
+      },
+      ...(isExternalButtonUrl(href) ? { rel: "noopener noreferrer" } : {}),
+    },
+    React.createElement(IconComp, { size: iconSize, color: iconColor }),
+  );
+}
+
+const SocialLinks: OraComponentConfig = {
+  label: "Social Links",
+  fields: {
+    // ── Per-item array (Req 7.2) ────────────────────────────────────────────
+    items: {
+      type: "array",
+      label: "Social Links",
+      getItemSummary: (item: Record<string, unknown>, i?: number) => {
+        const icon = String((item as Partial<SocialItem>).icon ?? "").trim();
+        const name = SOCIAL_LINK_NAMES[icon.toLowerCase()] || icon || "Link";
+        return `${(i ?? 0) + 1}. ${name}`;
+      },
+      defaultItemProps: { icon: "facebook", href: "", label: "" },
+      arrayFields: {
+        icon: createCustomSelectField("Icon", SOCIAL_ICON_OPTIONS, "Pick the social platform / icon."),
+        href: { type: "text", label: "Link URL" },
+        label: { type: "text", label: "Accessible Name (optional)" },
+      },
+    },
+
+    // ── Icon appearance (Req 7.4) ───────────────────────────────────────────
+    iconSize: makeSliderField("Icon Size", 16, 64, "px", "Rendered width/height of each icon."),
+    iconColor: makeColorField("Icon Color", "#2C2C2C", "Color applied to every icon."),
+
+    // ── Alignment (Req 7.4) — logical, so it flips correctly under RTL ──────
+    align: createCustomSelectField("Alignment", [
+      { label: "Left", value: "left" },
+      { label: "Center", value: "center" },
+      { label: "Right", value: "right" },
+    ]),
+
+    // ── Shared style helpers (Req 7.8) ──────────────────────────────────────
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    items: [
+      { icon: "facebook", href: "", label: "" },
+      { icon: "instagram", href: "", label: "" },
+      { icon: "x", href: "", label: "" },
+      { icon: "linkedin", href: "", label: "" },
+    ],
+    iconSize: 24,
+    iconColor: "#2C2C2C",
+    align: "left",
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    const items = (props.items as Array<Record<string, unknown>>) ?? [];
+    const iconSize = Number(props.iconSize) || 24;
+    const iconColor = (props.iconColor as string) || "#2C2C2C";
+
+    // ── Alignment (logical, so it flips under RTL — Req 7.9) ────────────────
+    const align = (props.align as string) || "left";
+    const justifyMap: Record<string, React.CSSProperties["justifyContent"]> = {
+      left: "flex-start",
+      center: "center",
+      right: "flex-end",
+    };
+
+    // Drop items without a usable href or resolvable icon (Req 7.5).
+    const anchors = items
+      .map((item, i) => renderSocialItem(item, i, iconSize, iconColor))
+      .filter((el): el is React.ReactElement => el !== null);
+
+    // Static flex row of anchors. The row flows in the inline direction with no
+    // hard-coded left/right, so it reverses to RTL order under `dir="rtl"`
+    // (Req 7.9). Alignment maps to `justifyContent` (Req 7.4).
+    const row = React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: justifyMap[align] || "flex-start",
+          gap: "16px",
+        },
+      },
+      ...anchors,
+    );
+
+    return styledRender(props, row);
+  },
+};
+//
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COUNTDOWN — a live countdown timer to an author-set date-time / time zone
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 9 — Countdown". Validates Requirements 8.1, 8.2, 8.9 (this task);
+//   the runtime behavior (8.3–8.8, 8.10, 11.3, 13.4) lives in `CountdownRuntime`.
+//
+// The block exposes a `targetDateTime` free-input field (an ISO 8601 date-time
+// the author types, e.g. `2026-12-31T23:59:59`), a `timeZone` select over a set
+// of common IANA zones (default the site zone, Asia/Dubai), and an
+// `expiryMessage` text field shown at/after expiry (Req 8.2). The shared
+// typography / spacing-border / animation style helpers (Req 8.9) are applied to
+// the container via `styledRender`.
+//
+// Render is intentionally thin: it delegates to the `"use client"`
+// `CountdownRuntime` via `React.createElement` wrapped in `styledRender`,
+// mirroring how the other interactive blocks (ImageCarousel, Gallery, TabGroup,
+// ExperienceLauncher) hand off to a dedicated runtime. The runtime owns the
+// per-second tick, hydration-safe pre-tick markup, expiry handling, and the
+// `aria-live` region; the block here owns only fields, defaults, and styling.
+
+// Common IANA time zones offered in the `timeZone` select. Kept small and
+// stable (each value is a valid IANA id understood by `Intl.DateTimeFormat`) so
+// the resolved target instant is deterministic on server and client (Req 8.5).
+const COUNTDOWN_TIMEZONE_OPTIONS = [
+  { label: "Dubai (GST, UTC+4)", value: "Asia/Dubai" },
+  { label: "Riyadh (AST, UTC+3)", value: "Asia/Riyadh" },
+  { label: "London (GMT/BST)", value: "Europe/London" },
+  { label: "Paris / Berlin (CET/CEST)", value: "Europe/Paris" },
+  { label: "New York (ET)", value: "America/New_York" },
+  { label: "Chicago (CT)", value: "America/Chicago" },
+  { label: "Los Angeles (PT)", value: "America/Los_Angeles" },
+  { label: "Mumbai (IST)", value: "Asia/Kolkata" },
+  { label: "Singapore (SGT)", value: "Asia/Singapore" },
+  { label: "Tokyo (JST)", value: "Asia/Tokyo" },
+  { label: "Sydney (AET)", value: "Australia/Sydney" },
+  { label: "UTC", value: "UTC" },
+];
+
+// The site's default time zone (matches the booking/calendar logic elsewhere,
+// which treats local time as Asia/Dubai / UTC+4).
+const COUNTDOWN_DEFAULT_TIMEZONE = "Asia/Dubai";
+
+// A sensible far-future placeholder so a freshly dropped block counts down
+// rather than immediately showing the expiry message. Authors replace this with
+// their real launch/promo instant.
+const COUNTDOWN_DEFAULT_TARGET = "2026-12-31T23:59:59";
+
+const Countdown: OraComponentConfig = {
+  label: "Countdown",
+  fields: {
+    // ── Target instant (Req 8.2) ────────────────────────────────────────────
+    // Free-text ISO 8601 date-time. No unit suffix; the placeholder shows the
+    // expected shape. Interpreted in `timeZone` below (Req 8.5).
+    targetDateTime: createFreeInputField(
+      "Target Date & Time",
+      "",
+      [],
+      "ISO date-time, e.g. 2026-12-31T23:59:59 (interpreted in the time zone below).",
+      "2026-12-31T23:59:59",
+    ),
+
+    // ── Time zone (Req 8.5) ─────────────────────────────────────────────────
+    timeZone: createCustomSelectField(
+      "Time Zone",
+      COUNTDOWN_TIMEZONE_OPTIONS,
+      "All visitors count down to the same instant in this time zone.",
+    ),
+
+    // ── Expiry message (Req 8.2, 8.4) ───────────────────────────────────────
+    expiryMessage: { type: "text", label: "Expiry Message" },
+
+    // ── Shared style helpers (Req 8.9) ──────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+    ...animationFields,
+  },
+  defaultProps: {
+    targetDateTime: COUNTDOWN_DEFAULT_TARGET,
+    timeZone: COUNTDOWN_DEFAULT_TIMEZONE,
+    expiryMessage: "This offer has ended.",
+    ...typographyDefaultsText,
+    ...spacingBorderDefaults,
+    ...animationDefaults,
+  },
+  render: (props) => {
+    // Thin delegation to the runtime (Req 8.1). All timer logic, hydration-safe
+    // pre-tick markup, expiry handling, and the live region live in
+    // `CountdownRuntime`; the container styling comes from `styledRender`.
+    const targetDateTime = (props.targetDateTime as string) || "";
+    const timeZone = (props.timeZone as string) || COUNTDOWN_DEFAULT_TIMEZONE;
+    const expiryMessage =
+      (props.expiryMessage as string) || "This offer has ended.";
+
+    return styledRender(
+      props,
+      React.createElement(CountdownRuntime, {
+        targetDateTime,
+        timeZone,
+        expiryMessage,
+      }),
+    );
+  },
+};
+//
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BREADCRUMBS — a semantic breadcrumb trail of label + optional-link items
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Design reference: `.kiro/specs/page-builder-block-library/design.md`
+//   §"Block 10 — Breadcrumbs". Validates Requirements 9.1–9.9.
+//   The `BreadcrumbList` JSON-LD `<script>` (Req 9.9) is emitted as a sibling
+//   of the <ol> inside the same <nav> (see `buildBreadcrumbList` below).
+//
+// The block exposes an ordered `items` array (each item: `label` text + optional
+// `href` text), a `separator` select over a small set of glyphs, and the shared
+// `typographyFields` / `spacingBorderFields` style helpers (Req 9.8). Author item
+// order is preserved (Req 9.3).
+//
+// Render is fully static: `<nav aria-label="Breadcrumb">` › `<ol>` › `<li>` per
+// item (Req 9.3, 9.4). Items with an `href` render as anchors; the hrefless
+// "current page" item renders as plain text marked `aria-current="page"`
+// (Req 9.5). Visual separators between items are `aria-hidden="true"` spans
+// (Req 9.6). The list flows in the inline direction with no hard-coded
+// left/right, so it reverses to RTL order under `dir="rtl"` (Req 9.7).
+
+// Separator glyphs offered in the `separator` select. Kept small and stable so
+// the rendered markup is deterministic (Req 9.10). Values are the literal glyph
+// rendered (aria-hidden) between items.
+const BREADCRUMB_SEPARATOR_OPTIONS = [
+  { label: "Slash  /", value: "/" },
+  { label: "Chevron  ›", value: "›" },
+  { label: "Dash  —", value: "—" },
+];
+
+const BREADCRUMB_DEFAULT_SEPARATOR = "/";
+
+/**
+ * Renders a single breadcrumb `<li>`. Items with a non-empty `href` become
+ * anchors (Req 9.5); the hrefless current-page item becomes plain text marked
+ * `aria-current="page"` (Req 9.5). A visual, `aria-hidden` separator span
+ * (Req 9.6) is appended after every item except the last so it sits *between*
+ * items in the inline (RTL-aware) flow.
+ */
+function renderBreadcrumbItem(
+  item: Record<string, unknown>,
+  index: number,
+  isLast: boolean,
+  separator: string,
+): React.ReactElement {
+  const label = String((item as Partial<BreadcrumbItem>).label ?? "");
+  const href = String((item as Partial<BreadcrumbItem>).href ?? "").trim();
+
+  // Item content: anchor when linked, otherwise plain text for the current page.
+  const content = href
+    ? React.createElement("a", { href }, label)
+    : React.createElement("span", { "aria-current": "page" }, label);
+
+  // Separator between items only (not after the final crumb). Hidden from AT
+  // (Req 9.6); it lives inside the <li> so it flows with the inline direction.
+  const sep = isLast
+    ? null
+    : React.createElement(
+        "span",
+        {
+          "aria-hidden": "true",
+          style: { display: "inline-block", margin: "0 0.5em" },
+        },
+        separator,
+      );
+
+  return React.createElement(
+    "li",
+    {
+      key: index,
+      style: { display: "inline-flex", alignItems: "center" },
+    },
+    content,
+    sep,
+  );
+}
+
+/**
+ * Builds the `BreadcrumbList` schema.org object emitted as JSON-LD (Req 9.9).
+ *
+ * Each source item becomes a `ListItem` in author order with `position` 1..n.
+ * The `item` URL key is present ONLY when the source item has a non-empty
+ * `href` (the hrefless current page is position-only). Keys are written in a
+ * fixed insertion order (`@type` → `position` → `name` → `item`) and the object
+ * itself in `@context` → `@type` → `itemListElement` order, so
+ * `JSON.stringify` produces a deterministic, byte-stable string with no
+ * `Date`/random input (preserves Byte_Stable_Render — Req 9.10).
+ */
+function buildBreadcrumbList(
+  items: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => {
+      const label = String((item as Partial<BreadcrumbItem>).label ?? "");
+      const href = String((item as Partial<BreadcrumbItem>).href ?? "").trim();
+      const listItem: Record<string, unknown> = {
+        "@type": "ListItem",
+        position: i + 1,
+        name: label,
+      };
+      // `item` URL only when the source item is linked (Req 9.9).
+      if (href) {
+        listItem.item = href;
+      }
+      return listItem;
+    }),
+  };
+}
+
+const Breadcrumbs: OraComponentConfig = {
+  label: "Breadcrumbs",
+  fields: {
+    // ── Ordered per-item array (Req 9.2) ────────────────────────────────────
+    items: {
+      type: "array",
+      label: "Breadcrumbs",
+      getItemSummary: (item: Record<string, unknown>, i?: number) => {
+        const label = String((item as Partial<BreadcrumbItem>).label ?? "").trim();
+        return `${(i ?? 0) + 1}. ${label || "Untitled"}`;
+      },
+      defaultItemProps: { label: "", href: "" },
+      arrayFields: {
+        label: { type: "text", label: "Label" },
+        href: { type: "text", label: "Link URL (leave empty for current page)" },
+      },
+    },
+
+    // ── Separator glyph (Req 9.6) ───────────────────────────────────────────
+    separator: createCustomSelectField(
+      "Separator",
+      BREADCRUMB_SEPARATOR_OPTIONS,
+      "Glyph shown between items. Hidden from assistive technology.",
+    ),
+
+    // ── Shared style helpers (Req 9.8) ──────────────────────────────────────
+    ...typographyFields,
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    items: [
+      { label: "Home", href: "/" },
+      { label: "Current Page", href: "" },
+    ],
+    separator: BREADCRUMB_DEFAULT_SEPARATOR,
+    ...typographyDefaultsText,
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    const items = (props.items as Array<Record<string, unknown>>) ?? [];
+    const separator = (props.separator as string) || BREADCRUMB_DEFAULT_SEPARATOR;
+
+    // Ordered list of crumbs in author order (Req 9.3). The <ol> flows in the
+    // inline direction with no hard-coded left/right, so it reverses to RTL
+    // order under `dir="rtl"` (Req 9.7).
+    const list = React.createElement(
+      "ol",
+      {
+        style: {
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+        },
+      },
+      ...items.map((item, i) =>
+        renderBreadcrumbItem(item, i, i === items.length - 1, separator),
+      ),
+    );
+
+    // `BreadcrumbList` JSON-LD structured data (Req 9.9). Serialized via
+    // `JSON.stringify` (never author HTML), so labels are JSON-escaped and no
+    // script injection is possible. `</` is additionally escaped to `\u003c` so
+    // a label can never break out of the <script> element. The object is built
+    // with a fixed key order and no Date/random input, so the serialized string
+    // is deterministic and the render stays byte-stable (Req 9.10).
+    const breadcrumbList = buildBreadcrumbList(items);
+    const jsonLd = React.createElement("script", {
+      type: "application/ld+json",
+      dangerouslySetInnerHTML: {
+        __html: JSON.stringify(breadcrumbList).replace(/</g, "\\u003c"),
+      },
+    });
+
+    // Semantic landmark wrapper (Req 9.3, 9.4). The JSON-LD `<script>` sits as a
+    // sibling of the <ol> inside the same <nav>; the list markup is unchanged.
+    const nav = React.createElement(
+      "nav",
+      { "aria-label": "Breadcrumb" },
+      list,
+      jsonLd,
+    );
+
+    return styledRender(props, nav);
+  },
+};
 //
 // All higher-level "blocks" (Hero, Property Card, Footer, etc.) are now
 // expressed as nested **templates** of these atomic components. See
 // ./templates/component-templates.ts and the Templates sidebar plugin.
 
-export const pageBuilderConfig: Config = {
-  categories: {
-    layout: { components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider"], title: "Layout", defaultExpanded: true },
-    basic: { components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel"], title: "Basic" },
-    interactive: { components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap"], title: "Interactive" },
-    projects: { components: ["FeaturedProjects", "FeaturedCommunities", "ProjectSection"], title: "Projects" },
-    experiences: { components: ["ExperienceLauncher"], title: "Experiences" },
+/**
+ * Wraps every component's `render` function with `withBreakpointResolution`
+ * so that breakpoint-aware props (fontSize, _padding, _margin, etc.) are
+ * resolved to their active-breakpoint scalar before the render runs.
+ *
+ * This is the core fix for Bug Condition 1: style changes not reflected on
+ * the canvas because render functions received BreakpointValue objects
+ * instead of scalar strings.
+ */
+function wrapAllRenders(
+  components: Record<string, OraComponentConfig>,
+): Record<string, OraComponentConfig> {
+  const wrapped: Record<string, OraComponentConfig> = {};
+  for (const [name, component] of Object.entries(components)) {
+    const responsiveDefaults = component.responsiveDefaults;
+
+    // Registration-time validation: fail fast if responsiveDefaults is invalid
+    if (responsiveDefaults) {
+      const errors = validateResponsiveDefaults(name, responsiveDefaults);
+      if (errors.length > 0) {
+        const messages = errors.map((e) => `  - ${e.reason}${e.field ? ` (field: ${e.field})` : ""}`).join("\n");
+        throw new Error(
+          `[pageBuilderConfig] Component "${name}" has invalid responsiveDefaults:\n${messages}`,
+        );
+      }
+    }
+
+    // Inject tracking fields into every component
+    const fieldsWithTracking = { ...(component.fields ?? {}), ...trackingFields };
+    const defaultPropsWithTracking = { ...(component.defaultProps ?? {}), ...trackingDefaults };
+
+    if (component.render) {
+      wrapped[name] = {
+        ...component,
+        fields: fieldsWithTracking,
+        defaultProps: defaultPropsWithTracking,
+        render: withBreakpointResolution(
+          component.render as (props: Record<string, unknown>) => React.ReactElement,
+          responsiveDefaults,
+        ),
+      };
+    } else {
+      wrapped[name] = {
+        ...component,
+        fields: fieldsWithTracking,
+        defaultProps: defaultPropsWithTracking,
+      };
+    }
+  }
+  return wrapped;
+}
+
+// ─── Per-Page Analytics Configuration (Root Fields) ─────────────────────────
+// Task 13.1 & 13.2: Analytics fields stored under root.props._analytics
+
+const EVENT_VOCABULARY_OPTIONS = EVENT_VOCABULARY.map((name) => ({
+  label: name.replace(/_/g, " "),
+  value: name,
+}));
+
+const CONSENT_OVERRIDE_OPTIONS = [
+  { label: "Inherit site default", value: "inherit" },
+  { label: "Analytics only", value: "analytics-only" },
+  { label: "No tracking", value: "no-tracking" },
+];
+
+const SURVEY_TRIGGER_TYPE_OPTIONS = [
+  { label: "None", value: "" },
+  { label: "Exit Intent", value: "exit-intent" },
+  { label: "Time on Page", value: "time-on-page" },
+  { label: "Scroll Depth", value: "scroll-depth" },
+];
+
+const analyticsRootFields = {
+  _analytics: {
+    type: "object" as const,
+    label: "Analytics",
+    objectFields: {
+      pageTemplate: {
+        type: "custom" as const,
+        label: "Page Template",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. project-landing, unit-detail",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      projectId: {
+        type: "custom" as const,
+        label: "Project Tag",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. Marina, Creek",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      unitType: {
+        type: "custom" as const,
+        label: "Unit Type",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. 2br-apartment",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      priceBand: {
+        type: "custom" as const,
+        label: "Price Band",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 50)),
+              placeholder: "e.g. 1.5m-2m",
+              maxLength: 50,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      conversionGoal: createCustomSelectField(
+        "Conversion Goal",
+        [{ label: "None", value: "" }, ...EVENT_VOCABULARY_OPTIONS],
+        "Primary conversion event for this page.",
+      ),
+      funnelSteps: {
+        type: "custom" as const,
+        label: "Funnel Steps",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) => {
+          const current = (value as string) || "";
+          return React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: current,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+              placeholder: "page_viewed,form_started,form_submitted",
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+            React.createElement("div", { style: { fontSize: 10, color: "#6B6B6B", marginTop: 4 } }, "Comma-separated event names (2–6 steps)"),
+          );
+        },
+      },
+      experimentFlag: {
+        type: "custom" as const,
+        label: "Experiment Flag",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "text",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value.slice(0, 100)),
+              placeholder: "PostHog feature flag key",
+              maxLength: 100,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      surveyTriggerType: createCustomSelectField(
+        "Survey Trigger",
+        SURVEY_TRIGGER_TYPE_OPTIONS,
+        "When to fire the PostHog survey.",
+      ),
+      surveyTriggerValue: {
+        type: "custom" as const,
+        label: "Survey Trigger Value",
+        render: ({ value, onChange }: { value: unknown; onChange: (v: string) => void }) =>
+          React.createElement("div", null,
+            React.createElement("input", {
+              type: "number",
+              value: (value as string) || "",
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+              placeholder: "e.g. 30 (seconds) or 75 (%)",
+              min: 5,
+              max: 300,
+              style: { width: "100%", minHeight: 36, border: "1px solid #E8E4DF", padding: "0 10px", fontSize: 12, color: "#2C2C2C", background: "#FFF", boxSizing: "border-box" as const },
+            }),
+          ),
+      },
+      consentOverride: createCustomSelectField(
+        "Consent Override",
+        CONSENT_OVERRIDE_OPTIONS,
+        "Override site-level consent mode for this page.",
+      ),
+    },
   },
-  components: {
+};
+
+const analyticsRootDefaults: { _analytics: PageAnalyticsConfig & { surveyTriggerType?: string; surveyTriggerValue?: string; funnelSteps?: string } } = {
+  _analytics: {
+    pageTemplate: "",
+    projectId: "",
+    unitType: "",
+    priceBand: "",
+    conversionGoal: "",
+    funnelSteps: "",
+    experimentFlag: "",
+    surveyTriggerType: "",
+    surveyTriggerValue: "",
+    consentOverride: "inherit",
+  } as any,
+};
+
+export const pageBuilderConfig: OraConfig = {
+  categories: {
+    layout: {
+      components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider", "CardGrid"],
+      title: "Layout",
+      defaultExpanded: true,
+    },
+    blocks: {
+      components: ["Heading", "Text", "Button", "InlineLink", "Image", "Video", "Quote", "Icon", "ImageCarousel", "Gallery", "Card"],
+      title: "Blocks",
+    },
+    components: {
+      components: ["FilterTabs", "ScrollIndicator", "IconFeatureList", "AccordionGroup", "StatsGrid", "LocationMap", "ContactLocationsMap", "FeaturedProjects", "FeaturedCommunities", "ProjectSection", "ExperienceLauncher", "CTA", "Testimonial", "TabGroup", "LogoCloud", "PricingTable", "SocialLinks", "Countdown", "Breadcrumbs"],
+      title: "Components",
+    },
+  },
+  root: {
+    fields: {
+      ...analyticsRootFields,
+    },
+    defaultProps: {
+      ...analyticsRootDefaults,
+    },
+  },
+  components: wrapAllRenders({
     Section, Container, Columns, Accordion, Spacer, Divider,
-    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel,
+    Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel, Gallery,
     FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap,
     ContactLocationsMap,
     FeaturedProjects, FeaturedCommunities, ProjectSection,
     ExperienceLauncher,
-  },
+    CTA,
+    Testimonial,
+    TabGroup,
+    LogoCloud,
+    PricingTable,
+    Card,
+    CardGrid,
+    SocialLinks,
+    Countdown,
+    Breadcrumbs,
+  }),
 };

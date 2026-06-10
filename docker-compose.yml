@@ -1,0 +1,108 @@
+# Production-style local stack: the Next.js app (+ optional Caddy reverse proxy
+# for https://doe.test). By default the app connects to your EXISTING host
+# Postgres (the ora-postgres container on localhost:5432) via
+# host.docker.internal — no bundled DB is started.
+#
+# Plain localhost:
+#   1. cp .env.example .env   (fill in secrets)
+#   2. docker compose up --build
+#   3. open http://localhost:3000
+#
+# Custom domain (https://doe.test):
+#   1. Add to /etc/hosts:   127.0.0.1  doe.test www.doe.test
+#   2. docker compose --profile proxy up --build
+#   3. open https://doe.test   (trust Caddy's local CA for a green padlock)
+#
+# Want a throwaway bundled Postgres instead of the host one?
+#   docker compose --profile bundled-db up   (and set DATABASE_URL=...@db:5432)
+#
+# The app container runs DB migrations on startup, then `next start`.
+
+services:
+  # Optional bundled Postgres. NOT started by default — the app uses the host's
+  # ora-postgres. Enable with: docker compose --profile bundled-db up
+  db:
+    profiles: ["bundled-db"]
+    # Postgres 17 with the pgvector extension preinstalled — the schema runs
+    # `CREATE EXTENSION vector` (768-dim embeddings for the AI knowledge base).
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-page_builder}
+    ports:
+      # Host port 5433 to avoid clashing with the host Postgres on 5432.
+      - "${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-page_builder}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* are inlined at build time — pull them from the env file.
+        # Default to the https://doe.test domain so the production-style build
+        # is faithful; override in .env for a plain localhost build.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://doe.test}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://doe.test}
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_POSTHOG_REVERSE_PROXY: ${NEXT_PUBLIC_POSTHOG_REVERSE_PROXY:-/ingest}
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+        NEXT_PUBLIC_GA4_ID: ${NEXT_PUBLIC_GA4_ID:-}
+        NEXT_PUBLIC_META_PIXEL_ID: ${NEXT_PUBLIC_META_PIXEL_ID:-}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Connect to the HOST's Postgres (ora-postgres on localhost:5432) from
+      # inside the container via host.docker.internal. Override with
+      # DOCKER_DATABASE_URL in .env if your host DB uses different creds/db name.
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:password@host.docker.internal:5432/page_builder}
+      # Server-side fetches (RSC) call the app's own API in-process, so keep
+      # this internal — doe.test only resolves on the host, not inside the
+      # container. The browser uses NEXT_PUBLIC_* (baked at build) instead.
+      API_URL: http://localhost:3000
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${APP_HOST_PORT:-3000}:3000"
+    extra_hosts:
+      # Resolve host.docker.internal to the host on all engines (Docker Desktop
+      # for macOS already provides it; this also covers Linux).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Persist locally-uploaded media across container restarts.
+      - uploads:/app/public/uploads
+
+  # Reverse proxy that serves the app at https://doe.test with a locally-trusted
+  # TLS cert. Only starts with: docker compose --profile proxy up
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["proxy"]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-doe.test}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

@@ -1,6 +1,8 @@
 # ORA Design System
 
-A luxury warm-neutral design system for enterprise applications. Thin strokes, minimal shadows, clean typography, and a gold accent palette.
+A luxury warm-neutral design system for enterprise applications. Thin strokes, minimal shadows, clean typography, and the official ORA brand palette (White / Silver / Sand / Dark Gray / Sun / Ocean).
+
+> **Brand source of truth:** [docs/ORA_BRAND_WEB.md](docs/ORA_BRAND_WEB.md) (distilled from `docs/ORA_BrandGuidelines_v1_2022.pdf`). If anything in this file disagrees, the brand reference wins.
 
 ---
 
@@ -8,7 +10,8 @@ A luxury warm-neutral design system for enterprise applications. Thin strokes, m
 
 - Next.js (App Router)
 - Tailwind CSS v4 (with `@theme inline` custom tokens)
-- Geist Sans / Geist Mono fonts (via `next/font/google`)
+- Public Sans (free, Google Fonts) — current working primary; **URW Geometric** (paid) is the official brand display face and should be self-hosted via `next/font/local` once licensed
+- Geist Mono (engineering choice — not in brand guide)
 - Lucide React icons (always `stroke-1`)
 - Framer Motion (animations/transitions)
 
@@ -16,43 +19,56 @@ A luxury warm-neutral design system for enterprise applications. Thin strokes, m
 
 ## Color Palette
 
-All colors use the `ora-` prefix as Tailwind tokens (e.g. `bg-ora-cream`, `text-ora-charcoal`).
+All colors use the `ora-` prefix as Tailwind tokens (e.g. `bg-ora-sand`, `text-ora-charcoal`). Token *names* pre-date the brand audit; their *hex values* are now the official brand colors. **Prefer the brand-canonical aliases** in new code.
 
-### Neutrals (Backgrounds & Surfaces)
+### Brand-canonical aliases (use these in new code)
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `ora-white` | `#FFFFFF` | Page background, card background |
-| `ora-cream-light` | `#F9F7F5` | Subtle hover states, alternate rows |
-| `ora-cream` | `#F5F3F0` | Secondary backgrounds, button secondary bg |
-| `ora-cream-dark` | `#EBE7E2` | Hover on cream surfaces |
-| `ora-sand-light` | `#EDEAE6` | Light borders, dividers |
-| `ora-sand` | `#E8E4DF` | Primary borders, card borders, input borders |
-| `ora-sand-dark` | `#D4CFC8` | Stronger borders |
-| `ora-stone-light` | `#DDD9D3` | Subtle UI elements |
-| `ora-stone` | `#D4CFC8` | Input borders, secondary borders |
-| `ora-stone-dark` | `#B8B3AB` | Muted UI, disabled borders |
+| Token | Hex | Brand name | Pantone |
+|-------|-----|------------|---------|
+| `ora-white` | `#FFFFFF` | White | Total White C |
+| `ora-silver` | `#B5B5B5` | Silver | Cool Gray 6 C |
+| `ora-sand` | `#E3CBA8` | Sand | 468 C |
+| `ora-dark-gray` | `#262626` | Dark Gray | 446 C |
+| `ora-sun` | `#EA8B6E` | Sun | 2434 C |
+| `ora-ocean` | `#A4E0E6` | Ocean | 629 C |
+
+### Neutrals (Backgrounds & Surfaces) — legacy aliases
+
+| Token | Hex | Maps to | Usage |
+|-------|-----|---------|-------|
+| `ora-white` | `#FFFFFF` | brand White | Page background, card background |
+| `ora-cream-light` | `#FBF8F3` | warm off-white (Sand-tinted) | Subtle hover states, alternate rows |
+| `ora-cream` | `#F7F1E6` | warm cream | Secondary backgrounds, button secondary bg |
+| `ora-cream-dark` | `#EFE4D0` | warm cream hover | Hover on cream surfaces |
+| `ora-sand-light` | `#ECDABB` | light Sand | Light borders, dividers |
+| `ora-sand` | `#E3CBA8` | **brand Sand** | Primary borders, card borders, input borders |
+| `ora-sand-dark` | `#C9B189` | dark Sand | Stronger borders |
+| `ora-stone-light` | `#D6D6D6` | light Silver | Subtle UI elements |
+| `ora-stone` | `#B5B5B5` | **brand Silver** | Input borders, secondary borders |
+| `ora-stone-dark` | `#9A9A9A` | dark Silver | Muted UI, disabled borders |
 
 ### Text Colors
 
 | Token | Hex | Usage |
 |-------|-----|-------|
 | `ora-charcoal-dark` | `#1A1A1A` | Headings, high emphasis |
-| `ora-charcoal` | `#2C2C2C` | Primary body text, default text color |
+| `ora-charcoal` | `#262626` | **brand Dark Gray** — primary body text, default text color |
 | `ora-charcoal-light` | `#4A4A4A` | Secondary text, descriptions |
 | `ora-graphite` | `#4A4A4A` | Button hover states |
 | `ora-slate` | `#6B6B6B` | Tertiary text, labels |
 | `ora-muted` | `#9A9A9A` | Placeholder text, disabled text, timestamps |
 
-### Accent (Gold)
+### Accent — Sun (legacy `ora-gold` alias)
+
+The brand has **no gold**; the previous gold tokens have been remapped to the official **Sun** color.
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `ora-gold-light` | `#D4B896` | Progress bars, light accents, hover gold |
-| `ora-gold` | `#B8956B` | Primary accent, CTA buttons, active states, focus rings |
-| `ora-gold-dark` | `#8B7355` | Gold button hover, dark accent |
+| `ora-gold-light` / `ora-sun` (light) | `#F2A88E` | Progress bars, light accents, hover |
+| `ora-gold` / `ora-sun` | `#EA8B6E` | **brand Sun** — primary accent, CTA buttons, active states, focus rings |
+| `ora-gold-dark` | `#C76A4D` | Sun button hover, dark accent |
 
-### Status Colors
+### Status Colors (engineering — not in brand guide)
 
 | Token | Hex | Usage |
 |-------|-----|-------|
@@ -69,8 +85,10 @@ Status badges use `bg-{status}/10 text-{status}` pattern (e.g. `bg-ora-success/1
 
 ### Fonts
 
-- **Primary**: Geist Sans (`--font-geist-sans`) — clean geometric sans-serif
-- **Monospace**: Geist Mono (`--font-geist-mono`) — for code, slugs, IDs
+- **Display / brand** (`--font-display`): **URW Geometric** (Light / Medium / Bold) — paid; self-host with `next/font/local`. Falls back to Public Sans until licensed.
+- **Primary / UI** (`--font-sans`, also `--font-public-sans`): **Public Sans** — free, loaded via `next/font/google`. Used for body, headings, and UI by default.
+- **Monospace** (`--font-mono`, also `--font-geist-mono`): Geist Mono — engineering choice, not in brand guide.
+- Legacy `--font-poppins` and `--font-geist-sans` are aliased to Public Sans for backwards compatibility.
 
 ### Scale
 

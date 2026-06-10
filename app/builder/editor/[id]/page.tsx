@@ -1,14 +1,16 @@
 "use client";
 
-import { use, useEffect, useState, useCallback } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import "@puckeditor/core/dist/index.css";
-import { PageEditor } from "@/lib/page-builder/components/PageEditor";
+import { BuilderShell } from "@/lib/page-builder/builder-shell";
+import { pageBuilderConfig } from "@/lib/page-builder/config";
 import type { PageData, PageMeta } from "@/lib/page-builder/types";
 import {
   pageManager,
   dataStore,
 } from "@/lib/page-builder/store";
+import { useFeatureFlag } from "@/lib/cms/hooks";
 
 export default function EditorPage({
   params,
@@ -21,6 +23,14 @@ export default function EditorPage({
   const [pageMeta, setPageMeta] = useState<PageMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const brandedBuilder = useFeatureFlag("branded_builder");
+
+  // One-time warning when the dead-letter flag is set to false
+  useEffect(() => {
+    if (!brandedBuilder) {
+      console.warn("branded_builder flag ignored; legacy PageEditor has been removed");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function load() {
@@ -49,26 +59,6 @@ export default function EditorPage({
     load();
   }, [id]);
 
-  const handleSave = useCallback(
-    async (data: PageData) => {
-      const result = await pageManager.updatePage(id, { data });
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
-    },
-    [id]
-  );
-
-  const handlePublish = useCallback(
-    async (_data: PageData) => {
-      const saveResult = await pageManager.updatePage(id, { data: _data });
-      if (!saveResult.ok) throw new Error(saveResult.error);
-      const pubResult = await pageManager.publishPage(id);
-      if (!pubResult.ok) throw new Error(pubResult.error);
-    },
-    [id]
-  );
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -93,10 +83,49 @@ export default function EditorPage({
 
   return (
     <div className="h-screen">
-      <PageEditor
-        initialData={pageData}
-        onSave={handleSave}
-        onPublish={handlePublish}
+      <BuilderShell
+        config={pageBuilderConfig as never}
+        document={{
+          id: pageMeta.id,
+          title: pageMeta.title,
+          slug: pageMeta.slug,
+          mode: "page",
+          status: pageMeta.status,
+          createdAt: pageMeta.createdAt,
+          updatedAt: pageMeta.updatedAt,
+          publishedAt: pageMeta.publishedAt ?? undefined,
+          pageData: pageData as never,
+        }}
+        onSave={async (record) => {
+          try {
+            const r = await pageManager.updatePage(id, {
+              title: record.title,
+              data: record.pageData as PageData,
+            });
+            return r.ok ? { ok: true } : { ok: false, error: r.error };
+          } catch (e) {
+            return {
+              ok: false,
+              error: e instanceof Error ? e.message : "Save failed",
+            };
+          }
+        }}
+        onPublish={async (record) => {
+          try {
+            const s = await pageManager.updatePage(id, {
+              title: record.title,
+              data: record.pageData as PageData,
+            });
+            if (!s.ok) return { ok: false, error: s.error };
+            const p = await pageManager.publishPage(id);
+            return p.ok ? { ok: true } : { ok: false, error: p.error };
+          } catch (e) {
+            return {
+              ok: false,
+              error: e instanceof Error ? e.message : "Publish failed",
+            };
+          }
+        }}
       />
     </div>
   );

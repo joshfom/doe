@@ -1,0 +1,2 @@
+ALTER TABLE "utm_links" ADD COLUMN "auto_registered" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "utm_links_params_unique_idx" ON "utm_links" USING btree (LOWER("utm_source"),LOWER("utm_medium"),LOWER("utm_campaign"),COALESCE(LOWER("utm_term"), ''),COALESCE(LOWER("utm_content"), ''));

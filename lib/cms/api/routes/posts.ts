@@ -350,6 +350,7 @@ const protectedPosts = new Elysia({ name: "posts-protected" })
       content,
       excerpt,
       featuredImage,
+      featured,
       metaTitle,
       metaDescription,
       metaKeywords,
@@ -362,6 +363,7 @@ const protectedPosts = new Elysia({ name: "posts-protected" })
       content?: unknown;
       excerpt?: string;
       featuredImage?: string;
+      featured?: boolean;
       metaTitle?: string;
       metaDescription?: string;
       metaKeywords?: string;
@@ -421,6 +423,7 @@ const protectedPosts = new Elysia({ name: "posts-protected" })
     if (content !== undefined) updates.content = content;
     if (excerpt !== undefined) updates.excerpt = excerpt;
     if (featuredImage !== undefined) updates.featuredImage = featuredImage;
+    if (featured !== undefined) updates.featured = featured;
     if (metaTitle !== undefined) updates.metaTitle = metaTitle;
     if (metaDescription !== undefined) updates.metaDescription = metaDescription;
     if (metaKeywords !== undefined) updates.metaKeywords = metaKeywords;

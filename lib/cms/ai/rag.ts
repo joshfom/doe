@@ -2,6 +2,10 @@ import { sql } from "drizzle-orm";
 import type { Database } from "../db";
 import type { ChatMessage } from "./gateway";
 import { generateEmbedding, generateCompletion } from "./gateway";
+import {
+  generateCompletionWithAnalytics,
+  type AIAnalyticsContext,
+} from "../../analytics/ai-analytics";
 import type { IdentityResult } from "./identity";
 import type { ClientPaymentPlanSummary } from "./actions";
 
@@ -43,6 +47,8 @@ export interface QueryInput {
   topK?: number;
   threshold?: number;
   otpVerified?: boolean;
+  /** Analytics context for PostHog AI tracking. If omitted, falls back to raw gateway call. */
+  analyticsContext?: AIAnalyticsContext;
 }
 
 export interface QueryResult {
@@ -498,7 +504,9 @@ export async function processQuery(
     { role: "user", content: input.query },
   ];
 
-  const response = await generateCompletion(messages);
+  const response = input.analyticsContext
+    ? await generateCompletionWithAnalytics(messages, input.analyticsContext)
+    : await generateCompletion(messages);
 
   // Step 5: Return result with metadata
   return {
