@@ -27,6 +27,7 @@ import {
   TrendingUp,
   DollarSign,
   BarChart3,
+  Network,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
 
@@ -62,6 +63,7 @@ const navItems = [
   { href: '/ora-panel/marketing/spend', label: 'Ad Spend', icon: DollarSign, permission: 'analytics:read' },
   { href: '/ora-panel/marketing/utm-analytics', label: 'UTM Analytics', icon: BarChart3, permission: 'analytics:read' },
   { href: '/ora-panel/settings', label: 'Settings', icon: Settings, permission: 'settings:update' },
+  { href: '/ora-panel/sitemap', label: 'Sitemap', icon: Network, permission: 'settings:update' },
 ];
 
 /**

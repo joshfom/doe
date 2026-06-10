@@ -41,6 +41,12 @@ const EXCLUDED = new Set([
   "FeaturedCommunities",
   "ProjectSection",
   "ContactLocationsMap",
+  // Countdown has a justified non-deterministic runtime: a post-mount effect
+  // reads Date.now() and ticks every second, so two render passes that straddle
+  // a 1s boundary differ by design (page-builder-block-library Req 11.3). It is
+  // the documented exclusion in the byte-stability suite for the same reason;
+  // exclude it here too so this determinism check stays meaningful.
+  "Countdown",
 ]);
 
 const knownKeys = Object.keys(pageBuilderConfig.components).filter(

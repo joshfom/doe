@@ -39,6 +39,12 @@ const EXCLUDED = new Set([
   "FeaturedCommunities",
   "ProjectSection",
   "ContactLocationsMap",
+  // Req 11.3: Countdown is the single documented exclusion with a justified
+  // non-deterministic runtime. Its server-rendered (pre-tick) markup IS
+  // byte-stable, but after hydration the CountdownRuntime starts a 1s interval
+  // that swaps the aria-live region to live remaining time, so repeated public
+  // renders are not byte-identical once the timer ticks.
+  "Countdown",
 ]);
 const knownKeys = Object.keys(pageBuilderConfig.components).filter(
   (k) => !EXCLUDED.has(k),

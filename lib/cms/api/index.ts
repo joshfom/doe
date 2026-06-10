@@ -47,6 +47,7 @@ import { marketingSpendRoutes } from "./routes/marketing-spend";
 import { customEventsRoutes } from "./routes/custom-events";
 import { conversionGoalsRoutes } from "./routes/conversion-goals";
 import { utmAnalyticsRoutes } from "./routes/utm-analytics";
+import { sitemapRoutes } from "./routes/sitemap";
 
 // ── One-time RBAC init ───────────────────────────────────────────────────────
 // When running under `next dev`, the standalone server.ts entry never executes,
@@ -137,4 +138,5 @@ export const api = new Elysia({ prefix: "/api" })
   .use(marketingSpendRoutes)
   .use(customEventsRoutes)
   .use(conversionGoalsRoutes)
-  .use(utmAnalyticsRoutes);
+  .use(utmAnalyticsRoutes)
+  .use(sitemapRoutes);

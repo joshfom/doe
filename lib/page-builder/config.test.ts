@@ -327,6 +327,7 @@ describe("Sidebar categories", () => {
       "Accordion",
       "Spacer",
       "Divider",
+      "CardGrid",
     ]);
   });
 

@@ -44,4 +44,16 @@ export const RESPONSIVE_DEFAULTS_EXEMPT: Record<string, string> = {
     "ProjectSection renders a single project detail view — it has no side-by-side item arrangement.",
   ExperienceLauncher:
     "ExperienceLauncher renders a single interactive launcher element — it has no multi-column behavior.",
+  CTA:
+    "CTA renders a single conversion band (heading, subtext, and one or two buttons) — it has no multi-column item grid that needs mobile stacking.",
+  TabGroup:
+    "TabGroup renders a single tab list above one visible panel slot — tabs and panels stack inherently and there is no multi-column item grid to collapse on mobile.",
+  Card:
+    "Card renders a single content card (image, title, body, optional CTA) — it has no multi-column item arrangement of its own; grid layout is provided by the CardGrid wrapper.",
+  SocialLinks:
+    "SocialLinks renders a single inline row of social icons that wraps naturally — it has no breakpoint-aware column grid that needs mobile stacking.",
+  Countdown:
+    "Countdown renders a single live countdown value/expiry message — it has no multi-column item layout.",
+  Breadcrumbs:
+    "Breadcrumbs renders a single inline ordered list of links that wraps naturally — it has no multi-column grid that needs mobile stacking.",
 };

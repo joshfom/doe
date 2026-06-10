@@ -39,6 +39,16 @@ import {
   Sparkles,
   Square,
   LayoutGrid,
+  Grid3x3,
+  Megaphone,
+  MessageSquareQuote,
+  PanelsTopLeft,
+  Boxes,
+  BadgeDollarSign,
+  CreditCard,
+  Share2,
+  Timer,
+  ChevronsRight,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -77,6 +87,10 @@ export const PALETTE_META: Record<string, PaletteMeta> = {
   Divider: {
     description: "Horizontal rule separating sections.",
     Icon: Minus,
+  },
+  CardGrid: {
+    description: "Responsive grid that lays out nested Card blocks in columns.",
+    Icon: Grid3x3,
   },
 
   // Blocks
@@ -119,6 +133,10 @@ export const PALETTE_META: Record<string, PaletteMeta> = {
   Gallery: {
     description: "Multi-image gallery with grid or carousel mode and lightbox.",
     Icon: LayoutGrid,
+  },
+  Card: {
+    description: "Content card with image, title, body, and optional CTA link.",
+    Icon: CreditCard,
   },
 
   // Components
@@ -166,6 +184,38 @@ export const PALETTE_META: Record<string, PaletteMeta> = {
   ExperienceLauncher: {
     description: "Launches the 3D experience overlay for a project.",
     Icon: Sparkles,
+  },
+  CTA: {
+    description: "Conversion band with heading, subtext, and buttons over a styled background.",
+    Icon: Megaphone,
+  },
+  Testimonial: {
+    description: "Social proof with quotes, authors, avatars, and star ratings.",
+    Icon: MessageSquareQuote,
+  },
+  TabGroup: {
+    description: "Switchable content panels, each holding its own nested blocks.",
+    Icon: PanelsTopLeft,
+  },
+  LogoCloud: {
+    description: "Responsive strip of partner logos with optional links and grayscale.",
+    Icon: Boxes,
+  },
+  PricingTable: {
+    description: "Side-by-side plan cards with prices, feature lists, and CTAs.",
+    Icon: BadgeDollarSign,
+  },
+  SocialLinks: {
+    description: "Row of icon links to social profiles with size, color, and alignment.",
+    Icon: Share2,
+  },
+  Countdown: {
+    description: "Live countdown timer to a date and time, with a custom expiry message.",
+    Icon: Timer,
+  },
+  Breadcrumbs: {
+    description: "Semantic breadcrumb trail with separators and JSON-LD structured data.",
+    Icon: ChevronsRight,
   },
 };
 
