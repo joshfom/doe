@@ -1,108 +1,164 @@
-# Production-style local stack: the Next.js app (+ optional Caddy reverse proxy
-# for https://doe.test). By default the app connects to your EXISTING host
-# Postgres (the ora-postgres container on localhost:5432) via
-# host.docker.internal — no bundled DB is started.
+# ============================================================================
+# Production-style local stack for DOE.
 #
-# Plain localhost:
-#   1. cp .env.example .env   (fill in secrets)
-#   2. docker compose up --build
-#   3. open http://localhost:3000
+# Postgres is EXTERNAL (managed/remote, e.g. Neon) — its connection string is
+# supplied via DATABASE_URL in .env. No database container runs here.
 #
-# Custom domain (https://doe.test):
-#   1. Add to /etc/hosts:   127.0.0.1  doe.test www.doe.test
-#   2. docker compose --profile proxy up --build
-#   3. open https://doe.test   (trust Caddy's local CA for a green padlock)
+# One image (built from ./Dockerfile) runs three roles as separate containers,
+# mirroring how this deploys in production:
 #
-# Want a throwaway bundled Postgres instead of the host one?
-#   docker compose --profile bundled-db up   (and set DATABASE_URL=...@db:5432)
+#   app      Next.js   — site + api.handle           :3000  (runs migrations)
+#   api      Bun/Elysia standalone — durable SSE      :3001
+#   workers  long-lived loops (outbox, sf, jobs, lead, nudge)
+#   voice    LiveKit voice agent worker      (profile: voice — opt-in)
+#   caddy    HTTPS reverse proxy on a .test domain    (profile: proxy — opt-in)
 #
-# The app container runs DB migrations on startup, then `next start`.
+# Secrets + SaaS credentials are read from .env (env_file). The DB connection
+# for the CONTAINERS is set per-service (see x-app-env): it uses
+# DOCKER_DATABASE_URL from .env when present (point this at your real external/
+# managed DB, e.g. Neon), otherwise it falls back to the host machine's Postgres
+# via host.docker.internal — because a container cannot reach a `localhost` DB
+# (localhost inside a container is the container itself).
+#
+# So: for a remote/managed DB, set DOCKER_DATABASE_URL in .env to its URL.
+#     for a DB running on THIS machine, the default already works.
+#
+# Usage:
+#   docker compose up -d --build                 # app + api + workers
+#   docker compose --profile proxy up -d --build # + HTTPS via Caddy
+#   docker compose --profile voice up -d         # + LiveKit voice worker
+#   docker compose logs -f app
+#   docker compose down
+# ============================================================================
+
+name: doe
+
+# Shared build definition + the env-host overrides every app-image service needs.
+x-app-build: &app-build
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      # NEXT_PUBLIC_* are inlined into the browser bundle at build time. They are
+      # interpolated from .env (compose auto-loads .env for ${VAR} substitution).
+      # For HTTPS-via-Caddy access set these to https://${APP_DOMAIN} in .env.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      NEXT_PUBLIC_POSTHOG_REVERSE_PROXY: ${NEXT_PUBLIC_POSTHOG_REVERSE_PROXY:-/ingest}
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+      NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+      NEXT_PUBLIC_GA4_ID: ${NEXT_PUBLIC_GA4_ID:-}
+      NEXT_PUBLIC_META_PIXEL_ID: ${NEXT_PUBLIC_META_PIXEL_ID:-}
+  image: doe/app:local
+
+x-app-env: &app-env
+  # Database connection used by the CONTAINERS. Resolution order:
+  #   1. DOCKER_DATABASE_URL from .env, if set (use this for a real external/
+  #      managed DB like Neon — paste the full connection string there).
+  #   2. else the host-machine Postgres via host.docker.internal (covers the
+  #      common case where .env's DATABASE_URL is localhost:5432 for native dev,
+  #      which a container cannot reach — localhost inside a container is the
+  #      container itself).
+  # This override wins over the DATABASE_URL injected by env_file, so the
+  # plain `DATABASE_URL=...localhost...` in .env can stay for `bun run dev`.
+  DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:password@host.docker.internal:5432/page_builder}
+  # Container-internal overrides so the services find each other on the network.
+  API_URL: http://app:3000
+  # Workers post audited tool calls to the standalone API mount (toolsRoutes).
+  INTERNAL_API_URL: http://api:3001
 
 services:
-  # Optional bundled Postgres. NOT started by default — the app uses the host's
-  # ora-postgres. Enable with: docker compose --profile bundled-db up
-  db:
-    profiles: ["bundled-db"]
-    # Postgres 17 with the pgvector extension preinstalled — the schema runs
-    # `CREATE EXTENSION vector` (768-dim embeddings for the AI knowledge base).
-    image: pgvector/pgvector:pg17
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-page_builder}
-    ports:
-      # Host port 5433 to avoid clashing with the host Postgres on 5432.
-      - "${DB_HOST_PORT:-5433}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-page_builder}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
+  # ── Next.js site + api.handle (also the migration runner) ─────────────────
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # NEXT_PUBLIC_* are inlined at build time — pull them from the env file.
-        # Default to the https://doe.test domain so the production-style build
-        # is faithful; override in .env for a plain localhost build.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://doe.test}
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://doe.test}
-        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
-        NEXT_PUBLIC_POSTHOG_REVERSE_PROXY: ${NEXT_PUBLIC_POSTHOG_REVERSE_PROXY:-/ingest}
-        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
-        NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
-        NEXT_PUBLIC_GA4_ID: ${NEXT_PUBLIC_GA4_ID:-}
-        NEXT_PUBLIC_META_PIXEL_ID: ${NEXT_PUBLIC_META_PIXEL_ID:-}
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *app-build
+    env_file: .env
     environment:
-      # Connect to the HOST's Postgres (ora-postgres on localhost:5432) from
-      # inside the container via host.docker.internal. Override with
-      # DOCKER_DATABASE_URL in .env if your host DB uses different creds/db name.
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:password@host.docker.internal:5432/page_builder}
-      # Server-side fetches (RSC) call the app's own API in-process, so keep
-      # this internal — doe.test only resolves on the host, not inside the
-      # container. The browser uses NEXT_PUBLIC_* (baked at build) instead.
-      API_URL: http://localhost:3000
+      <<: *app-env
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: 0.0.0.0
+      RUN_MIGRATIONS: "true" # this service owns schema migrations on boot
+    command: ["bun", "run", "start"]
     ports:
-      - "${APP_HOST_PORT:-3000}:3000"
-    extra_hosts:
-      # Resolve host.docker.internal to the host on all engines (Docker Desktop
-      # for macOS already provides it; this also covers Linux).
-      - "host.docker.internal:host-gateway"
-    volumes:
-      # Persist locally-uploaded media across container restarts.
-      - uploads:/app/public/uploads
+      - "3000:3000"
+    healthcheck:
+      # Marked healthy only after migrations + next start are serving, so api /
+      # workers (which need the schema seeded) wait for this.
+      test:
+        ["CMD-SHELL", "bun -e \"fetch('http://localhost:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
 
-  # Reverse proxy that serves the app at https://doe.test with a locally-trusted
-  # TLS cert. Only starts with: docker compose --profile proxy up
+  # ── Standalone Bun/Elysia API: durable SSE (/api/realtime/*, /ws/*) ───────
+  api:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      API_PORT: "3001"
+      RUN_MIGRATIONS: "false" # app already migrated; this only seeds + listens
+    command: ["bun", "run", "api:start"]
+    ports:
+      - "3001:3001"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Container-tier workers (no voice) ─────────────────────────────────────
+  workers:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+    # Run directly (not the package script, which forces --env-file=.env that
+    # is not shipped in the image — env is injected by compose instead).
+    command: ["bun", "scripts/start-workers.ts", "core"]
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── LiveKit voice agent worker (opt-in) ───────────────────────────────────
+  voice:
+    <<: *app-build
+    profiles: ["voice"]
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+    command: ["bun", "scripts/start-workers.ts", "voice"]
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── HTTPS reverse proxy on a custom .test/.localtest.me domain (opt-in) ───
   caddy:
     image: caddy:2-alpine
-    restart: unless-stopped
     profiles: ["proxy"]
     environment:
-      APP_DOMAIN: ${APP_DOMAIN:-doe.test}
+      APP_DOMAIN: ${APP_DOMAIN:-doe.localtest.me}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - caddy-data:/data
+      - caddy-config:/config
     depends_on:
       - app
+      - api
+    restart: unless-stopped
 
 volumes:
-  pgdata:
-  uploads:
-  caddy_data:
-  caddy_config:
+  caddy-data:
+  caddy-config:

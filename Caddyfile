@@ -9,6 +9,18 @@
 	encode zstd gzip
 	tls internal
 
+	# Long-lived connections (durable SSE now, native WebSocket later) are
+	# served by the standalone Bun Elysia mount (`api.listen` on API_PORT||3001)
+	# rather than the Next.js bridge. Higher priority than the catch-all below.
+	@realtime path /api/realtime/* /ws/*
+	reverse_proxy @realtime api:3001 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		# Disable response buffering so the SSE byte stream flushes immediately.
+		flush_interval -1
+	}
+
+	# Everything else → Next.js (api.handle + pages).
 	reverse_proxy app:3000 {
 		# Preserve the original host + scheme so Next.js / the API see the
 		# real request as https://doe.test rather than the upstream container.
