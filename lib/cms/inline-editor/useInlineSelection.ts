@@ -27,7 +27,9 @@ import { useEffect, useState, useCallback } from "react";
  */
 export const PUCK_ID_ATTR = "data-puck-id";
 
-function findPuckIdFromTarget(target: EventTarget | null): string | null {
+export function findPuckIdFromTarget(
+  target: EventTarget | null,
+): string | null {
   if (!(target instanceof Element)) return null;
   const annotated = target.closest(`[${PUCK_ID_ATTR}]`);
   if (!annotated) return null;
@@ -40,6 +42,14 @@ export interface InlineSelection {
   /** The DOM element bearing `data-puck-id`, kept for overlay positioning. */
   selectedEl: HTMLElement | null;
   setSelectedId: (id: string | null) => void;
+  /**
+   * Imperatively set the selected element. Paired with `setSelectedId` so an
+   * external capture-phase driver (the live editor's NavigationNeutralizer,
+   * which resolves both the id and the element) can push a complete selection
+   * into this state container when the hook is mounted with `active=false`.
+   * The internal `pointerdown` listener also uses this when `active=true`.
+   */
+  setSelectedEl: (el: HTMLElement | null) => void;
 }
 
 export function useInlineSelection(active: boolean): InlineSelection {
@@ -87,5 +97,5 @@ export function useInlineSelection(active: boolean): InlineSelection {
     }
   }, [selectedEl]);
 
-  return { selectedId, selectedEl, setSelectedId };
+  return { selectedId, selectedEl, setSelectedId, setSelectedEl };
 }

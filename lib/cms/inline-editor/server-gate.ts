@@ -32,6 +32,49 @@ import {
 } from "@/lib/cms/rbac/engine";
 import { resolveFeatureFlag } from "@/lib/cms/hooks/feature-flag-utils";
 
+/**
+ * Result of the `pages:edit` authorization gate.
+ *
+ * - `{ ok: true; userId }` — the request has an authenticated session whose
+ *   resolved permissions include `pages:edit`.
+ * - `{ ok: false; reason: "unauthenticated" }` — no valid session.
+ * - `{ ok: false; reason: "forbidden" }` — authenticated, but lacking
+ *   `pages:edit`.
+ */
+export type RequirePagesEditResult =
+  | { ok: true; userId: string }
+  | { ok: false; reason: "unauthenticated" | "forbidden" };
+
+/**
+ * Reusable server-side `pages:edit` authorization gate.
+ *
+ * Encapsulates the session + RBAC machinery
+ * (`validateSession` → `loadUserRoles` → `resolvePermissions` →
+ * `hasPermission(.., 'pages:edit')`) **without** the `inline_editor`
+ * feature-flag check — the live editor route is the canonical editing
+ * surface and is not gated by the old experimental rollout flag.
+ *
+ * Session and RBAC are read fresh on every call (no caching), so a revoked
+ * permission takes effect on the next navigation without any client cache
+ * invalidation.
+ */
+export async function requirePagesEdit(): Promise<RequirePagesEditResult> {
+  // Authenticated session — DB-backed, not just cookie presence.
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE_NAME)?.value;
+  const userId = await validateSession(token);
+  if (!userId) return { ok: false, reason: "unauthenticated" };
+
+  // RBAC — `pages:edit` is the gating permission.
+  const roles = await loadUserRoles(db, userId);
+  const perms = await resolvePermissions(db, roles);
+  if (!hasPermission(perms, "pages:edit")) {
+    return { ok: false, reason: "forbidden" };
+  }
+
+  return { ok: true, userId };
+}
+
 export async function canMountInlineEditor(): Promise<boolean> {
   // Feature flag — never mount unless the rollout is on.
   const settingsRows = await db
@@ -39,14 +82,7 @@ export async function canMountInlineEditor(): Promise<boolean> {
     .from(siteSettings);
   if (!resolveFeatureFlag("inline_editor", settingsRows)) return false;
 
-  // Authenticated session — DB-backed, not just cookie presence.
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE_NAME)?.value;
-  const userId = await validateSession(token);
-  if (!userId) return false;
-
-  // RBAC — `pages:edit` is the gating permission.
-  const roles = await loadUserRoles(db, userId);
-  const perms = await resolvePermissions(db, roles);
-  return hasPermission(perms, "pages:edit");
+  // Session + RBAC machinery is shared with the live editor route.
+  const gate = await requirePagesEdit();
+  return gate.ok;
 }

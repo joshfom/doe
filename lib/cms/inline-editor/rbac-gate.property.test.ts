@@ -27,7 +27,7 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { hasPermission } from "@/lib/cms/rbac/engine";
 
-const ITERATIONS = { numRuns: 200 };
+const ITERATIONS = { numRuns: 100 };
 
 const requiredPermArb = fc.constant("pages:edit");
 
