@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ShieldAlert, Power } from "lucide-react";
 import type { SessionData } from "@/lib/types/session";
 import { EVENT_VOCABULARY } from "@/lib/analytics/events";
+import { PageHeaderSkeleton, ListSkeleton } from "@/components/ui/panel-skeletons";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const DISPLAY_LABEL_MAX = 100;
@@ -66,8 +67,9 @@ export default function ConversionGoalsPage() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
+      <div>
+        <PageHeaderSkeleton />
+        <ListSkeleton rows={4} />
       </div>
     );
   }
@@ -295,11 +297,7 @@ function ConversionGoalsContent() {
       <section className="border border-ora-sand/60 bg-ora-white p-6">
         <h2 className="mb-4 text-sm font-semibold text-ora-charcoal">Configured goals</h2>
         {goalsLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded bg-ora-sand/40" />
-            ))}
-          </div>
+          <ListSkeleton rows={3} rowClassName="h-12 bg-ora-sand/40" />
         ) : !goals?.length ? (
           <p className="py-4 text-center text-sm text-ora-muted">
             No conversion goals configured yet. Add one above.

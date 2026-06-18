@@ -25,7 +25,7 @@ export default function Forbidden() {
         href="/ora-panel"
         className="mt-6 inline-flex h-10 items-center gap-2 bg-ora-charcoal px-6 text-sm text-ora-white hover:bg-ora-graphite transition-colors"
       >
-        Back to Dashboard
+        Back to Feed
       </Link>
     </div>
   );

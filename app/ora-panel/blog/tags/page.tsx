@@ -49,7 +49,7 @@ export default function TagsPage() {
   return (
     <div>
       <nav className="mb-6 flex items-center gap-2 text-sm text-ora-muted">
-        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Dashboard</Link>
+        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Feed</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />
         <Link href="/ora-panel/blog" className="hover:text-ora-charcoal transition-colors">Blog</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />

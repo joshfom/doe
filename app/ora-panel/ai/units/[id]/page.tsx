@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Save, Trash2 } from 'lucide-react';
+import { DetailPageSkeleton } from '@/components/ui/panel-skeletons';
 
 const UNIT_TYPES = ['apartment', 'villa', 'townhouse', 'office'] as const;
 const UNIT_STATUSES = ['available', 'sold', 'reserved', 'rented', 'under_construction'] as const;
@@ -88,7 +89,7 @@ export default function EditUnitPage({ params }: { params: Promise<{ id: string 
     });
   };
 
-  if (isLoading) return <div className="flex min-h-[40vh] items-center justify-center"><p className="text-sm text-ora-muted">Loading…</p></div>;
+  if (isLoading) return <DetailPageSkeleton fieldsPerSection={6} />;
 
   return (
     <div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { usePendingApprovals } from '@/lib/cms/hooks';
 import { ClipboardCheck, Eye, Globe, Users, CheckCircle } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 import type { ContentModule } from '@/lib/cms/types';
 import {
   useContentApprovalStatus,
@@ -130,11 +131,7 @@ export default function ReviewDashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse bg-ora-sand/60" />
-          ))}
-        </div>
+        <ListSkeleton rows={3} rowClassName="rounded-none" className="space-y-2" />
       ) : !pending?.length ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <ClipboardCheck className="mx-auto mb-3 h-10 w-10 stroke-1 text-ora-muted" />

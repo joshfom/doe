@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useFormSubmissions } from '@/lib/cms/hooks';
-import { Inbox, X, ExternalLink } from 'lucide-react';
+import { Inbox, X, ExternalLink, ArrowRight, Sparkles } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 interface SubmissionData {
   [key: string]: unknown;
@@ -49,12 +51,32 @@ export default function FormSubmissionsPage() {
         <p className="mt-1 text-sm text-ora-charcoal-light">View leads and form submissions by source</p>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded bg-ora-sand/60" />
-          ))}
+      {/* Deprecation notice — submissions are now captured by the Lead Engine. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
+        <div className="flex items-start gap-2.5">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-medium text-amber-900">
+              This view is deprecated
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              Form submissions and AI chat enquiries are now captured directly by the
+              Lead Engine, where they’re parsed, qualified, routed, and synced to
+              Salesforce. This page remains read-only for historical submissions.
+            </p>
+          </div>
         </div>
+        <Link
+          href="/ora-panel/leads"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-ora-charcoal px-3 py-1.5 text-xs font-medium text-white hover:bg-ora-graphite transition-colors"
+        >
+          Open Lead Engine
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <ListSkeleton rows={2} rowClassName="h-32" className="space-y-4" />
       ) : !groups?.length ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <Inbox className="mx-auto mb-3 h-10 w-10 stroke-1 text-ora-muted" />

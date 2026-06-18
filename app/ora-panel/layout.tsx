@@ -13,7 +13,6 @@ import {
   FileText,
   Newspaper,
   Image as ImageIcon,
-  Inbox,
   CheckSquare,
   Ticket,
   Settings,
@@ -28,8 +27,14 @@ import {
   DollarSign,
   BarChart3,
   Network,
+  PhoneCall,
+  Sparkles,
+  Bot,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
+import { Skeleton } from '@/components/ui/skeleton';
+import { DemoPersonaProvider } from './_components/demo-persona';
+import { PanelTopBar } from './_components/PanelTopBar';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -44,21 +49,22 @@ const queryClient = new QueryClient({
 });
 
 const navItems = [
-  { href: '/ora-panel', label: 'Dashboard', icon: LayoutDashboard, permission: null },
+  { href: '/ora-panel', label: 'Feed', icon: LayoutDashboard, permission: null },
+  { href: '/ora-panel/leads', label: 'Lead Engine', icon: Sparkles, permission: 'leads:read' },
+  { href: '/ora-panel/tickets', label: 'Tickets', icon: Ticket, permission: 'tickets:read' },
+  { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
+  { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
+  { href: '/ora-panel/ai', label: 'My AI', icon: Bot, permission: 'ai:conversations:read' },
+  { href: '/ora-panel/ai/clients', label: 'People', icon: Users, permission: 'ai:clients:manage' },
   { href: '/ora-panel/pages', label: 'Pages', icon: FileText, permission: 'pages:read' },
   { href: '/ora-panel/blog', label: 'Blog', icon: Newspaper, permission: 'posts:read' },
   { href: '/ora-panel/communities', label: 'Communities', icon: MapPin, permission: 'communities:read' },
   { href: '/ora-panel/projects', label: 'Projects', icon: Building2, permission: 'projects:read' },
   { href: '/ora-panel/media', label: 'Media', icon: ImageIcon, permission: 'media:read' },
-  { href: '/ora-panel/submissions', label: 'Submissions', icon: Inbox, permission: 'leads:read' },
   { href: '/ora-panel/reviews', label: 'Reviews', icon: CheckSquare, permission: 'bookings:read' },
-  { href: '/ora-panel/tickets', label: 'Tickets', icon: Ticket, permission: 'tickets:read' },
-  { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
-  { href: '/ora-panel/ai', label: 'My AI', icon: BrainCircuit, permission: 'ai:conversations:read' },
   { href: '/ora-panel/ai/knowledge-base', label: 'AI Knowledge', icon: BrainCircuit, permission: 'ai:knowledge-base:manage' },
   { href: '/ora-panel/ai/conversations', label: 'AI Conversations', icon: MessageSquare, permission: 'ai:conversations:read' },
-  { href: '/ora-panel/ai/clients', label: 'People', icon: Users, permission: 'ai:clients:manage' },
-  { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
+  { href: '/ora-panel/voice-console', label: 'Voice Console', icon: PhoneCall, permission: 'voice:console' },
   { href: '/ora-panel/marketing/dashboard', label: 'Marketing', icon: TrendingUp, permission: 'analytics:read' },
   { href: '/ora-panel/marketing/spend', label: 'Ad Spend', icon: DollarSign, permission: 'analytics:read' },
   { href: '/ora-panel/marketing/utm-analytics', label: 'UTM Analytics', icon: BarChart3, permission: 'analytics:read' },
@@ -93,9 +99,14 @@ export default function OraPanelLayout({
   const [collapsed, setCollapsed] = useState(true);
 
   const isLoginPage = pathname === '/ora-panel/login' || pathname === '/ora-panel/register';
+  // The live page editor (/ora-panel/live/[id]) renders chrome-free and full-bleed,
+  // mirroring the login route: no sidebar, no nav, no main padding. Server-side
+  // pages:edit authorization is enforced in the route's server component.
+  const isLiveEditor = pathname?.startsWith('/ora-panel/live/') ?? false;
+  const isChromeless = isLoginPage || isLiveEditor;
 
   useEffect(() => {
-    if (isLoginPage) {
+    if (isChromeless) {
       setLoading(false);
       return;
     }
@@ -124,7 +135,7 @@ export default function OraPanelLayout({
     return () => {
       cancelled = true;
     };
-  }, [isLoginPage, pathname, router]);
+  }, [isChromeless, pathname, router]);
 
   const handleLogout = async () => {
     try {
@@ -139,13 +150,31 @@ export default function OraPanelLayout({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-ora-cream-light">
-        <p className="text-sm text-ora-muted">Loading…</p>
+      <div className="flex min-h-screen bg-ora-cream-light">
+        {/* Sidebar shell */}
+        <aside className="hidden w-60 shrink-0 flex-col gap-2 border-r border-ora-sand/60 bg-ora-white p-4 md:flex">
+          <Skeleton className="mb-4 h-8 w-32" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </aside>
+        {/* Content shell */}
+        <main className="flex-1 p-6">
+          <div className="mb-6 space-y-2">
+            <Skeleton className="h-7 w-56" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
 
-  if (isLoginPage) {
+  if (isChromeless) {
     return (
       <QueryClientProvider client={queryClient}>
         {children}
@@ -166,7 +195,10 @@ export default function OraPanelLayout({
 
   return (
     <QueryClientProvider client={queryClient}>
+      <DemoPersonaProvider>
       <div className="flex min-h-screen" style={{ fontFamily: "var(--font-poppins), Poppins, system-ui, sans-serif" }}>
+        {/* Top-right user menu + session-only persona toggle (demo). */}
+        <PanelTopBar userName={session?.name} />
         {/* Sidebar — expands on hover, collapses on mouse leave */}
         <aside
           onMouseEnter={() => setCollapsed(false)}
@@ -238,6 +270,7 @@ export default function OraPanelLayout({
           {children}
         </main>
       </div>
+      </DemoPersonaProvider>
     </QueryClientProvider>
   );
 }

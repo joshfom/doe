@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Search } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 const STATUS_OPTIONS = ['confirmed', 'cancelled', 'rescheduled', 'completed'] as const;
 const TYPE_OPTIONS = ['site_visit', 'consultation', 'payment_discussion', 'maintenance_request'] as const;
@@ -108,9 +109,7 @@ export default function AppointmentsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse bg-ora-sand/60" />)}
-        </div>
+        <ListSkeleton rows={3} rowClassName="rounded-none" />
       ) : appointments.length === 0 ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <CalendarDays className="mx-auto h-10 w-10 stroke-1 text-ora-muted" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 import posthog from "posthog-js";
 
 export interface TrackingWrapperProps {
@@ -21,26 +21,15 @@ export interface TrackingWrapperProps {
   children?: React.ReactNode;
 }
 
-// Module-level set to track used element IDs for collision detection
-const usedElementIds = new Set<string>();
-
 /**
- * Generates a unique element ID, appending a numeric suffix if a collision
- * is detected with an existing ID on the page.
+ * Suffix-sanitises a React `useId()` value (e.g. ":r3:") into something safe to
+ * embed in an element id. `useId()` is stable across the server and client
+ * renders of the same component, so using it — rather than a module-level
+ * mutable Set read during render — keeps the generated id identical on both
+ * sides and avoids hydration mismatches.
  */
-function generateUniqueId(baseId: string): string {
-  if (!usedElementIds.has(baseId)) {
-    usedElementIds.add(baseId);
-    return baseId;
-  }
-
-  let suffix = 1;
-  while (usedElementIds.has(`${baseId}-${suffix}`)) {
-    suffix++;
-  }
-  const uniqueId = `${baseId}-${suffix}`;
-  usedElementIds.add(uniqueId);
-  return uniqueId;
+function sanitizeReactId(reactId: string): string {
+  return reactId.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
 /**
@@ -76,21 +65,19 @@ export function TrackingWrapper({
   const hasFiredVisibility = useRef(false);
   const visibilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvedIdRef = useRef<string>("");
+  // SSR-safe unique token; identical on the server and client for this instance.
+  const reactId = useId();
 
-  // Resolve element ID on first render
+  // Resolve element ID on first render. An explicit `elementId` is used verbatim;
+  // otherwise the readable base is made unique with the SSR-stable `useId()` so
+  // two sections sharing an event name never collide AND never mismatch on
+  // hydration (the previous module-level Set diverged between server and client).
   if (resolvedIdRef.current === "" && trackAsEvent) {
     const baseId = elementId || `track-${eventName || "element"}`;
-    resolvedIdRef.current = generateUniqueId(baseId);
+    resolvedIdRef.current = elementId
+      ? baseId
+      : `${baseId}-${sanitizeReactId(reactId)}`;
   }
-
-  // Cleanup element ID from the set on unmount
-  useEffect(() => {
-    return () => {
-      if (resolvedIdRef.current) {
-        usedElementIds.delete(resolvedIdRef.current);
-      }
-    };
-  }, []);
 
   // IntersectionObserver for visibility tracking
   useEffect(() => {

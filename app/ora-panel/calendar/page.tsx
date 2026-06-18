@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,7 +263,10 @@ export default function CalendarPage() {
       </div>
 
       {isLoading && (
-        <p className="mt-3 text-sm text-ora-charcoal-light">Loading events…</p>
+        <div className="mt-3 space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
       )}
       {!isLoading && events.length === 0 && (
         <p className="mt-3 text-sm text-ora-charcoal-light">

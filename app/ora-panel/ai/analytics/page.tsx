@@ -2,6 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, MessageSquare, ArrowRightLeft, Hash, BookOpen, RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 function statusBadge(status: string) {
   switch (status) {
@@ -50,7 +52,7 @@ export default function AnalyticsPage() {
             <span className="text-xs font-medium text-ora-charcoal-light">Total Conversations</span>
           </div>
           {statsLoading ? (
-            <div className="h-8 w-20 animate-pulse bg-ora-sand/60" />
+            <Skeleton className="h-8 w-20" />
           ) : (
             <p className="text-2xl font-semibold text-ora-charcoal">{totalConversations}</p>
           )}
@@ -61,7 +63,7 @@ export default function AnalyticsPage() {
             <span className="text-xs font-medium text-ora-charcoal-light">Handoff Rate</span>
           </div>
           {statsLoading ? (
-            <div className="h-8 w-20 animate-pulse bg-ora-sand/60" />
+            <Skeleton className="h-8 w-20" />
           ) : (
             <p className="text-2xl font-semibold text-ora-charcoal">{handoffRate}</p>
           )}
@@ -72,7 +74,7 @@ export default function AnalyticsPage() {
             <span className="text-xs font-medium text-ora-charcoal-light">Avg Messages / Conv</span>
           </div>
           {statsLoading ? (
-            <div className="h-8 w-20 animate-pulse bg-ora-sand/60" />
+            <Skeleton className="h-8 w-20" />
           ) : (
             <p className="text-2xl font-semibold text-ora-charcoal">{avgMessages}</p>
           )}
@@ -83,7 +85,7 @@ export default function AnalyticsPage() {
             <span className="text-xs font-medium text-ora-charcoal-light">KB Documents</span>
           </div>
           {kbLoading ? (
-            <div className="h-8 w-20 animate-pulse bg-ora-sand/60" />
+            <Skeleton className="h-8 w-20" />
           ) : (
             <p className="text-2xl font-semibold text-ora-charcoal">{totalDocs}</p>
           )}
@@ -95,9 +97,7 @@ export default function AnalyticsPage() {
         <div className="border border-ora-sand/60 bg-ora-white p-6">
           <h3 className="text-sm font-semibold text-ora-charcoal mb-4">Conversations by Status</h3>
           {statsLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => <div key={i} className="h-8 animate-pulse bg-ora-sand/60" />)}
-            </div>
+            <ListSkeleton rows={3} rowClassName="h-8 rounded-none" className="space-y-2" />
           ) : byStatus.length === 0 ? (
             <p className="text-sm text-ora-muted">No data</p>
           ) : (
@@ -127,9 +127,7 @@ export default function AnalyticsPage() {
         <div className="border border-ora-sand/60 bg-ora-white p-6">
           <h3 className="text-sm font-semibold text-ora-charcoal mb-4">Daily Conversation Volume</h3>
           {statsLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => <div key={i} className="h-6 animate-pulse bg-ora-sand/60" />)}
-            </div>
+            <ListSkeleton rows={3} rowClassName="h-6 rounded-none" className="space-y-2" />
           ) : dailyVolume.length === 0 ? (
             <p className="text-sm text-ora-muted">No data</p>
           ) : (
@@ -148,9 +146,7 @@ export default function AnalyticsPage() {
         <div className="border border-ora-sand/60 bg-ora-white p-6">
           <h3 className="text-sm font-semibold text-ora-charcoal mb-4">Knowledge Base Health</h3>
           {kbLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => <div key={i} className="h-6 animate-pulse bg-ora-sand/60" />)}
-            </div>
+            <ListSkeleton rows={3} rowClassName="h-6 rounded-none" className="space-y-2" />
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">

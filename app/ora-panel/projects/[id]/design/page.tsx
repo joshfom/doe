@@ -13,6 +13,7 @@ import { createEditorPlugins } from '@/lib/page-builder/components/plugins';
 import { defaultTheme } from '@/lib/page-builder/theme';
 import type { PageData, ComponentInstance } from '@/lib/page-builder/types';
 import { apiFetch } from '@/lib/cms/hooks/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Default project landing page template.
@@ -640,8 +641,33 @@ export default function ProjectDesignPage({
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading designer…</p>
+      <div className="flex min-h-[60vh] flex-col">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between border-b border-ora-sand bg-ora-white px-4 py-3">
+          <Skeleton className="h-6 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        </div>
+        {/* Components rail · canvas · inspector */}
+        <div className="grid flex-1 grid-cols-[200px_1fr_280px] gap-px bg-ora-sand/60">
+          <div className="space-y-2 bg-ora-cream-light p-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+          <div className="space-y-4 bg-ora-white p-6">
+            <Skeleton className="h-48 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-64 w-full rounded-lg" />
+          </div>
+          <div className="space-y-3 bg-ora-cream-light p-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

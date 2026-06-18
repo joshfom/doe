@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, DollarSign } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/panel-skeletons";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -222,11 +223,7 @@ export default function MarketingSpendPage() {
       <div className="border border-ora-sand/60 bg-ora-white p-6">
         <h2 className="mb-4 text-sm font-semibold text-ora-charcoal">Recent entries</h2>
         {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 animate-pulse bg-ora-sand/40" />
-            ))}
-          </div>
+          <ListSkeleton rows={3} rowClassName="h-10 bg-ora-sand/40 rounded-none" className="space-y-2" />
         ) : !records?.length ? (
           <div className="py-8 text-center">
             <DollarSign className="mx-auto mb-2 h-8 w-8 stroke-1 text-ora-muted" />

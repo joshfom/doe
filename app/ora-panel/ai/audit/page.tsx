@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import { useAuditLog } from '@/lib/cms/hooks';
 import { BrainCircuit, Filter } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 const ACTOR_OPTIONS = [
   { label: 'Anyone', value: '' },
@@ -68,14 +69,7 @@ export default function AiAuditPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="h-14 animate-pulse rounded bg-ora-sand/60"
-            />
-          ))}
-        </div>
+        <ListSkeleton rows={5} rowClassName="h-14" className="space-y-2" />
       ) : visible.length === 0 ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <BrainCircuit className="mx-auto mb-3 h-10 w-10 stroke-1 text-ora-muted" />

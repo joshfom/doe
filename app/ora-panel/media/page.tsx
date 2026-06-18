@@ -8,6 +8,7 @@ import {
   useUpdateMediaAlt,
 } from '@/lib/cms/hooks';
 import { Upload, Trash2, Search, Pencil, Link, Check, X } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function MediaLibraryPage() {
   const [search, setSearch] = useState('');
@@ -110,7 +111,7 @@ export default function MediaLibraryPage() {
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="aspect-square animate-pulse bg-ora-sand/60" />
+            <Skeleton key={i} className="aspect-square rounded-none" />
           ))}
         </div>
       ) : !items?.length ? (

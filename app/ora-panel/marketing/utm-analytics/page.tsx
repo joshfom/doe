@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
+import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -121,8 +122,9 @@ export default function UTMAnalyticsPage() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
+      <div>
+        <PageHeaderSkeleton />
+        <SkeletonTable />
       </div>
     );
   }

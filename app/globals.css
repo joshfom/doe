@@ -293,6 +293,29 @@ html {
   border-top-color: #4A4A4A;
 }
 
+/* ── intl-tel-input overrides for the Call Widget pre-call form ──
+   The Tailwind classes on the input (py-3 text-base) handle the field itself;
+   these rules make the .iti wrapper full-width so the underline spans the row
+   and keep the flag/dial-code selector vertically centred against the larger
+   input so the number and the flag line up. */
+.call-widget-phone .iti {
+  width: 100% !important;
+  display: block !important;
+}
+.call-widget-phone .iti__country-container {
+  border: none !important;
+  background: transparent !important;
+}
+.call-widget-phone .iti__selected-country,
+.call-widget-phone .iti__selected-country-primary {
+  background: transparent !important;
+  border: none !important;
+  height: 100% !important;
+}
+.call-widget-phone .iti__arrow {
+  border-top-color: #4A4A4A;
+}
+
 /* ── Accordion / Details-Summary fixes for Puck editor ── */
 details > summary::-webkit-details-marker {
   display: none;

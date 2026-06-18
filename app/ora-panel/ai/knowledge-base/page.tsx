@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 import {
   Plus,
   Search,
@@ -165,11 +166,7 @@ export default function KnowledgeBasePage() {
 
       {/* List */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse bg-ora-sand/60" />
-          ))}
-        </div>
+        <ListSkeleton rows={3} rowClassName="rounded-none" />
       ) : error ? (
         <div className="border border-ora-error/30 bg-ora-error/5 p-6 text-sm text-ora-error">
           <strong className="block">Failed to load knowledge base.</strong>

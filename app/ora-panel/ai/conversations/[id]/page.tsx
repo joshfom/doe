@@ -4,6 +4,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, User, Bot, AlertTriangle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function roleBadge(role: string) {
   switch (role) {
@@ -36,7 +37,43 @@ export default function ConversationDetailPage({ params }: { params: Promise<{ i
   const messages = conv?.messages ?? data?.messages ?? [];
 
   if (isLoading) {
-    return <div className="flex min-h-[40vh] items-center justify-center"><p className="text-sm text-ora-muted">Loading…</p></div>;
+    return (
+      <div>
+        {/* Breadcrumb */}
+        <div className="mb-6 flex items-center gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+        {/* Header */}
+        <div className="mb-6 space-y-2">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Message thread */}
+          <div className="lg:col-span-2 space-y-3">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}
+              >
+                <Skeleton
+                  className={`h-16 ${i % 2 === 0 ? 'w-2/3' : 'w-1/2'} rounded-lg`}
+                />
+              </div>
+            ))}
+          </div>
+          {/* Sidebar */}
+          <div className="space-y-3">
+            <Skeleton className="h-40 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!conv) {

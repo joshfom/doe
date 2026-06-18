@@ -9,7 +9,8 @@ import {
   type TicketApprovalRecord,
   type TicketApprovalScope,
 } from '@/lib/cms/hooks';
-import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 const SCOPE_LABELS: Record<TicketApprovalScope, string> = {
   noc: 'NOC',
@@ -80,11 +81,7 @@ export default function PendingApprovalsPage() {
       </div>
 
       {/* List */}
-      {isLoading && (
-        <div className="flex items-center gap-2 border border-ora-sand/60 bg-ora-white p-6 text-sm text-ora-charcoal-light">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading approvals…
-        </div>
-      )}
+      {isLoading && <ListSkeleton rows={3} rowClassName="h-28" />}
       {isError && (
         <div className="border border-ora-error/30 bg-ora-error/5 p-6 text-sm text-ora-error">
           Failed to load approvals.

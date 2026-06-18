@@ -28,7 +28,16 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        router.replace('/ora-panel');
+        // Post-login landing is the agent-first Home_Surface, now at
+        // `/ora-panel` (the old `/ora-panel/home` route was consolidated into
+        // it). Honor a safe `next` (set by the ora-panel layout when redirecting
+        // an unauthenticated visitor back to where they were) and otherwise land
+        // on `/ora-panel`. Only same-app relative `/ora-panel...` targets are
+        // accepted, so the param can't be abused for an open redirect.
+        const nextParam = new URLSearchParams(window.location.search).get('next');
+        const dest =
+          nextParam && nextParam.startsWith('/ora-panel') ? nextParam : '/ora-panel';
+        router.replace(dest);
       } else {
         setError('Invalid credentials');
       }

@@ -39,7 +39,7 @@ export default function OraError({
           href="/ora-panel"
           className="inline-flex h-10 items-center gap-2 border border-ora-sand px-6 text-sm text-ora-charcoal hover:bg-ora-sand/30 transition-colors"
         >
-          Back to Dashboard
+          Back to Feed
         </a>
       </div>
     </div>

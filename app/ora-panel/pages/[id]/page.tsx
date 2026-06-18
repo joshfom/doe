@@ -31,6 +31,7 @@ import {
   ClipboardCheck,
   X,
 } from 'lucide-react';
+import { DetailPageSkeleton, ListSkeleton } from '@/components/ui/panel-skeletons';
 
 export default function PageDetailPage({
   params,
@@ -84,11 +85,7 @@ export default function PageDetailPage({
   }, [page]);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
-      </div>
-    );
+    return <DetailPageSkeleton fieldsPerSection={6} />;
   }
 
   if (!page) {
@@ -137,7 +134,7 @@ export default function PageDetailPage({
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-sm text-ora-muted">
         <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">
-          Dashboard
+          Feed
         </Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />
         <Link href="/ora-panel/pages" className="hover:text-ora-charcoal transition-colors">
@@ -528,11 +525,7 @@ export default function PageDetailPage({
       {activeTab === 'revisions' && (
         <div>
           {revisionsLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-12 animate-pulse bg-ora-sand/60" />
-              ))}
-            </div>
+            <ListSkeleton rows={3} rowClassName="h-12 rounded-none" className="space-y-2" />
           ) : !revisions?.length ? (
             <div className="border border-ora-sand/60 bg-ora-white p-8 text-center">
               <p className="text-sm text-ora-muted">No revisions yet</p>

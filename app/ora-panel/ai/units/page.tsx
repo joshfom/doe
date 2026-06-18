@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Building2 } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 const UNIT_STATUSES = ['available', 'sold', 'reserved', 'rented', 'under_construction'] as const;
 const UNIT_TYPES = ['apartment', 'villa', 'townhouse', 'office'] as const;
@@ -87,9 +88,7 @@ export default function UnitsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse bg-ora-sand/60" />)}
-        </div>
+        <ListSkeleton rows={3} rowClassName="rounded-none" />
       ) : units.length === 0 ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <Building2 className="mx-auto h-10 w-10 stroke-1 text-ora-muted" />

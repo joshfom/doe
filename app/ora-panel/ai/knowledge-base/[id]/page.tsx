@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Save, Trash2 } from 'lucide-react';
+import { DetailPageSkeleton } from '@/components/ui/panel-skeletons';
 
 const SOURCE_TYPES = ['manual', 'blog_sync', 'construction_update', 'faq', 'policy'] as const;
 
@@ -69,7 +70,7 @@ export default function EditKnowledgeDocumentPage({ params }: { params: Promise<
   };
 
   if (isLoading) {
-    return <div className="flex min-h-[40vh] items-center justify-center"><p className="text-sm text-ora-muted">Loading…</p></div>;
+    return <DetailPageSkeleton fieldsPerSection={6} />;
   }
 
   return (

@@ -9,6 +9,7 @@ import {
   useUpdateCommunity,
 } from '@/lib/cms/hooks/use-communities';
 import { ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function EditCommunityPage({
   params,
@@ -71,7 +72,7 @@ export default function EditCommunityPage({
   }
 
   if (isLoading) {
-    return <div className="h-32 animate-pulse bg-ora-sand/40" />;
+    return <Skeleton className="h-32 w-full rounded-none" />;
   }
   if (!community) {
     return <div className="text-sm text-ora-error">Community not found.</div>;

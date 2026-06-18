@@ -5,6 +5,7 @@ import { NavigationBar } from "@/lib/cms/components/NavigationBar";
 import { GlobalFooter } from "@/lib/cms/components/GlobalFooter";
 import { ReactQueryProvider } from "@/lib/cms/components/ReactQueryProvider";
 import { ChatWidget } from "@/lib/cms/components/ChatWidget";
+import { CallWidget } from "@/lib/cms/components/call-widget";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
 import { ClarityScript } from "@/lib/analytics/clarity";
 import { ConsentBanner } from "@/lib/analytics/consent-banner";
@@ -31,6 +32,10 @@ export default async function ArLayout({
   };
   const consentMode = (settings.analytics_consent_mode as "strict" | "balanced" | "off") ?? "strict";
 
+  // Public voice call widget — opt-in, toggled by admins without redeploy.
+  // Default OFF until the container voice workers are live (S6 R7.4).
+  const voiceEnabled = settings.voice_call_widget_enabled === "true";
+
   return (
     <div dir="rtl" className={notoSansArabic.variable} style={{ fontFamily: "var(--font-arabic), var(--font-sans, system-ui, sans-serif)" }}>
       <link rel="alternate" hrefLang="en" href="/" />
@@ -46,6 +51,7 @@ export default async function ArLayout({
               <GlobalFooter locale="ar" />
             </div>
             <ChatWidget locale="ar" />
+            {voiceEnabled && <CallWidget variant="floating" locale="ar" />}
           </ReactQueryProvider>
         </SiteSettingsProvider>
         <ClarityScript />

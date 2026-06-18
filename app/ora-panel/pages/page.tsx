@@ -6,6 +6,7 @@ import { usePages, useCloneLocale, useSiteSettings } from '@/lib/cms/hooks';
 import { getLocaleCompletionStatus } from '@/lib/cms/utils/locale-indicator';
 import type { PageStatus } from '@/lib/cms/types';
 import { Plus, Search } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 const STATUS_DOT: Record<string, string> = {
   green: 'bg-ora-success',
@@ -99,11 +100,7 @@ export default function PageIndexPage() {
 
       {/* Page list */}
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded bg-ora-sand/60" />
-          ))}
-        </div>
+        <ListSkeleton rows={3} />
       ) : filtered.length === 0 ? (
         <div className="border border-ora-sand/60 bg-ora-white p-12 text-center">
           <p className="text-sm text-ora-muted">No pages found</p>

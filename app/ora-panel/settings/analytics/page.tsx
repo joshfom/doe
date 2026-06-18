@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save, ShieldAlert } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
+import {
+  PageHeaderSkeleton,
+  DetailFormSkeleton,
+} from '@/components/ui/panel-skeletons';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -149,8 +153,9 @@ export default function AnalyticsSettingsPage() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
+      <div className="mx-auto max-w-3xl">
+        <PageHeaderSkeleton />
+        <DetailFormSkeleton sections={3} fieldsPerSection={2} className="max-w-3xl" />
       </div>
     );
   }
@@ -278,11 +283,7 @@ function AnalyticsSettingsForm() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded bg-ora-sand/60" />
-        ))}
-      </div>
+      <DetailFormSkeleton sections={3} fieldsPerSection={2} className="max-w-3xl" />
     );
   }
 

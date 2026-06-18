@@ -14,6 +14,11 @@ import {
   Target,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
+import {
+  PageHeaderSkeleton,
+  StatCardsSkeleton,
+} from '@/components/ui/panel-skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,8 +101,10 @@ export default function MarketingDashboardPage() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
+      <div className="mx-auto max-w-6xl">
+        <PageHeaderSkeleton />
+        <StatCardsSkeleton count={4} />
+        <Skeleton className="mt-4 h-64 w-full" />
       </div>
     );
   }
@@ -199,15 +206,8 @@ function DashboardContent() {
       {/* Loading state */}
       {isLoading && !dashboardData && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="h-28 animate-pulse border border-ora-sand/60 bg-ora-sand/30"
-              />
-            ))}
-          </div>
-          <div className="h-64 animate-pulse border border-ora-sand/60 bg-ora-sand/30" />
+          <StatCardsSkeleton count={4} />
+          <Skeleton className="h-64 w-full" />
         </div>
       )}
 

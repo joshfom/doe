@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, Settings, CheckSquare, BrainCircuit, Mail } from 'lucide-react';
 import type { ContentModule } from '@/lib/cms/types';
 import { OrderedApproverList } from '@/lib/cms/components/OrderedApproverList';
+import { ListSkeleton, DetailFormSkeleton } from '@/components/ui/panel-skeletons';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -151,13 +152,7 @@ function GeneralSettingsTab() {
   };
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded bg-ora-sand/60" />
-        ))}
-      </div>
-    );
+    return <ListSkeleton rows={4} />;
   }
 
   return (
@@ -312,13 +307,7 @@ function ContentApprovalTab() {
   const isLoading = configLoading || usersLoading;
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded bg-ora-sand/60" />
-        ))}
-      </div>
-    );
+    return <ListSkeleton rows={4} rowClassName="h-24" />;
   }
 
   return (
@@ -475,11 +464,7 @@ function AISettingsTab() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[20vh] items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading…</p>
-      </div>
-    );
+    return <DetailFormSkeleton sections={2} fieldsPerSection={2} />;
   }
 
   return (

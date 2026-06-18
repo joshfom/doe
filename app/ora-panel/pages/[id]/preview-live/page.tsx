@@ -7,6 +7,7 @@ import { Render } from '@puckeditor/core';
 import { pageBuilderConfig } from '@/lib/page-builder/config';
 import type { PageData } from '@/lib/page-builder/types';
 import { apiFetch } from '@/lib/cms/hooks/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PreviewLivePage({
   params,
@@ -41,8 +42,25 @@ export default function PreviewLivePage({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-ora-muted">Loading preview…</p>
+      <div className="min-h-screen">
+        {/* Header bar */}
+        <div className="sticky top-0 z-50 flex items-center justify-between border-b border-ora-sand bg-ora-white px-6 py-3">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        {/* Rendered-page placeholder */}
+        <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+          <Skeleton className="h-72 w-full rounded-lg" />
+          <Skeleton className="h-8 w-1/2" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-3/4" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-40 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

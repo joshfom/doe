@@ -35,6 +35,7 @@ import {
   Search,
   Settings,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PostEditorPage({
   params,
@@ -151,7 +152,38 @@ export default function PostEditorPage({
     ));
 
   if (isLoading) {
-    return <div className="flex min-h-[40vh] items-center justify-center"><p className="text-sm text-ora-muted">Loading…</p></div>;
+    return (
+      <div>
+        {/* Breadcrumb */}
+        <div className="mb-6 flex items-center gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+        {/* Header row */}
+        <div className="mb-6 flex items-start justify-between">
+          <Skeleton className="h-8 w-64" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+          </div>
+        </div>
+        {/* Editor + sidebar */}
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-[28rem] w-full rounded" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full rounded" />
+            <Skeleton className="h-32 w-full rounded" />
+            <Skeleton className="h-48 w-full rounded" />
+          </div>
+        </div>
+      </div>
+    );
   }
   if (!post) {
     return <div className="flex min-h-[40vh] items-center justify-center"><p className="text-sm text-ora-error">Post not found</p></div>;
@@ -172,7 +204,7 @@ export default function PostEditorPage({
     <div>
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-sm text-ora-muted">
-        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Dashboard</Link>
+        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Feed</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />
         <Link href="/ora-panel/blog" className="hover:text-ora-charcoal transition-colors">Blog</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />

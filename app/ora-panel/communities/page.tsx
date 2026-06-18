@@ -7,6 +7,7 @@ import {
   useCommunities,
   useArchiveCommunity,
 } from '@/lib/cms/hooks/use-communities';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function CommunitiesListPage() {
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -42,7 +43,7 @@ export default function CommunitiesListPage() {
       </label>
 
       {isLoading ? (
-        <div className="h-32 animate-pulse bg-ora-sand/40" />
+        <Skeleton className="h-32 w-full rounded-none" />
       ) : !communities || communities.length === 0 ? (
         <div className="border border-ora-sand bg-ora-white p-12 text-center text-sm text-ora-muted">
           No communities yet.

@@ -82,33 +82,39 @@ describe("TrackingWrapper", () => {
       ).toBeNull();
     });
 
-    it("generates a unique element ID with collision suffix", () => {
-      const { container: c1 } = render(
+    it("uses an explicit elementId verbatim and auto-generates unique ids otherwise", () => {
+      // An explicit elementId is honoured as-is (author's choice).
+      const { container: explicit } = render(
         <TrackingWrapper
           trackAsEvent={true}
           eventName="cta_clicked"
           elementId="shared-id"
         >
-          <span>First</span>
+          <span>Explicit</span>
         </TrackingWrapper>
       );
+      expect((explicit.firstElementChild as HTMLElement).id).toBe("shared-id");
 
-      const { container: c2 } = render(
-        <TrackingWrapper
-          trackAsEvent={true}
-          eventName="cta_clicked"
-          elementId="shared-id"
-        >
-          <span>Second</span>
-        </TrackingWrapper>
+      // Two auto-generated wrappers for the same event name get distinct,
+      // SSR-stable ids (via useId) — no module-level collision bookkeeping.
+      // Rendered as SIBLINGS in one tree, mirroring real page usage.
+      const { container: siblings } = render(
+        <div>
+          <TrackingWrapper trackAsEvent={true} eventName="cta_clicked">
+            <span>First</span>
+          </TrackingWrapper>
+          <TrackingWrapper trackAsEvent={true} eventName="cta_clicked">
+            <span>Second</span>
+          </TrackingWrapper>
+        </div>
       );
 
-      const id1 = (c1.firstElementChild as HTMLElement).id;
-      const id2 = (c2.firstElementChild as HTMLElement).id;
-
-      expect(id1).toBe("shared-id");
-      expect(id2).toBe("shared-id-1");
-      expect(id1).not.toBe(id2);
+      const wrappers = siblings.querySelectorAll(":scope > div > div");
+      const idA = (wrappers[0] as HTMLElement).id;
+      const idB = (wrappers[1] as HTMLElement).id;
+      expect(idA.startsWith("track-cta_clicked")).toBe(true);
+      expect(idB.startsWith("track-cta_clicked")).toBe(true);
+      expect(idA).not.toBe(idB);
     });
 
     it("uses display: contents on the wrapper div", () => {

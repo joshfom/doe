@@ -9,6 +9,7 @@ import {
 } from '@/lib/cms/hooks';
 import type { PostType } from '@/lib/cms/types';
 import { ChevronRight, Eye, Share2, FileText, BarChart3 } from 'lucide-react';
+import { ListSkeleton } from '@/components/ui/panel-skeletons';
 
 export default function StatsPage() {
   const [typeFilter, setTypeFilter] = useState<PostType | ''>('');
@@ -31,7 +32,7 @@ export default function StatsPage() {
   return (
     <div>
       <nav className="mb-6 flex items-center gap-2 text-sm text-ora-muted">
-        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Dashboard</Link>
+        <Link href="/ora-panel" className="hover:text-ora-charcoal transition-colors">Feed</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />
         <Link href="/ora-panel/blog" className="hover:text-ora-charcoal transition-colors">Blog</Link>
         <ChevronRight className="h-3.5 w-3.5 stroke-1" />
@@ -97,7 +98,7 @@ export default function StatsPage() {
             <h2 className="text-sm font-semibold text-ora-charcoal">Top Posts by Views</h2>
           </div>
           {topLoading ? (
-            <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse bg-ora-sand/60" />)}</div>
+            <ListSkeleton rows={3} rowClassName="h-10 rounded-none" className="space-y-2" />
           ) : !topPosts?.length ? (
             <p className="text-sm text-ora-muted">No data yet</p>
           ) : (
@@ -128,7 +129,7 @@ export default function StatsPage() {
             <h2 className="text-sm font-semibold text-ora-charcoal">Shares by Platform</h2>
           </div>
           {sharesLoading ? (
-            <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse bg-ora-sand/60" />)}</div>
+            <ListSkeleton rows={3} rowClassName="h-10 rounded-none" className="space-y-2" />
           ) : !shares?.length ? (
             <p className="text-sm text-ora-muted">No share data yet</p>
           ) : (
