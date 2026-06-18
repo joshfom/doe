@@ -39,6 +39,7 @@ import {
   tickets,
 } from "../schema";
 import { ORA_KNOWLEDGE_DOCS } from "./ora-knowledge";
+import { clearVoiceDemo, seedVoiceDemo } from "./voice-demo";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1332,6 +1333,11 @@ export interface SeedDemoSummary {
   conversations: number;
   knowledgeDocs: number;
   namedVillaClients: number;
+  voiceReps: number;
+  voiceParties: number;
+  voiceLeads: number;
+  voiceViewingSlots: number;
+  voiceMarketingSpend: number;
 }
 
 /**
@@ -1377,6 +1383,11 @@ export async function seedDemo(db: Database): Promise<SeedDemoSummary> {
     namedVillaClients = named.length;
   }
 
+  // 10. DOE Voice Surface demo dataset (reps, parties, leads, slots, 90-day
+  //     metrics spread) — every row carries `demo = true` (Requirements 11.4,
+  //     11.5). Self-clears its own scope first, so it stays idempotent.
+  const voice = await seedVoiceDemo(db);
+
   return {
     communities: seededCommunities.length,
     projects: seededProjects.length,
@@ -1387,6 +1398,11 @@ export async function seedDemo(db: Database): Promise<SeedDemoSummary> {
     conversations: 3,
     knowledgeDocs: ORA_KNOWLEDGE_DOCS.length,
     namedVillaClients,
+    voiceReps: voice.reps,
+    voiceParties: voice.parties,
+    voiceLeads: voice.leads,
+    voiceViewingSlots: voice.viewingSlots,
+    voiceMarketingSpend: voice.marketingSpend,
   };
 }
 
@@ -1502,6 +1518,11 @@ export async function resetDemo(db: Database): Promise<{
   const communitiesRes = await db
     .delete(communities)
     .where(like(communities.slug, "demo-bayn%"));
+
+  // 9. DOE Voice Surface demo scope (reps, parties, identities, leads, slots,
+  //    marketing spend) — removed by the shared `demo = true` flag so the full
+  //    demo reset clears the voice dataset too (Requirements 11.4, 11.6).
+  await clearVoiceDemo(db);
 
   return {
     knowledgeDocs: knowledgeDocsRemoved,

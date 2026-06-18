@@ -628,3 +628,146 @@ export async function sendLeadEmail(
     return { success: false, error: message };
   }
 }
+
+// ── Report email (PDF attachment) ─────────────────────────────────────────────
+
+export interface SendReportEmailInput {
+  recipientEmail: string;
+  subject: string;
+  /** Rendered HTML body of the email. */
+  html: string;
+  /** Rendered PDF report bytes attached to the message. */
+  pdf: Uint8Array;
+  /** Attachment file name (defaults to "report.pdf"). */
+  fileName?: string;
+}
+
+/**
+ * Send an analytics report via Microsoft Graph mail with the rendered PDF
+ * attached. Returns the `messageId` recorded on `report_jobs` on success.
+ *
+ * Graph's `sendMail` action returns `202 Accepted` with an empty body and does
+ * not surface the created message id, so we generate a stable
+ * `client-request-id` and echo it back as the `messageId` — enough to correlate
+ * the receipt on `report_jobs` and the Demo Console. The voice job runner
+ * abstracts this behind an injectable sender so tests never touch Graph.
+ */
+export async function sendReportEmail(
+  input: SendReportEmailInput
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const token = await acquireToken();
+    const senderEmail = getSenderEmail();
+
+    const pdfBase64 = Buffer.from(input.pdf).toString("base64");
+    const clientRequestId = crypto.randomUUID();
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "client-request-id": clientRequestId,
+      },
+      body: JSON.stringify({
+        message: {
+          subject: input.subject,
+          body: { contentType: "HTML", content: input.html },
+          toRecipients: [{ emailAddress: { address: input.recipientEmail } }],
+          attachments: [
+            {
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: input.fileName ?? "report.pdf",
+              contentType: "application/pdf",
+              contentBytes: pdfBase64,
+            },
+          ],
+        },
+        saveToSentItems: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "Unknown error");
+      return {
+        success: false,
+        error: `Graph API sendMail failed (${response.status}): ${errorBody}`,
+      };
+    }
+
+    const messageId =
+      response.headers.get("request-id") ??
+      response.headers.get("client-request-id") ??
+      clientRequestId;
+
+    return { success: true, messageId };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return { success: false, error: message };
+  }
+}
+
+// ── Generic HTML mail sender ──────────────────────────────────────────────────
+
+export interface SendGraphMailInput {
+  /** One or more recipient addresses. */
+  to: string | string[];
+  subject: string;
+  /** Pre-rendered HTML body. */
+  htmlContent: string;
+}
+
+/**
+ * Sends a generic HTML email via the Microsoft Graph API, reusing the cached
+ * OAuth2 client-credentials token and the configured sender mailbox.
+ *
+ * Unlike the templated senders above (`sendOtpEmail`, `sendAppointmentEmail`,
+ * `sendLeadEmail`), this is a thin transport for callers that have already
+ * rendered their own body — e.g. the async job handlers
+ * (`morning_briefing`, `compile_and_email_report`). Returns
+ * `{ success: true }` on success, or `{ success: false, error }` on failure.
+ */
+export async function sendGraphMail(
+  input: SendGraphMailInput
+): Promise<{ success: boolean; error?: string }> {
+  const recipients = Array.isArray(input.to) ? input.to : [input.to];
+
+  try {
+    const token = await acquireToken();
+    const senderEmail = getSenderEmail();
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${senderEmail}/sendMail`;
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject: input.subject,
+          body: { contentType: "HTML", content: input.htmlContent },
+          toRecipients: recipients.map((address) => ({
+            emailAddress: { address },
+          })),
+        },
+        saveToSentItems: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "Unknown error");
+      return {
+        success: false,
+        error: `Graph API sendMail failed (${response.status}): ${errorBody}`,
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return { success: false, error: message };
+  }
+}

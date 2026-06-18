@@ -11,6 +11,7 @@ import { getPostHogServer } from "@/lib/analytics/posthog-server";
 import { hashIdentifier } from "@/lib/analytics/hash-identifier";
 import { sendConversion } from "@/lib/analytics/capi";
 import { getActiveConversionGoals } from "../../conversion-goals";
+import { captureFormSubmissionLead } from "../../leads/capture";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,6 +151,20 @@ const publicForms = new Elysia({ name: "forms-public" })
         lastTouchAttribution: lastTouch,
       })
       .returning();
+
+    // ── Lead Engine capture ──────────────────────────────────────────────
+    // The Lead Engine is the single lead collector: route every submission into
+    // the durable inbound_leads ledger so it becomes a first-class lead the
+    // Console can analyze, qualify, route, and sync to Salesforce. Fire-and-
+    // forget + idempotent by submission id — it never blocks or fails the POST.
+    void captureFormSubmissionLead(db, {
+      submissionId: submission.id,
+      formId,
+      formName: form.name ?? "Form",
+      data,
+      sourcePageSlug: sourcePageSlug ?? null,
+      attribution: hasMarketingConsent ? attribution : null,
+    });
 
     // Fire PostHog server-side event if attribution is available
     if (hasMarketingConsent && attribution) {

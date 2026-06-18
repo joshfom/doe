@@ -37,6 +37,14 @@ import {
 import type { TicketStatus } from "../types";
 import { transitionTicketStatus } from "../tickets/lifecycle";
 import { logAudit } from "../audit";
+// Migration_Switch (Requirements 7, 9, 14). Imported from the switch module
+// directly — NOT from the agents barrel (`../agents`) — because the barrel
+// re-exports the Mastra runtime. `migration-switch.ts` pulls in no Mastra code
+// (only the db + schema), so this deterministic module (mounted on the Next.js
+// serverless route via `ai-admin.ts`) stays free of the Mastra runtime. The
+// agent path itself is loaded lazily (dynamic import) only when a capability is
+// actually routed to it (Requirement 15.3).
+import { serveCapability, type Capability } from "../agents/migration-switch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +62,18 @@ export interface AdminAgentInput {
   message: string;
   /** Optional confirmation token — when present, executes the bound action. */
   confirmationToken?: string;
+  /**
+   * The requesting user's RBAC roles. Used only for persona shaping when a turn
+   * is delegated to the Mastra twin (the feed's agent). Optional; defaults to
+   * an empty set (per-tool RBAC is enforced under the agent identity, not these
+   * roles).
+   */
+  roles?: string[];
+  /**
+   * Prior conversation turns for this session (oldest → newest), so a delegated
+   * twin turn reasons with context. Optional.
+   */
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export interface PendingActionPayload {
@@ -91,6 +111,12 @@ export interface AdminAgentResult {
     affected: number;
     detail?: Record<string, unknown>;
   };
+  /**
+   * Structured tool results when the turn was served by the Mastra twin (the
+   * feed's agent) — the same `{toolName, result}` envelopes the home feed
+   * renders as typed cards (e.g. `add_stack_item`, `query_leads`).
+   */
+  toolResults?: Array<{ toolName: string; result: unknown }>;
   metadata?: Record<string, unknown>;
 }
 
@@ -607,20 +633,55 @@ function isoDate(d: Date): string {
 
 // ── Reports ──────────────────────────────────────────────────────────────────
 
+/**
+ * Lead count sourced from the `metrics_leads` SQL view over `leads_mirror`
+ * (Salesforce Lead Core S2, task 7.1; design §6.4). Lead figures come from SQL
+ * over the canonical Lead world (`parties` + `leads_mirror`), NOT from the
+ * retired `tickets.request_type = 'lead_inquiry'` shim, and are never computed
+ * in a model or in application code beyond summing the view's `lead_count`
+ * rows (Req 9.1, 9.2, 13.8, 13.9). An optional inclusive day window is applied
+ * in SQL against the view's `day` column.
+ *
+ * On a query failure (or `metrics_leads`/`leads_mirror` being unavailable) the
+ * error is surfaced to the caller; the path never substitutes a figure computed
+ * outside the view (Req 9.4).
+ */
+async function queryLeadCount(
+  db: Database,
+  window?: { start?: Date; end?: Date }
+): Promise<number> {
+  const conds: ReturnType<typeof sql>[] = [];
+  if (window?.start) conds.push(sql`day >= ${isoDate(window.start)}`);
+  if (window?.end) conds.push(sql`day <= ${isoDate(window.end)}`);
+  const whereClause = conds.length
+    ? sql` WHERE ${sql.join(conds, sql` AND `)}`
+    : sql``;
+  try {
+    const result = (await db.execute(
+      sql`SELECT COALESCE(SUM(lead_count), 0)::int AS leads FROM metrics_leads${whereClause}`
+    )) as { rows: Array<{ leads: number | string }> };
+    return Number(result.rows[0]?.leads ?? 0);
+  } catch (err) {
+    // Req 9.4 — surface the failure; never fall back to a ticket/model figure.
+    throw new Error(
+      `metrics_leads lead-count query failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+}
+
 async function reportOverview(db: Database): Promise<string> {
   const [
     [{ projectsCount }],
     [{ clientsCount }],
-    [{ leadsCount }],
+    leadsCount,
     [{ openTicketsCount }],
     [{ confirmedAppointmentsCount }],
   ] = await Promise.all([
     db.select({ projectsCount: sql<number>`count(*)::int` }).from(projects),
     db.select({ clientsCount: sql<number>`count(*)::int` }).from(aiClients),
-    db
-      .select({ leadsCount: sql<number>`count(*)::int` })
-      .from(tickets)
-      .where(eq(tickets.requestType, "lead_inquiry")),
+    queryLeadCount(db),
     db
       .select({ openTicketsCount: sql<number>`count(*)::int` })
       .from(tickets)
@@ -637,7 +698,7 @@ async function reportOverview(db: Database): Promise<string> {
     "Here's the current snapshot:",
     `• Projects: ${projectsCount}`,
     `• Clients in CRM: ${clientsCount}`,
-    `• Leads (lead_inquiry tickets): ${leadsCount}`,
+    `• Leads: ${leadsCount}`,
     `• Open / in-progress tickets: ${openTicketsCount}`,
     `• Active appointments (confirmed or rescheduled): ${confirmedAppointmentsCount}`,
   ].join("\n");
@@ -677,15 +738,12 @@ async function reportClients(db: Database): Promise<string> {
 }
 
 async function reportLeads(db: Database, window: DateWindow | null): Promise<string> {
-  const conds = [eq(tickets.requestType, "lead_inquiry")];
-  if (window) {
-    conds.push(gte(tickets.createdAt, window.start));
-    conds.push(lte(tickets.createdAt, window.end));
-  }
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tickets)
-    .where(and(...conds));
+  // Sourced from the `metrics_leads` SQL view (over `leads_mirror`), never the
+  // retired `lead_inquiry` ticket shim (task 7.1; Req 9.1, 9.2, 13.8, 13.9).
+  const count = await queryLeadCount(
+    db,
+    window ? { start: window.start, end: window.end } : undefined
+  );
   const suffix = window ? ` from ${window.label}` : "";
   return `${count} lead(s)${suffix}.`;
 }
@@ -1390,7 +1448,7 @@ async function listTicketsByPriority(
 
 // ── Confirmed-action executors ───────────────────────────────────────────────
 
-async function executeBulkCompleteBookings(
+export async function executeBulkCompleteBookings(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1422,7 +1480,7 @@ async function executeBulkCompleteBookings(
   };
 }
 
-async function executeBulkCancelBookings(
+export async function executeBulkCancelBookings(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1498,7 +1556,7 @@ async function closeTicketViaLifecycle(
   }
 }
 
-async function executeBulkCloseTickets(
+export async function executeBulkCloseTickets(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1535,7 +1593,7 @@ async function executeBulkCloseTickets(
   };
 }
 
-async function executeBulkCloseTicketsByIds(
+export async function executeBulkCloseTicketsByIds(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1544,7 +1602,7 @@ async function executeBulkCloseTicketsByIds(
   return { ...r, executed: r.executed ? { ...r.executed, kind: "bulk_close_tickets_by_ids" } : undefined };
 }
 
-async function executeBulkCloseTicketsByStatus(
+export async function executeBulkCloseTicketsByStatus(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1553,7 +1611,7 @@ async function executeBulkCloseTicketsByStatus(
   return { ...r, executed: r.executed ? { ...r.executed, kind: "bulk_close_tickets_by_status" } : undefined };
 }
 
-async function executeCancelAppointmentAction(
+export async function executeCancelAppointmentAction(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1583,7 +1641,7 @@ async function executeCancelAppointmentAction(
   };
 }
 
-async function executeCompleteAppointmentAction(
+export async function executeCompleteAppointmentAction(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1611,7 +1669,7 @@ async function executeCompleteAppointmentAction(
   };
 }
 
-async function executeRescheduleAppointmentAction(
+export async function executeRescheduleAppointmentAction(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1652,7 +1710,7 @@ async function executeRescheduleAppointmentAction(
   };
 }
 
-async function executeChangeTicketStatusAction(
+export async function executeChangeTicketStatusAction(
   db: Database,
   userId: string,
   args: Record<string, unknown>
@@ -1892,6 +1950,152 @@ const HELP_TEXT = [
 ].join("\n");
 
 export async function runAdminAgent(
+  db: Database,
+  input: AdminAgentInput
+): Promise<AdminAgentResult> {
+  // Migration_Switch (Requirements 7, 9, 14): map this turn to the migrated
+  // Capability it concerns (a report, or `admin_destructive` for the
+  // propose/confirm + destructive intents). When a turn maps to no migrated
+  // capability (lists, personal queries, help, unknown), serve it directly via
+  // the deterministic path. With every `agent_migration_flags` row defaulting
+  // to deterministic, `serveCapability` runs `runAdminAgentDeterministic` and
+  // never touches the Mastra runtime; only a capability flagged
+  // `mode = "agent" && enabled` is served by the admin Agent, and any
+  // agent-path error falls back to the deterministic dispatch for that
+  // capability (Requirements 7.2, 7.3, 14.2, 14.3). The agent path is imported
+  // lazily (dynamic `import`) so Mastra is never bundled onto the Next.js
+  // serverless route (Requirement 15.3). The route `ai-admin.ts` is unchanged —
+  // the switch lives entirely behind `runAdminAgent` (CC-NoRegress).
+  const capability = detectAdminCapability(input);
+  if (!capability) {
+    // The deterministic path only knows reports, lists, personal queries, help,
+    // and the destructive confirm flow. Anything else (create a ticket, add a
+    // task, brainstorm on the pipeline, ask about the platform…) used to dead-
+    // end at "I didn't catch that". Those general turns are now delegated to the
+    // Mastra twin — the SAME agent + audited tool catalog the home feed uses —
+    // so /ai gains the full feed functionality (Mastra upgrade parity).
+    if (detectAdminIntent(input.message) === "unknown") {
+      return runAdminViaTwin(input);
+    }
+    return runAdminAgentDeterministic(db, input);
+  }
+
+  return serveCapability(
+    db,
+    capability,
+    async () => {
+      const { runAdminAgentTurn } = await import("../agents/admin-agent");
+      return runAdminAgentTurn(db, input, capability);
+    },
+    () => runAdminAgentDeterministic(db, input)
+  );
+}
+
+/**
+ * Delegate a general admin turn to the Mastra twin (the feed's `homeAgent`),
+ * which is bound to the audited tool catalog (ticket creation via
+ * `add_stack_item`, `query_leads`, `get_pipeline_summary`, reports, platform
+ * Q&A, CRM analytics). This is the bridge that makes the /ai Platform Copilot
+ * use the same tool-calling as the home feed after the Mastra upgrade.
+ *
+ * The agent module is imported lazily so Mastra is never bundled onto the
+ * serverless route; this path only runs on the container tier (the same tier
+ * that already serves `/api/home/chat`). Any failure degrades to a friendly
+ * text reply so a turn never hard-fails.
+ */
+async function runAdminViaTwin(input: AdminAgentInput): Promise<AdminAgentResult> {
+  try {
+    const { runHomeAgentTurn } = await import("../agents/home-agent");
+    const turn = await runHomeAgentTurn({
+      userId: input.userId,
+      roles: input.roles ?? [],
+      message: input.message,
+      history: input.history ?? [],
+    });
+
+    if (turn.ok) {
+      return {
+        response: turn.response,
+        toolResults: turn.toolResults,
+        metadata: { via: "twin", modelTier: turn.modelTier },
+      };
+    }
+
+    // The only non-ok outcome today is a per-run budget ceiling crossing.
+    return {
+      response:
+        "That request needed more work than a single turn allows. Try narrowing it or splitting it into smaller steps.",
+      metadata: { via: "twin", reason: turn.reason },
+    };
+  } catch (err) {
+    console.error("[ai-admin] twin delegation failed", err);
+    return {
+      response:
+        "I couldn't complete that just now. Please try again in a moment.",
+    };
+  }
+}
+
+/**
+ * Map an admin turn to the migrated {@link Capability} it concerns, or `null`
+ * when the turn maps to no migrated capability (so it is served directly by the
+ * deterministic path). A confirmation echo and every destructive intent map to
+ * `admin_destructive`; the six read-only reports map to their report capability
+ * (Requirements 9.1, 9.3–9.5).
+ */
+function detectAdminCapability(input: AdminAgentInput): Capability | null {
+  // A confirmation echo executes a previously proposed destructive action.
+  if (input.confirmationToken) return "admin_destructive";
+
+  const intent = detectAdminIntent(input.message);
+  const reportCapability = REPORT_INTENT_TO_CAPABILITY[intent];
+  if (reportCapability) return reportCapability;
+  if (DESTRUCTIVE_ADMIN_INTENTS.has(intent)) return "admin_destructive";
+  return null;
+}
+
+/**
+ * The six read-only report intents that map 1:1 to a migrated report Capability
+ * (Requirement 9.1). Other read intents (`list_*`, `show_*`, `my_*`, `help`)
+ * are not migrated and stay on the deterministic path (Requirement 14.2).
+ */
+const REPORT_INTENT_TO_CAPABILITY: Partial<Record<AdminIntent, Capability>> = {
+  report_overview: "report_overview",
+  report_projects: "report_projects",
+  report_clients: "report_clients",
+  report_leads: "report_leads",
+  report_tickets: "report_tickets",
+  report_appointments: "report_appointments",
+};
+
+/**
+ * The destructive admin intents gated by the Admin_Confirmation_Flow
+ * (`decisions.md` Decision 7). Each proposes (or, on the confirmation echo,
+ * executes) a destructive action, so every one maps to the single
+ * `admin_destructive` Migration_Switch capability (Requirements 9.3–9.5).
+ */
+const DESTRUCTIVE_ADMIN_INTENTS: ReadonlySet<AdminIntent> = new Set<AdminIntent>(
+  [
+    "bulk_complete_bookings",
+    "bulk_cancel_bookings",
+    "bulk_close_tickets",
+    "bulk_close_tickets_by_ids",
+    "bulk_close_tickets_by_status",
+    "complete_appointment",
+    "cancel_appointment",
+    "reschedule_appointment",
+    "change_ticket_status",
+  ]
+);
+
+/**
+ * The deterministic admin dispatch — the existing keyword/regex intent path
+ * (`Deterministic_Path`). It is the fallback the Migration_Switch serves by
+ * default and on any agent-path error, and it serves unmigrated intents
+ * directly (Requirements 7.2, 7.3, 14.2, 14.3). Its behaviour is unchanged from
+ * before the switch was introduced.
+ */
+async function runAdminAgentDeterministic(
   db: Database,
   input: AdminAgentInput
 ): Promise<AdminAgentResult> {

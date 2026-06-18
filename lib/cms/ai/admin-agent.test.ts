@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   detectAdminIntent,
   parseDateWindow,
@@ -6,6 +6,22 @@ import {
   _resetPendingActionsForTests,
   type AdminIntent,
 } from "./admin-agent";
+
+// The deterministic admin agent delegates general ("unknown") turns to the
+// Mastra twin (the feed's home agent). Mock that module so the unit test never
+// pulls in the Mastra runtime / DB-backed memory, and so we can assert the
+// delegation wiring (response + structured toolResults) deterministically.
+vi.mock("../agents/home-agent", () => ({
+  runHomeAgentTurn: async (input: { message: string }) => ({
+    ok: true as const,
+    response: `Twin handled: ${input.message}`,
+    toolResults: [
+      { toolName: "add_stack_item", result: { id: "t1", ticketNumber: "ORA-000003" } },
+    ],
+    personaSource: "default" as const,
+    modelTier: "fast",
+  }),
+}));
 
 // Minimal fake of the drizzle-style fluent builder used by admin-agent reports.
 // Each chain ends in a thenable so `await db.select()...` resolves.
@@ -30,7 +46,15 @@ function buildFakeDb(rows: Record<string, unknown[]>): {
       const tableKey = `${key}:${tableNameOf(table)}`;
       calls.push(tableKey);
       return {
-        where: () => Promise.resolve(result),
+        where: () => ({
+          // Supports both `await ...where(...)` (reports) and
+          // `...where(...).limit(1)` (routeCapability flag lookup). With no
+          // seeded flag rows the lookup resolves empty → deterministic path.
+          limit: () => Promise.resolve(result),
+          orderBy: () => ({ limit: () => Promise.resolve(result) }),
+          then: (cb: (v: unknown[]) => unknown) =>
+            Promise.resolve(result).then(cb),
+        }),
         leftJoin: () => ({
           where: () => ({
             orderBy: () => ({ limit: () => Promise.resolve(result) }),
@@ -179,13 +203,17 @@ describe("runAdminAgent — text-only intents", () => {
     expect(res.pendingAction).toBeUndefined();
   });
 
-  it("returns a friendly message for unknown intent", async () => {
+  it("delegates a general (unknown) intent to the Mastra twin", async () => {
     const { db } = buildFakeDb({});
     const res = await runAdminAgent(db as never, {
       userId: "user-1",
-      message: "what is the meaning of life",
+      message: "create a ticket for the demo at 4pm",
     });
-    expect(res.response).toMatch(/(not sure|don't|help|understand)/i);
+    // The twin's narrated reply + its structured tool results flow through so
+    // /ai renders the same typed cards (e.g. ticket creation) as the home feed.
+    expect(res.response).toContain("Twin handled");
+    expect(res.toolResults?.[0]?.toolName).toBe("add_stack_item");
+    expect(res.metadata?.via).toBe("twin");
   });
 });
 

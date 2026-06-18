@@ -26,6 +26,7 @@ import { approvalConfigRoutes } from "./routes/approval-config";
 import { approvalRoutes } from "./routes/approvals";
 import { usersRoutes } from "./routes/users";
 import { ticketsRoutes } from "./routes/tickets";
+import { leadsRoutes } from "./routes/leads";
 import { ticketCategoriesRoutes } from "./routes/ticket-categories";
 import { communitiesRoutes } from "./routes/communities";
 import { projectsRoutes } from "./routes/projects";
@@ -48,6 +49,20 @@ import { customEventsRoutes } from "./routes/custom-events";
 import { conversionGoalsRoutes } from "./routes/conversion-goals";
 import { utmAnalyticsRoutes } from "./routes/utm-analytics";
 import { sitemapRoutes } from "./routes/sitemap";
+// DOE Voice Surface route modules (task 19.1). voice/tools/demo-admin resolve on
+// the Next mount (request/response); realtime SSE is effective only on the Bun
+// mount (`api.listen`), where the stream can stay open. See design §3, §10.
+import { voiceRoutes } from "./routes/voice";
+import { toolsRoutes } from "./routes/tools";
+import { realtimeRoutes, realtimeLeadsRoutes } from "./routes/realtime";
+import { demoAdminRoutes } from "./routes/demo-admin";
+// Agent-First Home / Briefing Surface (S5, task 11). Bun-mounted Elysia
+// transports attached to THIS single app (no second mount): GET /home/briefing,
+// POST /home/chat, GET /home/health + the SSE-bus Briefing_Cache invalidation
+// listener (wired on `.listen()` via the plugin's onStart). The chat turn and
+// health probe dynamically import the agent runtime, so this static import
+// pulls no `@mastra` into the Next bridge bundle.
+import { homeRoutes } from "./routes/home";
 
 // ── One-time RBAC init ───────────────────────────────────────────────────────
 // When running under `next dev`, the standalone server.ts entry never executes,
@@ -118,6 +133,7 @@ export const api = new Elysia({ prefix: "/api" })
   .use(approvalRoutes)
   .use(usersRoutes)
   .use(ticketsRoutes)
+  .use(leadsRoutes) // POST /api/leads/simulate (+ inspect) — lead-engine test harness
   .use(ticketCategoriesRoutes)
   .use(communitiesRoutes)
   .use(projectsRoutes)
@@ -139,4 +155,23 @@ export const api = new Elysia({ prefix: "/api" })
   .use(customEventsRoutes)
   .use(conversionGoalsRoutes)
   .use(utmAnalyticsRoutes)
-  .use(sitemapRoutes);
+  .use(sitemapRoutes)
+  // ── DOE Voice Surface (task 19.1) ──────────────────────────────────────────
+  // Additive registration, after the existing routes and before `type Api`, so
+  // the single `api` instance — and the `Api` type Eden Treaty consumes — now
+  // includes the voice surface. `realtimeRoutes` rides the same instance but is
+  // only useful on the Bun mount (`server.ts`), where the SSE stream stays open.
+  .use(voiceRoutes) // POST /api/voice/sessions, GET /api/voice/sessions/:id
+  .use(toolsRoutes) // POST /api/tools/:toolName (service-token guarded)
+  .use(realtimeRoutes) // GET /api/realtime/events (SSE) — durable on Bun mount only
+  .use(realtimeLeadsRoutes) // GET /api/realtime/leads (SSE, leads:read) — Bun mount only
+  .use(demoAdminRoutes) // POST /api/demo/reset (admin-gated)
+  // ── Agent-First Home / Briefing Surface (S5, task 11) ──────────────────────
+  // GET /api/home/briefing, POST /api/home/chat, GET /api/home/health. The
+  // Briefing_Cache invalidation listener subscribes on the Bun mount's
+  // `.listen()` (the plugin's onStart), never on the Next `.handle()` bridge.
+  .use(homeRoutes);
+
+// Single app type consumed by every Eden Treaty client (web, agent worker,
+// job runner, Demo Console). See design §3 and §16.
+export type Api = typeof api;

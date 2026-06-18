@@ -107,10 +107,32 @@ export const aiAdminRoutes = new Elysia({ name: "ai-admin" })
     }
 
     try {
+      // Load this session's prior turns (oldest → newest) so a delegated twin
+      // turn reasons with conversation context. Best-effort: history failures
+      // never block the turn.
+      let history: Array<{ role: "user" | "assistant"; content: string }> = [];
+      if (parsed.data.sessionId) {
+        try {
+          const rows = await db
+            .select({
+              role: adminChatMessages.role,
+              content: adminChatMessages.content,
+            })
+            .from(adminChatMessages)
+            .where(eq(adminChatMessages.sessionId, parsed.data.sessionId))
+            .orderBy(adminChatMessages.createdAt)
+            .limit(20);
+          history = rows;
+        } catch (err) {
+          console.error("[ai-admin] history load failed (non-fatal)", err);
+        }
+      }
+
       const result = await runAdminAgent(db, {
         userId,
         message: parsed.data.message,
         confirmationToken: parsed.data.confirmationToken,
+        history,
       });
 
       // Persist this turn into a chat session. A confirmation echo (no real

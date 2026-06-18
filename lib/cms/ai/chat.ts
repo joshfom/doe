@@ -16,10 +16,19 @@ import type { AccountSummary, ClientPaymentPlanSummary } from "./actions";
 import type { ChatMessage } from "./gateway";
 import { handleOtpGate } from "./otp";
 import type { OtpVerificationState } from "./otp";
-import { runAgent, loadConversationContact } from "./agent";
+import { runAgent, loadConversationContact, detectIntent } from "./agent";
+import type { AgentIntent, AgentInput, AgentResult } from "./agent";
+// Migration_Switch (Requirements 7, 14). Imported from the switch module
+// directly — NOT from the agents barrel (`../agents`) — because the barrel
+// re-exports the Mastra runtime. `migration-switch.ts` pulls in no Mastra code
+// (only the db + schema), so the public chat flow stays free of the Mastra
+// runtime on the Next.js serverless route. The agent path itself is loaded
+// lazily (dynamic import) only when a capability is actually routed to it.
+import { serveCapability, type Capability } from "../agents/migration-switch";
 import { getPostHogServer } from "@/lib/analytics/posthog-server";
 import { hashIdentifier } from "@/lib/analytics/hash-identifier";
 import type { AttributionData } from "@/lib/analytics/types";
+import { captureChatLead } from "../leads/capture";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,6 +169,33 @@ const CAPABILITIES_REPLY_AR =
   "- كل محادثة ورسالة ومحاولة OTP وكتابة تذكرة محفوظة في Postgres مع تدقيق.\n" +
   "- جميع نداءات النموذج عبر Cloudflare AI Gateway (Workers AI Llama 3.1/3.3 و BGE).\n\n" +
   "جرّب: *\"افتح تذكرة انتقال\"*، *\"أرسل لي رمز التحقق\"*، أو *\"خذني إلى صفحة اتصل بنا\"*.";
+
+// ── Migration_Switch: text intent → migrated Capability ──────────────────────
+
+/**
+ * Maps a deterministic {@link AgentIntent} to the Migration_Switch
+ * {@link Capability} that may serve it via the Mastra text agent. Only the ten
+ * migrated text capabilities (Requirement 8.1) are mappable; control intents
+ * (`confirm_pending`, `decline_pending`, `none`) have no agent equivalent and
+ * always run the deterministic path.
+ *
+ * The migration order itself is governed per-capability by the
+ * `agent_migration_flags` table (decisions.md Decision 5); this map only says
+ * which capability a turn is about. With every flag defaulting to deterministic,
+ * `serveCapability` runs `runAgent` and never loads the Mastra runtime.
+ */
+const INTENT_TO_CAPABILITY: Partial<Record<AgentIntent, Capability>> = {
+  create_lead: "create_lead",
+  register_lead: "register_lead",
+  create_ticket: "create_ticket",
+  create_booking: "create_booking",
+  cancel_appointment: "cancel_appointment",
+  reschedule_appointment: "reschedule_appointment",
+  request_otp: "request_otp",
+  request_handover: "request_handover",
+  navigate: "navigate",
+  provide_contact: "provide_contact",
+};
 
 // ── handleChatMessage ────────────────────────────────────────────────────────
 
@@ -371,6 +407,19 @@ async function handleChatMessageInner(
     } catch (err) {
       console.error("[chat] ai_conversation_started capture failed", err);
     }
+
+    // ── Lead Engine capture ──────────────────────────────────────────────
+    // The marketing-site chat popup is a lead source: route the opening enquiry
+    // into the durable inbound_leads ledger so it becomes a first-class lead in
+    // the Lead Engine. Fire-and-forget + idempotent by conversation id (exactly
+    // one lead per conversation) — it never blocks or fails the chat turn.
+    void captureChatLead(db, {
+      conversationId,
+      message: input.message,
+      email: input.email,
+      phone: input.phone,
+      attribution: input.attribution,
+    });
   }
 
   // ── Step 2: Resolve identity ─────────────────────────────────────────────
@@ -468,7 +517,7 @@ async function handleChatMessageInner(
   // gate, identity stays "visitor", and personal data leaks through RAG.
   const previousIdentityType = identity.type;
   const conversationContact = await loadConversationContact(db, conversationId);
-  const agentResult = await runAgent(db, {
+  const agentInput: AgentInput = {
     conversationId,
     message: input.message,
     history: conversationHistory,
@@ -476,7 +525,40 @@ async function handleChatMessageInner(
     language,
     contact: conversationContact,
     attribution: input.attribution,
-  });
+  };
+
+  // Migration_Switch (Requirements 7, 8, 14): when the detected text intent maps
+  // to a migrated Capability, route it through `serveCapability`. With the
+  // capability's `agent_migration_flags` row defaulting to deterministic, this
+  // runs the existing `runAgent` and never touches the Mastra runtime; only a
+  // capability flagged `mode = "agent" && enabled` is served by the text agent,
+  // and any agent-path error falls back to `runAgent` for that capability
+  // (Requirements 7.2, 7.3, 14.2, 14.3). The agent path is imported lazily
+  // (dynamic `import`) so Mastra is never bundled onto the Next.js serverless
+  // route (Requirement 15.3).
+  const capability = INTENT_TO_CAPABILITY[detectIntent(input.message)];
+  const agentResult: AgentResult = capability
+    ? await serveCapability(
+        db,
+        capability,
+        async () => {
+          const { runTextAgentTurn } = await import("../agents/text-agent");
+          return runTextAgentTurn(
+            db,
+            {
+              conversationId,
+              message: input.message,
+              history: conversationHistory,
+              identity,
+              language,
+              contact: conversationContact,
+            },
+            capability,
+          );
+        },
+        () => runAgent(db, agentInput),
+      )
+    : await runAgent(db, agentInput);
 
   // Upgrade the working identity if the agent learned more about the user.
   if (agentResult.identity) {
