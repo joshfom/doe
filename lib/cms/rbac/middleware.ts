@@ -227,3 +227,64 @@ export function requirePermission(permission?: string) {
       }
     });
 }
+
+// ── requireAdmin ─────────────────────────────────────────────────────────────
+
+/**
+ * Elysia plugin that gates a route to platform administrators only.
+ *
+ * Used by destructive, platform-wide operations such as `POST /api/demo/reset`
+ * (DOE Voice Surface, task 18.2 / Req 14.7), which wipes the demo dataset and
+ * must never be reachable by an ordinary authenticated user.
+ *
+ * "Admin" is the global RBAC wildcard `*:*` — the permission held only by the
+ * `super_admin` role (see `ROLE_PERMISSION_MAP` in `rbac/seed.ts`). Resolving
+ * permissions and checking the wildcard reuses the same machinery as
+ * `requirePermission`, so this stays consistent with every other guarded route.
+ *
+ * Compose it after `identityGuard` (which establishes the authenticated
+ * `userId`), exactly like `requirePermission`:
+ *
+ * ```ts
+ * new Elysia().use(identityGuard).use(requireAdmin)
+ * ```
+ */
+export const requireAdmin = new Elysia({ name: "requireAdmin" })
+  .derive({ as: "scoped" }, async (ctx: any) => {
+    const userId: string = ctx.userId;
+
+    const cached = permissionCache.get(userId);
+    if (cached) {
+      return {
+        resolvedRoles: cached.roles,
+        resolvedPermissions: cached.permissions,
+      };
+    }
+
+    const userRolesResult = await loadUserRoles(db, userId);
+    const roleNames = userRolesResult.map((r) => r.name);
+    const perms = await resolvePermissions(db, userRolesResult);
+
+    permissionCache.set(userId, {
+      roles: roleNames,
+      permissions: perms,
+    });
+
+    return {
+      resolvedRoles: roleNames,
+      resolvedPermissions: perms,
+    };
+  })
+  .onBeforeHandle({ as: "scoped" }, (ctx: any) => {
+    const resolvedPermissions: string[] = ctx.resolvedPermissions ?? [];
+
+    // Admin == the global `*:*` wildcard (super_admin). `hasPermission` returns
+    // true for any required permission when `*:*` is present, so we check the
+    // wildcard directly to demand full admin rather than a narrow grant.
+    if (!resolvedPermissions.includes("*:*")) {
+      ctx.set.status = 403;
+      return {
+        error: "Access denied: admin privileges required",
+      };
+    }
+  });
