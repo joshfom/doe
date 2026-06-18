@@ -34,6 +34,71 @@ const BASE_DELAY_MS = 1000; // 1s, 2s, 4s with exponential backoff
 const TOKEN_ENDPOINT_PATH = "/services/oauth2/token";
 const CASE_SOBJECT_PATH = "/services/data/v59.0/sobjects/Case";
 
+// ── Typed transport errors (Requirement 1.6, 1.7) ─────────────────────────────
+
+/**
+ * Raised when a Salesforce request fails authentication and a single
+ * re-authentication retry does not recover it. Terminal — never retried by
+ * `withRetry`. (Requirement 1.6)
+ */
+export class SfAuthError extends Error {
+  readonly status: number;
+  constructor(message: string, status = 401) {
+    super(message);
+    this.name = "SfAuthError";
+    this.status = status;
+  }
+}
+
+/**
+ * Raised on a non-2xx Salesforce HTTP response other than the 401 handled by
+ * the re-auth path. `transient` is true for HTTP 429 and any 5xx (worth
+ * retrying with backoff); false for other 4xx validation-style responses,
+ * which are terminal so retries are not wasted. (Requirement 1.7)
+ */
+export class SfHttpError extends Error {
+  readonly status: number;
+  readonly transient: boolean;
+  constructor(message: string, status: number, transient: boolean) {
+    super(message);
+    this.name = "SfHttpError";
+    this.status = status;
+    this.transient = transient;
+  }
+}
+
+/**
+ * Raised when the underlying fetch fails at the network layer (connection
+ * timeout, DNS failure, connection reset). Always transient. (Requirement 1.7)
+ */
+export class SfNetworkError extends Error {
+  readonly transient = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "SfNetworkError";
+  }
+}
+
+/**
+ * Classify whether an error represents a transient Salesforce failure
+ * (HTTP 429, any 5xx, or a network timeout) that is worth retrying.
+ */
+export function isTransientError(error: unknown): boolean {
+  if (error instanceof SfHttpError) return error.transient;
+  if (error instanceof SfNetworkError) return true;
+  return false;
+}
+
+/**
+ * Classify whether an error is terminal and must NOT be retried: a surfaced
+ * authentication failure, or a non-transient (other-4xx) HTTP error.
+ */
+function isTerminalError(error: unknown): boolean {
+  if (error instanceof SfAuthError) return true;
+  if (error instanceof SfHttpError) return !error.transient;
+  return false;
+}
+
 // ── Priority mapping ─────────────────────────────────────────────────────────
 
 /**
@@ -69,6 +134,12 @@ function sleep(ms: number): Promise<void> {
  * Execute an async function with retry logic.
  * Retries up to `maxRetries` times with exponential backoff (1s, 2s, 4s).
  * Throws the last error if all retries are exhausted.
+ *
+ * Terminal errors (a surfaced {@link SfAuthError} or a non-transient
+ * {@link SfHttpError}, i.e. a 4xx other than 401) are re-thrown immediately
+ * without consuming retries, so validation failures don't waste backoff
+ * attempts. Transient errors (HTTP 429, any 5xx, or a network timeout) and any
+ * unclassified errors are retried. (Requirement 1.7)
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -82,6 +153,11 @@ export async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Don't waste retries on terminal failures.
+      if (isTerminalError(lastError)) {
+        throw lastError;
+      }
 
       if (attempt < maxRetries) {
         const delayMs = baseDelayMs * Math.pow(2, attempt);
@@ -169,8 +245,16 @@ export class SalesforceAdapter implements CrmAdapter {
   // ── API helpers ──────────────────────────────────────────────────────────
 
   /**
-   * Make an authenticated request to the Salesforce REST API.
-   * Throws on non-2xx responses.
+   * Make a single authenticated request to the Salesforce REST API.
+   *
+   * This is the low-level, single-attempt transport: it classifies failures
+   * into typed errors but performs no re-auth or retry of its own (those are
+   * the responsibility of {@link requestJson} and {@link withRetry}).
+   *
+   * - HTTP 401 → clears the cached token and throws {@link SfAuthError}.
+   * - HTTP 429 / 5xx → throws a transient {@link SfHttpError}.
+   * - Other non-2xx (4xx) → throws a terminal {@link SfHttpError}.
+   * - Network-layer failure (timeout/DNS/reset) → throws {@link SfNetworkError}.
    */
   private async sfRequest<T>(
     method: string,
@@ -185,23 +269,34 @@ export class SalesforceAdapter implements CrmAdapter {
       "Content-Type": "application/json",
     };
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (err) {
+      // Connection timeout / DNS / reset — transient (Requirement 1.7).
+      throw new SfNetworkError(
+        `Salesforce network error: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
 
-    // If we get a 401, clear token and re-throw so retry logic can re-auth
+    // On a 401, clear the cached token so the re-auth path can refresh it.
     if (response.status === 401) {
       this.accessToken = null;
       this.instanceUrl = null;
-      throw new Error("Salesforce session expired or invalid");
+      throw new SfAuthError("Salesforce session expired or invalid", 401);
     }
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Salesforce API error (${response.status}): ${errorText}`
+      const transient = response.status === 429 || response.status >= 500;
+      throw new SfHttpError(
+        `Salesforce API error (${response.status}): ${errorText}`,
+        response.status,
+        transient
       );
     }
 
@@ -211,6 +306,46 @@ export class SalesforceAdapter implements CrmAdapter {
     }
 
     return (await response.json()) as T;
+  }
+
+  /**
+   * Reusable JSON transport over the Salesforce REST API, shared by the legacy
+   * Case methods and the first-class object client (`salesforce-objects.ts`).
+   *
+   * Single-shot 401 re-auth (Requirement 1.6): if a request returns HTTP 401,
+   * the cached token is cleared, the client re-authenticates, and the request
+   * is retried exactly once. If the retried request also returns 401, a typed
+   * {@link SfAuthError} is surfaced rather than looping.
+   *
+   * Transient HTTP/network failures (429 / 5xx / timeout) surface as retryable
+   * errors and other 4xx as terminal, so callers can wrap this in
+   * {@link withRetry} for the bounded exponential backoff (Requirement 1.7).
+   */
+  async requestJson<T>(
+    method: string,
+    path: string,
+    body?: Record<string, unknown>
+  ): Promise<T> {
+    try {
+      return await this.sfRequest<T>(method, path, body);
+    } catch (error) {
+      if (error instanceof SfAuthError) {
+        // Single-shot re-auth: token was already cleared by sfRequest.
+        await this.authenticate();
+        try {
+          return await this.sfRequest<T>(method, path, body);
+        } catch (retryError) {
+          if (retryError instanceof SfAuthError) {
+            throw new SfAuthError(
+              "Salesforce authentication failed after re-authentication",
+              retryError.status
+            );
+          }
+          throw retryError;
+        }
+      }
+      throw error;
+    }
   }
 
   // ── CrmAdapter implementation ────────────────────────────────────────────
@@ -223,7 +358,7 @@ export class SalesforceAdapter implements CrmAdapter {
     return withRetry(async () => {
       const sfCase = this.mapToSalesforceCase(input);
 
-      const result = await this.sfRequest<SalesforceCreateResponse>(
+      const result = await this.requestJson<SalesforceCreateResponse>(
         "POST",
         CASE_SOBJECT_PATH,
         sfCase
@@ -253,7 +388,7 @@ export class SalesforceAdapter implements CrmAdapter {
     return withRetry(async () => {
       const sfUpdates = this.mapToSalesforceCase(updates);
 
-      await this.sfRequest<void>(
+      await this.requestJson<void>(
         "PATCH",
         `${CASE_SOBJECT_PATH}/${externalId}`,
         sfUpdates
@@ -272,7 +407,7 @@ export class SalesforceAdapter implements CrmAdapter {
    */
   async getCaseStatus(externalId: string): Promise<string> {
     return withRetry(async () => {
-      const result = await this.sfRequest<{ Status: string }>(
+      const result = await this.requestJson<{ Status: string }>(
         "GET",
         `${CASE_SOBJECT_PATH}/${externalId}?fields=Status`
       );
