@@ -16,6 +16,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Box,
   Columns as ColumnsIcon,
+  StretchHorizontal,
   ChevronDown,
   Minus,
   ArrowUpDown,
@@ -75,6 +76,10 @@ export const PALETTE_META: Record<string, PaletteMeta> = {
   Columns: {
     description: "Side-by-side columns with adjustable ratios.",
     Icon: ColumnsIcon,
+  },
+  Flex: {
+    description: "Flexbox wrapper — arrange blocks in a row or column (e.g. icon beside text), responsive per device.",
+    Icon: StretchHorizontal,
   },
   Accordion: {
     description: "Expandable region with its own drop zone.",
@@ -229,6 +234,86 @@ export const FALLBACK_META: PaletteMeta = {
 // Any categories not listed here render after these three but before "Other".
 
 export const CATEGORY_ORDER = ["layout", "blocks", "components"] as const;
+
+// ─── Palette grouping ────────────────────────────────────────────────────────
+// Single source of truth for deriving the grouped, ordered palette listing from
+// a Puck config's `categories` + `components`. Both the builder's
+// `ComponentPalette` (left rail) and the Live_Editor's `ComponentSheet` consume
+// this so the two surfaces stay in sync (grouping + ordering + "Other" bucket)
+// rather than re-implementing the derivation.
+
+/** Narrow subset of a Puck category definition the palette reads. */
+export type PaletteCategory = {
+  title?: string;
+  components?: string[];
+};
+
+/** Narrow subset of a Puck component definition the palette reads. */
+export type PaletteComponentDef = {
+  label?: string;
+};
+
+/** A resolved palette group: a titled bucket of component type names. */
+export type PaletteGroup = {
+  key: string;
+  title: string;
+  items: string[];
+};
+
+/**
+ * buildPaletteGroups — pure derivation of the ordered, grouped palette listing.
+ *
+ * Ordering rules (deterministic):
+ *   1. Categories named in `CATEGORY_ORDER` first, in that fixed order.
+ *   2. Any remaining categories in object-key order.
+ *   3. An "Other" bucket for every registered component not referenced by any
+ *      category, so no registered block is ever dropped from the listing.
+ *
+ * Only components that are actually registered in `components` are listed (a
+ * category may reference a component that isn't registered). Empty groups are
+ * omitted. Pure: no I/O, no DOM, no React.
+ */
+export function buildPaletteGroups(
+  categories: Record<string, PaletteCategory>,
+  components: Record<string, PaletteComponentDef>,
+): PaletteGroup[] {
+  const allComponents = Object.keys(components);
+  const result: PaletteGroup[] = [];
+  const used = new Set<string>();
+
+  // 1. Fixed-order categories first.
+  for (const key of CATEGORY_ORDER) {
+    const cat = categories[key];
+    if (!cat) continue;
+    const items = (cat.components ?? []).filter((name) =>
+      allComponents.includes(name),
+    );
+    items.forEach((name) => used.add(name));
+    if (items.length > 0) {
+      result.push({ key, title: cat.title ?? key, items });
+    }
+  }
+
+  // 2. Additional categories not in the fixed order.
+  for (const [key, cat] of Object.entries(categories)) {
+    if ((CATEGORY_ORDER as readonly string[]).includes(key)) continue;
+    const items = (cat.components ?? []).filter((name) =>
+      allComponents.includes(name),
+    );
+    items.forEach((name) => used.add(name));
+    if (items.length > 0) {
+      result.push({ key, title: cat.title ?? key, items });
+    }
+  }
+
+  // 3. "Other" fallback for unregistered-by-category components.
+  const leftover = allComponents.filter((name) => !used.has(name));
+  if (leftover.length > 0) {
+    result.push({ key: "other", title: "Other", items: leftover });
+  }
+
+  return result;
+}
 
 // ─── Search helpers ──────────────────────────────────────────────────────────
 

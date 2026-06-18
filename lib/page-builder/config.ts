@@ -1256,6 +1256,137 @@ const Container: OraComponentConfig = {
   },
 };
 
+// ─── Flex — Flexbox wrapper for arranging blocks along an axis ───────────────
+// A single-slot container that lays its dropped children out with `display:
+// flex`. Unlike the grid-based Columns block (whose cells always stack their
+// contents vertically), Flex places children side by side — the right tool for
+// icon-beside-text rows, button rows, badge strips, etc.
+//
+// The flex styles are applied directly to the slot's own wrapper element (via
+// the `style` arg Puck's slot/DropZone render accepts) so the dropped blocks are
+// its DIRECT children and therefore real flex items. Wrapping the slot in an
+// extra div instead would make that div the single flex child and the items
+// would just stack inside it.
+//
+// `flexDirection` is breakpoint-aware: it is edited through the builder's
+// DESKTOP / TABLET / MOBILE switcher (like Columns' `layoutDirection`) rather
+// than separate per-device fields, and `responsiveDefaults` stacks it to a
+// column on mobile.
+
+const FLEX_GAP_OPTS = [
+  { label: "None", value: "0" },
+  { label: "XS (8px)", value: "8px" },
+  { label: "Small (16px)", value: "16px" },
+  { label: "Medium (24px)", value: "24px" },
+  { label: "Large (32px)", value: "32px" },
+  { label: "XL (48px)", value: "48px" },
+];
+
+const FLEX_DIRECTION_OPTS = [
+  { label: "Row (side by side)", value: "row" },
+  { label: "Row reversed", value: "row-reverse" },
+  { label: "Column (stacked)", value: "column" },
+  { label: "Column reversed", value: "column-reverse" },
+];
+
+const FLEX_JUSTIFY_OPTS = [
+  { label: "Start", value: "flex-start" },
+  { label: "Center", value: "center" },
+  { label: "End", value: "flex-end" },
+  { label: "Space between", value: "space-between" },
+  { label: "Space around", value: "space-around" },
+  { label: "Space evenly", value: "space-evenly" },
+];
+
+const FLEX_ALIGN_OPTS = [
+  { label: "Stretch", value: "stretch" },
+  { label: "Start", value: "flex-start" },
+  { label: "Center", value: "center" },
+  { label: "End", value: "flex-end" },
+  { label: "Baseline", value: "baseline" },
+];
+
+const FLEX_WRAP_OPTS = [
+  { label: "Wrap", value: "wrap" },
+  { label: "No wrap", value: "nowrap" },
+];
+
+const Flex: OraComponentConfig = {
+  label: "Flex",
+  // Edited through the DESKTOP/TABLET/MOBILE switcher; stacks on mobile.
+  responsiveDefaults: {
+    flexDirection: { mobile: "column" },
+  },
+  fields: {
+    "flex-content": { type: "slot", disallow: ["Section"] },
+    flexDirection: createCustomSelectField(
+      "Direction",
+      FLEX_DIRECTION_OPTS,
+      "How children flow. Use Row for icon-beside-text layouts. Switch the DESKTOP / TABLET / MOBILE toggle to set a per-device direction.",
+    ),
+    justify: createCustomSelectField(
+      "Justify (main axis)",
+      FLEX_JUSTIFY_OPTS,
+      "Distributes children along the flex direction (horizontal for a row).",
+    ),
+    crossAxis: createCustomSelectField(
+      "Vertical align (items)",
+      FLEX_ALIGN_OPTS,
+      "Aligns children across the flex direction. For a row this is vertical alignment — Center lines an icon up with its text (items-start / center / end).",
+    ),
+    wrap: createToggleField(
+      "Wrap",
+      FLEX_WRAP_OPTS,
+      "Allow children to wrap onto multiple lines when space runs out.",
+    ),
+    gap: createCustomSelectField("Gap", FLEX_GAP_OPTS, "Spacing between children."),
+    ...spacingBorderFields,
+  },
+  defaultProps: {
+    "flex-content": [],
+    flexDirection: { desktop: "row", mobile: "column" },
+    justify: "flex-start",
+    crossAxis: "center",
+    wrap: "wrap",
+    gap: "16px",
+    ...spacingBorderDefaults,
+  },
+  render: (props) => {
+    // `flexDirection` is resolved to the active breakpoint's scalar by
+    // `withBreakpointResolution` before this runs.
+    const direction = (props.flexDirection as string) || "row";
+    const justify = (props.justify as string) || "flex-start";
+    const align = (props.crossAxis as string) || "center";
+    const wrap = (props.wrap as string) || "wrap";
+    const gap = (props.gap as string) || "0";
+
+    const flexStyle: React.CSSProperties = {
+      display: "flex",
+      flexDirection: direction as React.CSSProperties["flexDirection"],
+      justifyContent: justify,
+      alignItems: align,
+      flexWrap: wrap as React.CSSProperties["flexWrap"],
+      gap,
+      // Keep an empty wrapper droppable in the builder.
+      minHeight: "40px",
+      minWidth: 0,
+    };
+
+    // Apply the flex styles to the slot's own element so the dropped blocks are
+    // its direct children (real flex items). Passing `style` is honoured by both
+    // the published `SlotRender` and the builder's `DropZone`.
+    const slot = props["flex-content"];
+    const content =
+      typeof slot === "function"
+        ? (slot as (p?: Record<string, unknown>) => React.ReactNode)({
+            style: flexStyle,
+          })
+        : null;
+
+    return styledRender(props, content);
+  },
+};
+
 // ─── Quote/Blockquote — Styled quote with accent border ──────────────────────
 
 const Quote: OraComponentConfig = {
@@ -6393,7 +6524,7 @@ const analyticsRootDefaults: { _analytics: PageAnalyticsConfig & { surveyTrigger
 export const pageBuilderConfig: OraConfig = {
   categories: {
     layout: {
-      components: ["Section", "Container", "Columns", "Accordion", "Spacer", "Divider", "CardGrid"],
+      components: ["Section", "Container", "Columns", "Flex", "Accordion", "Spacer", "Divider", "CardGrid"],
       title: "Layout",
       defaultExpanded: true,
     },
@@ -6415,7 +6546,7 @@ export const pageBuilderConfig: OraConfig = {
     },
   },
   components: wrapAllRenders({
-    Section, Container, Columns, Accordion, Spacer, Divider,
+    Section, Container, Columns, Flex, Accordion, Spacer, Divider,
     Heading, Text, Button, InlineLink, Image, Video, Quote, Icon, ImageCarousel, Gallery,
     FilterTabs, ScrollIndicator, IconFeatureList, AccordionGroup, StatsGrid, LocationMap,
     ContactLocationsMap,

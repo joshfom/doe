@@ -168,7 +168,7 @@ describe("SelectedElementHeader — Puck dispatch wiring", () => {
     }
   });
 
-  it("dispatches `insert` with a fresh id after the selected block when Duplicate is activated (Req 4.3)", async () => {
+  it("dispatches `setData` with a deep-cloned, freshly-id'd copy after the selected block when Duplicate is activated (Req 4.3)", async () => {
     seed(0);
     mountAnchor("heading-1");
     const { getByRole } = render(<SelectedElementHeader />);
@@ -177,35 +177,32 @@ describe("SelectedElementHeader — Puck dispatch wiring", () => {
     fireEvent.click(getByRole("button", { name: /duplicate heading/i }));
 
     const calls = mockPuckState.dispatch.mock.calls;
-    // Expect three dispatches: insert → replace → setUi.
-    expect(calls.length).toBe(3);
+    // Expect two dispatches: setData (insert the clone) → setUi (select it).
+    expect(calls.length).toBe(2);
 
-    const [insertCall] = calls;
-    expect(insertCall[0]).toMatchObject({
-      type: "insert",
-      componentType: "Heading",
-      destinationIndex: 1, // immediately after the selected index 0
-      destinationZone: ROOT_ZONE,
-    });
-    // The fresh id is generated at dispatch time and MUST be present so
-    // Puck's reducer uses it instead of auto-generating its own.
-    expect(typeof insertCall[0].id).toBe("string");
-    expect(insertCall[0].id).not.toBe("heading-1");
+    const [setDataCall] = calls;
+    expect(setDataCall[0].type).toBe("setData");
 
-    // The follow-up replace writes the cloned props (minus id) on the
-    // newly-inserted item, preserving the new id.
-    const [, replaceCall] = calls;
-    expect(replaceCall[0]).toMatchObject({
-      type: "replace",
-      destinationIndex: 1,
-      destinationZone: ROOT_ZONE,
-    });
-    expect(replaceCall[0].data.type).toBe("Heading");
-    expect(replaceCall[0].data.props.id).toBe(insertCall[0].id);
-    expect(replaceCall[0].data.props.text).toBe("First");
+    // The copy is inserted immediately after the source at root index 1, and
+    // the original content is preserved (3 blocks total).
+    const content = setDataCall[0].data.content as Array<{
+      type: string;
+      props: { id: string; text?: string };
+    }>;
+    expect(content).toHaveLength(3);
+    expect(content[0].props.id).toBe("heading-1");
+    expect(content[2].props.id).toBe("text-2");
+
+    const copy = content[1];
+    expect(copy.type).toBe("Heading");
+    // Fresh id — NOT a mirror of the source.
+    expect(copy.props.id).not.toBe("heading-1");
+    expect(typeof copy.props.id).toBe("string");
+    // Props are carried over (deep-cloned).
+    expect(copy.props.text).toBe("First");
 
     // Selection moves to the new copy so follow-up edits target it.
-    const [, , setUiCall] = calls;
+    const [, setUiCall] = calls;
     expect(setUiCall[0]).toMatchObject({
       type: "setUi",
       ui: { itemSelector: { zone: ROOT_ZONE, index: 1 } },

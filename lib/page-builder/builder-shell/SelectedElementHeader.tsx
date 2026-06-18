@@ -14,26 +14,25 @@
  * translates each toolbar action into a Puck dispatch call.
  *
  * Dispatch mapping (per tasks.md 6.2):
- *   - Duplicate   → `dispatch({ type: "insert", ... })` with cloned props
- *                   and a fresh id, inserted at `sourceIndex + 1` in the
- *                   same zone so the copy sits immediately after the
- *                   selected block (Req 4.3).
+ *   - Duplicate   → `dispatch({ type: "setData", ... })` with a deep-cloned
+ *                   subtree (the selected block plus all of its descendant
+ *                   zones), every id regenerated and zone keys remapped, then
+ *                   `setUi` to select the copy (Req 4.3).
  *   - Delete      → `dispatch({ type: "remove", ... })` (Req 4.4).
  *   - Move up /   → `dispatch({ type: "reorder", ... })` within the same
  *     Move down     zone, shifting the source index by ±1 (Req 4.5).
  *
- * Why `insert` and not Puck's built-in `duplicate`: the tasks file is
- * explicit — duplicate goes through the `insert` action with cloned props.
- * This keeps the header's dispatch surface narrow (insert/remove/reorder
- * only) and guarantees the duplicated block carries the exact prop
- * snapshot the editor sees, independent of any resolver re-runs. The
- * trade-off is that we reimplement Puck's nested-slot id regeneration for
- * blocks whose props contain slot arrays; the existing
- * `templates/component-templates.ts#regenerateIds` helper already handles
- * that pattern, and blocks used today via the element header never embed
- * slots in props (they use Puck zones instead), so a shallow clone with a
- * fresh root id is sufficient for Slice 1. If/when a block type gains
- * slotted props, revisit `clonePropsForInsert` below.
+ * Why a full deep clone via `setData` (not Puck's `insert` + `replace`): a
+ * shallow `insert`/`replace` only copies a single item's top-level props and
+ * leaves nested objects/arrays sharing references with the source, and it does
+ * not copy the child *zones* that container blocks (Flex/Columns/Section/
+ * Accordion) use to hold their children. That produced "mirror" copies —
+ * editing the copy mutated the original, and duplicated columns came up empty
+ * or linked. `buildDuplicatedSubtree` (see `./duplicate-subtree`) collects the
+ * block + every descendant zone, deep-clones the whole tree, regenerates all
+ * ids, and remaps the zone keys via the shared `regenerateIds` helper, so the
+ * copy is completely independent. This mirrors the Component Library insert
+ * flow, which already merges a regenerated subtree via `setData`.
  *
  * Anchor resolution: Puck stamps `data-puck-component="{id}"` on every
  * rendered block's root element inside the canvas (see
@@ -53,6 +52,8 @@ import { ElementHeader } from "./ElementHeader";
 import { useBreakpoint } from "../breakpoint-context";
 import { resolveVisibility } from "../visibility";
 import { useLibrary } from "./LibraryContext";
+import { buildDuplicatedSubtree, type SubtreeData } from "./duplicate-subtree";
+import type { ComponentInstance } from "../types";
 
 // Puck's root zone compound — used as the fallback zone when a block sits
 // at the top level of the page. Mirrors `rootAreaId` + `rootZone` in
@@ -60,41 +61,11 @@ import { useLibrary } from "./LibraryContext";
 const ROOT_ZONE_COMPOUND = "root:default-zone";
 
 // ─── ID generation ───────────────────────────────────────────────────────────
-
-/**
- * Generate a fresh component instance id. Kept local (and tiny) instead of
- * importing from `templates/component-templates.ts` to avoid pulling the
- * heavy template module into the shell's tree-shaking graph. The format is
- * intentionally opaque to Puck — Puck only requires ids to be unique.
- */
-function generateComponentId(componentType: string): string {
-  const suffix =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  return `${componentType}-${suffix}`;
-}
-
-/**
- * Shallow-clone a block's props for insertion after the selected block.
- * Strips the `id` so the caller can assign a fresh one. The action
- * reducer (Puck's `insertAction`) builds the inserted item from
- * `componentType` + optional `id`, then uses the block's `defaultProps` —
- * so we dispatch a `replace` immediately after `insert` to write the
- * cloned props on top of the freshly inserted item.
- */
-function clonePropsForInsert(
-  props: Record<string, unknown>,
-): Record<string, unknown> {
-  // We deliberately do a shallow clone of the props object and let object
-  // identities be shared for array/object children. Puck is immutable-by-
-  // convention at the top level of each prop; downstream mutations happen
-  // through `replace` which re-creates the prop slots. A deep clone would
-  // be defensive overreach for the current Slice 1 scope.
-  const { id: _id, ...rest } = props;
-  void _id;
-  return rest;
-}
+//
+// Duplicate now deep-clones the whole subtree and regenerates every id via the
+// shared `regenerateIds` helper (see `./duplicate-subtree`), so the previous
+// local `generateComponentId` / `clonePropsForInsert` shallow-clone helpers are
+// no longer needed and have been removed.
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -235,54 +206,37 @@ export function SelectedElementHeader() {
 
   const onDuplicate = React.useCallback(() => {
     if (!selectedItem || !selector) return;
-    const zoneCompound = selector.zone || ROOT_ZONE_COMPOUND;
-    const destinationIndex = selector.index + 1;
-    const componentType = selectedItem.type;
-    const newId = generateComponentId(componentType);
 
-    // Step 1 — insert a fresh component of the same type at the position
-    // immediately after the selection. Puck's reducer builds the new item
-    // from `componentType` + `id` and the block's `defaultProps`.
+    // Deep-clone the selected block plus all of its descendant zones into a
+    // fully independent subtree: every id is regenerated and zone keys are
+    // remapped, and props are deep-cloned (no shared references). This is what
+    // makes the copy a separate node rather than a mirror of the source, and
+    // it brings along every child object when duplicating a column/Flex.
+    const { data: mergedData, zoneCompound, destinationIndex } =
+      buildDuplicatedSubtree(
+        appState.data as unknown as SubtreeData,
+        selectedItem as unknown as ComponentInstance,
+        selector,
+      );
+
+    // A single setData applies the inserted clone + its copied zones. The
+    // source data is already in the editor's current model, so no migration is
+    // needed (this matches the templates plugin, which also writes zones via
+    // setData directly).
     dispatch({
-      type: "insert",
-      componentType,
-      destinationIndex,
-      destinationZone: zoneCompound,
-      id: newId,
+      type: "setData",
+      data: mergedData as unknown as Partial<import("@puckeditor/core").Data>,
     });
 
-    // Step 2 — overwrite the freshly-inserted item's props with a clone of
-    // the source props, preserving the new id. `replace` with the same
-    // zone/index targets the item we just inserted. We use the current
-    // `selectedItem.props` rather than re-reading app state because the
-    // insert dispatch is synchronous from our point of view but Puck's
-    // async `resolveData` pipeline may fire before the replace lands; the
-    // explicit replace here wins and re-runs resolveData on the cloned
-    // props.
-    dispatch({
-      type: "replace",
-      destinationZone: zoneCompound,
-      destinationIndex,
-      data: {
-        type: componentType,
-        props: {
-          ...clonePropsForInsert(
-            selectedItem.props as Record<string, unknown>,
-          ),
-          id: newId,
-        },
-      },
-    });
-
-    // Step 3 — move selection to the new copy so the user can immediately
-    // tweak it (matches Puck's own `duplicate` action behavior).
+    // Move selection to the new copy so the user can immediately tweak it
+    // (matches Puck's own `duplicate` action behavior).
     dispatch({
       type: "setUi",
       ui: {
         itemSelector: { zone: zoneCompound, index: destinationIndex },
       },
     });
-  }, [dispatch, selectedItem, selector]);
+  }, [appState.data, dispatch, selectedItem, selector]);
 
   const onDelete = React.useCallback(() => {
     if (!selector) return;

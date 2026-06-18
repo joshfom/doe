@@ -41,6 +41,8 @@ export const BREAKPOINT_AWARE_FIELDS: ReadonlySet<string> = new Set<string>([
   "rowGap",
   // Layout direction
   "layoutDirection",
+  // Flex block direction
+  "flexDirection",
   // Grid columns
   "columns",
 ]);

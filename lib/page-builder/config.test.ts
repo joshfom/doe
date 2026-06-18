@@ -319,11 +319,12 @@ describe("Sidebar categories", () => {
     { components: string[]; title: string; defaultExpanded?: boolean }
   >;
 
-  it("Layout category contains Section, Container, Columns, Accordion, Spacer, Divider", () => {
+  it("Layout category contains Section, Container, Columns, Flex, Accordion, Spacer, Divider, CardGrid", () => {
     expect(categories.layout.components).toEqual([
       "Section",
       "Container",
       "Columns",
+      "Flex",
       "Accordion",
       "Spacer",
       "Divider",

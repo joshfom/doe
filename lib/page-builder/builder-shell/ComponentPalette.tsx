@@ -34,20 +34,11 @@ import { ORA_THEME } from "./inspector/tokens";
 import {
   PALETTE_META,
   FALLBACK_META,
-  CATEGORY_ORDER,
+  buildPaletteGroups,
   matchesQuery,
+  type PaletteCategory,
+  type PaletteComponentDef,
 } from "./palette-meta";
-
-// ─── Types mirroring Puck config shape (narrow subset we use) ────────────────
-
-type PaletteCategory = {
-  title?: string;
-  components?: string[];
-};
-
-type PaletteComponent = {
-  label?: string;
-};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -70,50 +61,18 @@ export function ComponentPalette({
     [config.categories],
   );
   const components = React.useMemo(
-    () => (config.components ?? {}) as Record<string, PaletteComponent>,
+    () => (config.components ?? {}) as Record<string, PaletteComponentDef>,
     [config.components],
   );
-  const allComponents = React.useMemo(() => Object.keys(components), [components]);
 
   // Build categorized groups with an "Other" bucket for any leftover
   // components not referenced by a category definition (Req 2.1 — every
-  // registered block must appear).
-  const groups = React.useMemo(() => {
-    const result: Array<{ key: string; title: string; items: string[] }> = [];
-    const used = new Set<string>();
-
-    // 1. Render categories in the fixed order first.
-    for (const key of CATEGORY_ORDER) {
-      const cat = categories[key];
-      if (!cat) continue;
-      const items = (cat.components ?? []).filter((name) =>
-        allComponents.includes(name),
-      );
-      items.forEach((name) => used.add(name));
-      if (items.length > 0) {
-        result.push({ key, title: cat.title ?? key, items });
-      }
-    }
-
-    // 2. Render any additional categories not in the fixed order.
-    for (const [key, cat] of Object.entries(categories)) {
-      if ((CATEGORY_ORDER as readonly string[]).includes(key)) continue;
-      const items = (cat.components ?? []).filter((name) =>
-        allComponents.includes(name),
-      );
-      items.forEach((name) => used.add(name));
-      if (items.length > 0) {
-        result.push({ key, title: cat.title ?? key, items });
-      }
-    }
-
-    // 3. "Other" fallback for unregistered components (Req 1.8).
-    const leftover = allComponents.filter((name) => !used.has(name));
-    if (leftover.length > 0) {
-      result.push({ key: "other", title: "Other", items: leftover });
-    }
-    return result;
-  }, [categories, allComponents]);
+  // registered block must appear). Derivation is shared with the Live_Editor's
+  // ComponentSheet via `buildPaletteGroups` so the two surfaces stay in sync.
+  const groups = React.useMemo(
+    () => buildPaletteGroups(categories, components),
+    [categories, components],
+  );
 
   // Filter groups by the current search query. A group is rendered only if at
   // least one of its items matches (Req 2.4).
