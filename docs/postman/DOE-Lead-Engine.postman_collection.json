@@ -1,0 +1,296 @@
+{
+  "info": {
+    "name": "DOE — Lead Engine Test Harness",
+    "_postman_id": "b1f4e6c2-7a3d-4f0e-9c11-doe-lead-engine",
+    "description": "Simulate inbound leads from any external source (web_form / email / whatsapp / meta_lead_ads / portal) and inspect the Lead Engine intake ledger.\n\n## Setup\n1. Import this collection.\n2. Set the collection variables (or use an Environment):\n   - `baseUrl` — e.g. `http://localhost:3000` (dev) or your deployed origin.\n   - `simulationToken` — value of `LEAD_SIMULATION_TOKEN`. In local dev with the env var unset you can leave it blank; the surface is open outside production.\n3. Run the requests. `Simulate Lead — *` requests auto-save the returned `id` into `lastLeadId` for the inspect requests.\n\n## Notes\n- Each request sends `Authorization: Bearer {{simulationToken}}`. If the token is blank the header is still sent but ignored in non-production.\n- Phone leads require `PHONE_HASH_SALT` to be configured on the server, otherwise the API returns 422. Leads without a phone work without it.\n- Re-sending the same `idempotencyKey` returns the SAME lead id with `deduped: true`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "simulationToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lastLeadId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{simulationToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Get Sources",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/sources",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "sources"]
+        },
+        "description": "List the valid `source` values and which currently have an ingestion adapter wired."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — WhatsApp (with phone + attribution)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}",
+              "pm.test('lead recorded', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"whatsapp\",\n  \"name\": \"Aisha Al Mansoori\",\n  \"phone\": \"+971501234567\",\n  \"email\": \"aisha@example.com\",\n  \"content\": \"Hi, I'm interested in a 2BR apartment in Dubai Marina. What's available?\",\n  \"attribution\": {\n    \"utm_source\": \"whatsapp\",\n    \"utm_medium\": \"chat\",\n    \"utm_campaign\": \"marina-launch\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Simulate a WhatsApp lead. NOTE: phone leads require PHONE_HASH_SALT on the server, else this returns 422."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — Meta Lead Ads (no phone)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}",
+              "pm.test('lead recorded', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"meta_lead_ads\",\n  \"name\": \"Omar Khan\",\n  \"email\": \"omar.khan@example.com\",\n  \"content\": \"Villa enquiry from Facebook lead form — looking in Arabian Ranches.\",\n  \"attribution\": {\n    \"utm_source\": \"facebook\",\n    \"utm_medium\": \"paid_social\",\n    \"utm_campaign\": \"ranches-villas\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Simulate a Meta Lead Ads lead with no phone — works without PHONE_HASH_SALT."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — Email",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"email\",\n  \"name\": \"Sara Hassan\",\n  \"email\": \"sara.hassan@example.com\",\n  \"content\": \"Subject: Downtown penthouse\\n\\nCould you send me a brochure and pricing for the Downtown penthouse units?\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Simulate an inbound email lead."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — Web Form",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"web_form\",\n  \"name\": \"Daniel Roberts\",\n  \"email\": \"daniel.roberts@example.com\",\n  \"content\": \"Web form enquiry: interested in off-plan investment options under AED 2M.\",\n  \"attribution\": {\n    \"utm_source\": \"google\",\n    \"utm_medium\": \"cpc\",\n    \"utm_campaign\": \"offplan-invest\",\n    \"gclid\": \"demo-gclid-123\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Simulate a public web-form lead."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — Portal",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"portal\",\n  \"name\": \"Layla Ahmed\",\n  \"email\": \"layla.ahmed@example.com\",\n  \"content\": \"Property portal enquiry forwarded from Bayut listing #88421.\",\n  \"attribution\": {\n    \"utm_source\": \"bayut\",\n    \"utm_medium\": \"portal\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Simulate a property-portal lead."
+      },
+      "response": []
+    },
+    {
+      "name": "Simulate Lead — Dedupe (fixed idempotencyKey)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res && res.id) {",
+              "  pm.collectionVariables.set('lastLeadId', res.id);",
+              "}",
+              "pm.test('responds 200/201', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"meta_lead_ads\",\n  \"name\": \"Dedupe Demo\",\n  \"email\": \"dedupe-demo@example.com\",\n  \"content\": \"Send this twice — the second call returns the same id with deduped: true.\",\n  \"idempotencyKey\": \"demo-fixed-key-001\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/simulate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "simulate"]
+        },
+        "description": "Send this request TWICE. The first call creates the lead (201, deduped: false); the second returns the same id (200, deduped: true)."
+      },
+      "response": []
+    },
+    {
+      "name": "List Inbound Leads",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/inbound?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "inbound"],
+          "query": [
+            { "key": "limit", "value": "20" },
+            { "key": "status", "value": "received", "disabled": true }
+          ]
+        },
+        "description": "List recently recorded inbound leads with their intake status. Optional `status` filter: received | parsed | queued | failed."
+      },
+      "response": []
+    },
+    {
+      "name": "Get Inbound Lead by Id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/leads/inbound/{{lastLeadId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "leads", "inbound", "{{lastLeadId}}"]
+        },
+        "description": "Fetch a single inbound lead's detail (uses `lastLeadId` saved by the simulate requests). Includes the verbatim rawPayload; never returns the raw phone."
+      },
+      "response": []
+    }
+  ]
+}
