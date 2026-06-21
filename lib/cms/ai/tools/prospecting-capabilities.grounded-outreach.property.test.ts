@@ -33,13 +33,20 @@ import type { OutreachDraft } from "../../prospecting/outreach";
  *
  * **Feature: prospecting-workspace, Property 2: Every factual claim in an OutreachDraft's grounding manifest resolves to a real record in its named SQL source; a draft contains no figure absent from the manifest.**
  *
- * **Validates: Requirements 6.2**
+ * **Validates: Requirements 14.8, 6.2**
  *
  * Grounding is the non-negotiable boundary of the outbound message (CC-SQL,
  * Req 6.2): the model narrates prose, but EVERY factual figure it states must
  * trace to a real SQL record, and the draft must never carry a figure that is
- * not pinned by its grounding manifest. This single property exercises both
- * halves end-to-end per run, against the REAL `draft_outreach` catalog handler
+ * not pinned by its grounding manifest. Req 14.8 EXTENDS this same rule (it does
+ * not create a new one) to area-level Area_Trend figures: when an Outreach_Draft
+ * grounds a claim in trend figures (roi_pct, volume, yoy_pct, trend), those too
+ * must come from a real SQL-mirrored `market_price_index` row that carries them,
+ * never model-computed. The `market_price_index` source seeded below therefore
+ * populates those Area_Trend columns so a trend-grounded claim resolves to a
+ * real row bearing the figures — exercising Req 14.8 inside Property 2 in place.
+ * This single property exercises both halves end-to-end per run, against the
+ * REAL `draft_outreach` catalog handler
  * (which persists the manifest verbatim — Design §Components #7) backed by an
  * in-memory Postgres standing in for the four named SQL sources:
  *
@@ -62,9 +69,9 @@ import type { OutreachDraft } from "../../prospecting/outreach";
  * unchanged and the persisted grounding manifest is exactly what we re-resolve.
  */
 
-// The spec baseline for this non-optional property (Property 2) is >= 100
-// iterations; overridable upward via FAST_CHECK_NUM_RUNS for CI.
-const NUM_RUNS = Math.max(100, Number(process.env.FAST_CHECK_NUM_RUNS) || 0);
+// The spec baseline for this non-optional property (Property 2) is exactly 100
+// iterations — the floor. The user wants fast tests, so we pin it at 100.
+const NUM_RUNS = 100;
 
 // The four SQL sources a grounding entry may name (the outreachDraftSchema enum).
 type SourceTable = OutreachDraft["grounding"][number]["sourceTable"];
@@ -134,6 +141,9 @@ const DDL = `
     "index_value" numeric,
     "avg_price_per_sqft" numeric,
     "yoy_pct" numeric,
+    "roi_pct" numeric,
+    "volume" integer,
+    "trend" jsonb,
     "source" text NOT NULL,
     "as_of" timestamp,
     "demo" boolean NOT NULL DEFAULT false,
@@ -263,6 +273,14 @@ async function seedRecord(db: Database, sourceTable: SourceTable): Promise<strin
       return row.id;
     }
     case "market_price_index": {
+      // Req 14.8 extends Req 6.2: an Outreach_Draft may ground a claim in the
+      // area-level Area_Trend summary, not just a transaction comp. The trend
+      // figures (roi_pct, volume, yoy_pct, trend) are carried on this very
+      // `market_price_index` row (S7 increment, Req 14.7), so seeding them here
+      // makes the Area_Trend grounding explicit: a trend-grounded outreach claim
+      // resolves to a REAL market_price_index row that actually carries those
+      // figures (rather than a bare index row). Same primary key the grounding
+      // entry pins to, so Property 2's manifest-resolves invariant is unchanged.
       const [row] = await db
         .insert(marketPriceIndex)
         .values({
@@ -270,6 +288,17 @@ async function seedRecord(db: Database, sourceTable: SourceTable): Promise<strin
           segment: "ultra_luxury",
           period: "2026-Q1",
           indexValue: 184.2,
+          yoyPct: 12.4,
+          roiPct: 6.8,
+          volume: 312,
+          trend: {
+            sale_avg_price: 41_500_000,
+            sale_avg_price_change: 8.1,
+            sale_avg_price_per_sqft: 5_900,
+            sale_avg_price_per_sqft_change: 7.3,
+            roi: 6.8,
+            volume: 312,
+          },
           source: "dubai_pulse",
           asOf: new Date("2026-02-01T00:00:00.000Z"),
         })

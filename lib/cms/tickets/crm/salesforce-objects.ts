@@ -21,6 +21,18 @@
 import { SalesforceAdapter, withRetry, SfHttpError } from "./salesforce";
 import { SF_OBJECT_CONFIG, sobjectPath, type SfObjectName } from "./sf-config";
 
+/** Salesforce REST API version (env-overridable), shared with the analytics reader. */
+const SF_API_VERSION = process.env.SF_API_VERSION ?? "v59.0";
+
+/**
+ * Escape a string for safe inclusion inside a single-quoted SOQL literal. The
+ * REST query API has no bind parameters, so values interpolated into a WHERE
+ * clause MUST be escaped (backslash and single-quote) to avoid SOQL injection.
+ */
+export function soqlEscape(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 // ── Typed errors ─────────────────────────────────────────────────────────────
 
 /**
@@ -139,6 +151,21 @@ export class SalesforceObjectClient {
   }
 
   // ── Internal helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Run a read-only SOQL query and return its records (Requirement 1.2). Used by
+   * the prospecting CRM pre-check to discover whether a prospect already exists
+   * as a Lead/Contact before any cold outreach. Callers MUST escape any value
+   * interpolated into the SOQL via {@link soqlEscape} — there are no bind
+   * parameters over the REST query API.
+   */
+  async query<T = Record<string, unknown>>(soql: string): Promise<T[]> {
+    const path = `/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(soql)}`;
+    const res = await withRetry(() =>
+      this.adapter.requestJson<{ records?: T[] }>("GET", path)
+    );
+    return res.records ?? [];
+  }
 
   /**
    * Resolve the configured sObject API name for a DOE object name. A name with

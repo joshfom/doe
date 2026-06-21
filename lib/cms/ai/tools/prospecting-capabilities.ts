@@ -80,6 +80,9 @@ import {
   type ProviderId,
   type TargetRef,
 } from "../../prospecting/providers";
+// Side-effect import: register the concrete providers (incl. the env-gated demo
+// provider) into the shared registry so the prospect_search fan-out finds them.
+import "../../prospecting/providers/register";
 import {
   resolveLeadByMatchKeys,
   upsertLead,
@@ -344,12 +347,31 @@ const marketCompsInput = z.object({
 });
 
 const priceIndexRowSchema = z.object({
+  // S7 increment (§4, Req 14.8): the stable `market_price_index` row id, so a
+  // draft_outreach grounding manifest entry whose claim is grounded in this
+  // Area_Trend can pin to it — `{ sourceTable: "market_price_index", recordId }`
+  // re-resolves to this exact row (mirrors how a comp claim pins to a
+  // `market_transactions` row by `id`). Additive + SQL-sourced: the Area_Trend
+  // figure the model narrates is never model-computed (CC-SQL, extending Req 6.2).
+  recordId: z.string(),
   areaName: z.string(),
   segment: z.string().nullable(),
   period: z.string(),
   indexValue: z.number().nullable(),
   avgPricePerSqft: z.number().nullable(),
   yoyPct: z.number().nullable(),
+  // S7 increment (§4, Req 14.7): Area_Trend figures carried from the reseller
+  // summary block (`market_price_index.roi_pct`/`.volume`/`.trend`, added in
+  // task 10.1). Additive + optional — existing consumers/tests ignore them.
+  // Every figure in this row shares the row-level `source` + `asOf` below, so
+  // each Area_Trend figure (avg price/sqft, YoY, ROI, volume, raw trend) is
+  // provenance-stamped (Req 14.7, CC-Provenance, Property 16).
+  /** ROI %, when carried by the source summary. */
+  roiPct: z.number().nullable().optional(),
+  /** Transaction volume backing the index period. */
+  volume: z.number().nullable().optional(),
+  /** Raw summary block (e.g. saleAvgPrice + *_change figures), as ingested. */
+  trend: z.unknown().nullable().optional(),
   source: z.string(),
   asOf: z.string().nullable(),
 });
@@ -409,12 +431,16 @@ const marketCompsEntry = entry({
     // first, then deterministic source/id ordering.
     const indexRows = await db
       .select({
+        id: marketPriceIndex.id,
         areaName: marketPriceIndex.areaName,
         segment: marketPriceIndex.segment,
         period: marketPriceIndex.period,
         indexValue: marketPriceIndex.indexValue,
         avgPricePerSqft: marketPriceIndex.avgPricePerSqft,
         yoyPct: marketPriceIndex.yoyPct,
+        roiPct: marketPriceIndex.roiPct,
+        volume: marketPriceIndex.volume,
+        trend: marketPriceIndex.trend,
         source: marketPriceIndex.source,
         asOf: marketPriceIndex.asOf,
       })
@@ -429,12 +455,17 @@ const marketCompsEntry = entry({
     const priceIndex = indexRows
       .filter((r) => (area ? projectMatchesAreaName(r.areaName, area) : true))
       .map((r) => ({
+        recordId: r.id,
         areaName: r.areaName,
         segment: r.segment ?? null,
         period: r.period,
         indexValue: r.indexValue ?? null,
         avgPricePerSqft: r.avgPricePerSqft ?? null,
         yoyPct: r.yoyPct ?? null,
+        // Area_Trend figures (Req 14.7) — share this row's source + asOf below.
+        roiPct: r.roiPct ?? null,
+        volume: r.volume ?? null,
+        trend: r.trend ?? null,
         source: r.source,
         asOf: toIso(r.asOf),
       }));
@@ -850,6 +881,14 @@ const draftOutreachEntry = entry({
   // is created `draft` (unsent); the grounding manifest is persisted verbatim so
   // the send path and the grounded-outreach property test can re-resolve every
   // claim against its named SQL source (Req 6.1, 6.2).
+  //
+  // S7 increment (§4, Req 14.8): the grounding `sourceTable` enum already permits
+  // both market tables, so the manifest contract is unchanged. A claim grounded
+  // in the Area_Trend pins to a `market_price_index` row by `recordId` (the id
+  // surfaced by `market_comps`, now carrying ROI/volume/YoY); a claim grounded in
+  // a specific comp pins to a `market_transactions` row by `id`. Every market /
+  // Area_Trend figure in a draft therefore comes from SQL, never model-computed
+  // (CC-SQL, extending Req 6.2).
   handler: async (db, _ctx, input) => {
     const [row] = await db
       .insert(outreachDrafts)

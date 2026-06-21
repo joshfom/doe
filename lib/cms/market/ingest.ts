@@ -13,8 +13,9 @@
  *
  * Every row is stamped with provenance the readers later surface: `source`
  * (the adapter discriminator), the record's `source_ref`, and its `as_of`
- * timestamp. Live ingest always stamps `demo = false`; synthetic rows flow only
- * through seed paths (CC-Synthetic).
+ * timestamp. The `demo` flag defaults to `false` (live ingest); the demo
+ * seeding path threads `{ demo: true }` so synthetic rows are clearly marked
+ * (CC-Synthetic, Decision 10).
  *
  * Cross-record foreign keys arrive as the PARENT's `source_ref` (e.g. a
  * project's `developerSourceRef`). Records are ingested parent-first
@@ -124,7 +125,8 @@ async function buildBuildingIdMap(
 async function upsertDevelopers(
   db: Database,
   source: string,
-  developers: RawDeveloper[]
+  developers: RawDeveloper[],
+  demo: boolean
 ): Promise<void> {
   for (const d of developers) {
     const set = {
@@ -132,7 +134,7 @@ async function upsertDevelopers(
       nameNormalized: d.nameNormalized ?? normalizeName(d.name),
       country: d.country ?? null,
       asOf: toDate(d.asOf),
-      demo: false,
+      demo,
     };
     await db
       .insert(marketDevelopers)
@@ -148,7 +150,8 @@ async function upsertProjects(
   db: Database,
   source: string,
   projects: RawProject[],
-  developerIdMap: Map<string, string>
+  developerIdMap: Map<string, string>,
+  demo: boolean
 ): Promise<void> {
   for (const p of projects) {
     const set = {
@@ -175,7 +178,7 @@ async function upsertProjects(
       branded: p.branded ?? false,
       brandName: p.brandName ?? null,
       asOf: toDate(p.asOf),
-      demo: false,
+      demo,
     };
     await db
       .insert(marketProjects)
@@ -191,7 +194,8 @@ async function upsertBuildings(
   db: Database,
   source: string,
   buildings: RawBuilding[],
-  projectIdMap: Map<string, string>
+  projectIdMap: Map<string, string>,
+  demo: boolean
 ): Promise<void> {
   for (const b of buildings) {
     const set = {
@@ -203,7 +207,7 @@ async function upsertBuildings(
       totalUnits: b.totalUnits ?? null,
       completionYear: b.completionYear ?? null,
       asOf: toDate(b.asOf),
-      demo: false,
+      demo,
     };
     await db
       .insert(marketBuildings)
@@ -220,7 +224,8 @@ async function upsertTransactions(
   source: string,
   transactions: RawTransaction[],
   projectIdMap: Map<string, string>,
-  buildingIdMap: Map<string, string>
+  buildingIdMap: Map<string, string>,
+  demo: boolean
 ): Promise<void> {
   for (const t of transactions) {
     const set = {
@@ -243,7 +248,7 @@ async function upsertTransactions(
       buyerSegment: t.buyerSegment ?? null,
       buyerNationality: t.buyerNationality ?? null,
       asOf: toDate(t.asOf),
-      demo: false,
+      demo,
     };
     await db
       .insert(marketTransactions)
@@ -258,15 +263,19 @@ async function upsertTransactions(
 async function upsertPriceIndex(
   db: Database,
   source: string,
-  priceIndex: RawIndex[]
+  priceIndex: RawIndex[],
+  demo: boolean
 ): Promise<void> {
   for (const i of priceIndex) {
     const set = {
       indexValue: i.indexValue ?? null,
       avgPricePerSqft: i.avgPricePerSqft ?? null,
       yoyPct: i.yoyPct ?? null,
+      roiPct: i.roiPct ?? null,
+      volume: i.volume ?? null,
+      trend: i.trend ?? null,
       asOf: toDate(i.asOf),
-      demo: false,
+      demo,
     };
     await db
       .insert(marketPriceIndex)
@@ -291,9 +300,15 @@ async function upsertPriceIndex(
 
 /**
  * Upsert a `MarketBatch` into the `market_*` mirror. Every row is stamped with
- * `source` + `source_ref` + `as_of` and `demo = false`; upserts key on
- * `(source, source_ref)` (price index: `(area_name, segment, period, source)`)
- * so re-ingesting the same record is field-identical (idempotent, Req 11.2).
+ * `source` + `source_ref` + `as_of` and `demo` (defaulting to `false`); upserts
+ * key on `(source, source_ref)` (price index:
+ * `(area_name, segment, period, source)`) so re-ingesting the same record is
+ * field-identical (idempotent, Req 11.2).
+ *
+ * `opts.demo` (default `false`) stamps the provenance `demo` flag on every
+ * ingested row. Live ingest omits it (live data is `demo = false`); the demo
+ * seeding path passes `{ demo: true }` so synthetic rows are clearly marked
+ * (Decision 10). Existing callers that pass no `opts` behave exactly as before.
  *
  * Records are ingested parent-first so foreign keys resolve, including to rows
  * persisted by an earlier batch.
@@ -301,23 +316,32 @@ async function upsertPriceIndex(
 export async function ingestMarketBatch(
   db: Database,
   source: string,
-  batch: MarketBatch
+  batch: MarketBatch,
+  opts?: { demo?: boolean }
 ): Promise<void> {
-  await upsertDevelopers(db, source, batch.developers);
+  const demo = opts?.demo ?? false;
+
+  await upsertDevelopers(db, source, batch.developers, demo);
 
   const developerIdMap = await buildDeveloperIdMap(
     db,
     source,
     batch.projects.map((p) => p.developerSourceRef)
   );
-  await upsertProjects(db, source, batch.projects, developerIdMap);
+  await upsertProjects(db, source, batch.projects, developerIdMap, demo);
 
   const projectIdMapForBuildings = await buildProjectIdMap(
     db,
     source,
     batch.buildings.map((b) => b.projectSourceRef)
   );
-  await upsertBuildings(db, source, batch.buildings, projectIdMapForBuildings);
+  await upsertBuildings(
+    db,
+    source,
+    batch.buildings,
+    projectIdMapForBuildings,
+    demo
+  );
 
   const projectIdMapForTxns = await buildProjectIdMap(
     db,
@@ -334,8 +358,9 @@ export async function ingestMarketBatch(
     source,
     batch.transactions,
     projectIdMapForTxns,
-    buildingIdMapForTxns
+    buildingIdMapForTxns,
+    demo
   );
 
-  await upsertPriceIndex(db, source, batch.priceIndex);
+  await upsertPriceIndex(db, source, batch.priceIndex, demo);
 }

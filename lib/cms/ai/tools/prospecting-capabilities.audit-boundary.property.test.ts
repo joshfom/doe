@@ -147,6 +147,7 @@ const VISITOR: IdentityResult = { type: "visitor", units: [] };
 const MIGRATION_0029 = "0029_demonic_mandrill.sql";
 const MIGRATION_0037 = "0037_market_catalog.sql";
 const MIGRATION_0038 = "0038_prospecting.sql";
+const MIGRATION_0039 = "0039_project_clusters.sql";
 
 // 0029 ALTERs ai_appointments / ai_conversations / ai_messages and references
 // ai_clients / ai_tenants via FK; 0037/0038 reference users / projects /
@@ -259,6 +260,10 @@ function buildDb(): { mem: IMemoryDb; db: Database } {
   // proven prospecting/market migration tests.
   mem.public.none(readMigration(MIGRATION_0037));
   mem.public.none(readMigration(MIGRATION_0038));
+  // 0039 (increment) adds the additive market_price_index Area_Trend columns
+  // (roi_pct/volume/trend) the read tools now surface, plus project_clusters /
+  // location_resolutions. Applied whole-file like 0037/0038.
+  mem.public.none(readMigration(MIGRATION_0039));
 
   const adapter = mem.adapters.createPg();
   const pool = new adapter.Pool();

@@ -55,9 +55,10 @@ import fc from "fast-check";
  * and the read handlers' market_* selects. No network is hit.
  */
 
-// Spec requires >=100 iterations (task notes); reduced for fast local runs —
-// restore via PBT_RUNS=100 (final verification, task 9.1).
-const NUM_RUNS = Number(process.env.PBT_RUNS ?? 25);
+// The spec pins this non-optional property at the >= 100 iteration floor.
+// Restored to 100 for final verification (task 9.1); env can raise it. Never
+// below the 100 floor.
+const NUM_RUNS = Math.max(100, Number(process.env.PBT_RUNS ?? 100));
 
 // `record_target` / `promote_target_to_lead` reach computePhoneHash on the
 // success path; a stable test salt keeps hashing deterministic (mirrors the
@@ -183,6 +184,9 @@ const DDL = `
     "index_value" numeric,
     "avg_price_per_sqft" numeric,
     "yoy_pct" numeric,
+    "roi_pct" numeric,
+    "volume" integer,
+    "trend" jsonb,
     "source" text NOT NULL,
     "as_of" timestamp,
     "demo" boolean NOT NULL DEFAULT false,

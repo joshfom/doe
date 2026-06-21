@@ -8,6 +8,7 @@ import { briefingAssemblyHandler } from "./briefing-assembly";
 import { outreachSendHandler } from "./outreach-send";
 import { enrichmentFetchHandler } from "./enrichment-fetch";
 import { marketSyncHandler } from "./market-sync";
+import { runProspectingBatch } from "../prospecting/batch/run";
 
 // ── Voice-surface job handler registration ────────────────────────────────────
 // The job-runner spine (`./index`) ships with placeholder handlers that throw.
@@ -70,10 +71,11 @@ export function registerHomeJobHandlers(): void {
 }
 
 // ── Prospecting job handler registration (Prospecting Workspace S7) ───────────
-// The prospecting jobs (`outreach_send`, `enrichment_fetch`, `market_sync`) run
-// on the container/worker tier — the prospecting agents/workflows worker and the
-// market-sync worker (task 8.3) call `registerProspectingJobHandlers()` once at
-// startup to plug these handlers onto the same spine before their loops run.
+// The prospecting jobs (`outreach_send`, `enrichment_fetch`, `market_sync`,
+// `prospecting_batch`) run on the container/worker tier — the prospecting
+// agents/workflows worker and the market-sync worker (task 8.3) call
+// `registerProspectingJobHandlers()` once at startup to plug these handlers onto
+// the same spine before their loops run.
 // Kept separate so each tier wires only its own handlers, using the identical
 // `registerJobHandler` seam (mirrors the lead-engine / home registrations above).
 //
@@ -94,5 +96,6 @@ export function registerProspectingJobHandlers(): void {
   registerJobHandler("outreach_send", outreachSendHandler);
   registerJobHandler("enrichment_fetch", enrichmentFetchHandler);
   registerJobHandler("market_sync", marketSyncHandler);
+  registerJobHandler("prospecting_batch", runProspectingBatch);
   prospectingRegistered = true;
 }

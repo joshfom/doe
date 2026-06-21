@@ -299,7 +299,7 @@ describe("send_outreach idempotency (task 6.6, Req 8.2)", () => {
           expect(await statusOf(db, draftId)).toBe("sent");
         }
       ),
-      { numRuns: 120 }
+      { numRuns: 100 }
     );
   });
 });

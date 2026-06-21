@@ -31,6 +31,11 @@ export type BriefSpec = z.infer<typeof briefSpecSchema>;
 export const prospectingBriefSchema = z.object({
   projectId: z.string().uuid().optional(), // own project (FK projects)
   aiUnitId: z.string().uuid().optional(), // own unit (FK ai_units)
+  // Own cluster (FK project_clusters) — S7 increment (Req 13.4). Purely
+  // additive: existing briefs carrying only projectId/aiUnitId/spec still
+  // validate, and `find_comparables` reads the brief opaquely via
+  // `rankComparables`, so no tool signature changes.
+  clusterId: z.string().uuid().optional(),
   spec: briefSpecSchema,
 });
 export type ProspectingBrief = z.infer<typeof prospectingBriefSchema>;

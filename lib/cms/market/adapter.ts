@@ -22,8 +22,20 @@
  * those references to mirror ids, so an adapter never needs to know our schema.
  */
 
-/** Provider discriminator. Becomes the `source` column on every ingested row. */
-export type MarketSource = "property_monitor" | "dubai_pulse";
+/**
+ * Provider discriminator. Becomes the `source` column on every ingested row.
+ *
+ * `"property_finder_reseller"` is the live RapidAPI reseller source wired by the
+ * increment (Req 14.1); `"dld_official"` is reserved for the future swap to an
+ * official DLD / Dubai Pulse source behind this same contract (Req 14.9). Both
+ * are code-only union additions — `market_*.source` is plain `text`, so no
+ * migration is needed and `ingestMarketBatch(source: string, ...)` is unaffected.
+ */
+export type MarketSource =
+  | "property_monitor"
+  | "dubai_pulse"
+  | "property_finder_reseller"
+  | "dld_official";
 
 /** A raw competitor developer record from a provider. */
 export interface RawDeveloper {
@@ -121,6 +133,23 @@ export interface RawIndex {
   indexValue?: number | null;
   avgPricePerSqft?: number | null;
   yoyPct?: number | null;
+  /**
+   * Area_Trend return-on-investment percentage (reseller `summary.roi`), carried
+   * into the additive `market_price_index.roi_pct` column (Req 14.2, 14.7).
+   */
+  roiPct?: number | null;
+  /**
+   * Transaction volume for the area/period (reseller `summary.volume`), carried
+   * into the additive `market_price_index.volume` column (Req 14.2, 14.7).
+   */
+  volume?: number | null;
+  /**
+   * The raw provider `summary` block (e.g. `saleAvgPrice`,
+   * `saleAvgPriceChange`), carried verbatim into the additive
+   * `market_price_index.trend` jsonb column so no Area_Trend figure is
+   * model-computed (Req 14.2, 14.8, CC-Provenance).
+   */
+  trend?: Record<string, unknown> | null;
   asOf?: Date | string | null;
 }
 

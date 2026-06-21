@@ -28,8 +28,19 @@ import { TARGET_TYPES } from "../target";
 
 // ── Provider identity ──────────────────────────────────────────────────────────
 
-/** The Account/Person providers S7 wires (Appendix A). */
-export const PROVIDER_IDS = ["apollo", "pdl", "cognism", "crunchbase"] as const;
+/**
+ * The Account/Person providers S7 wires (Appendix A). `"demo"` is a synthetic,
+ * env-gated provider (`PROSPECT_DEMO=true`) that returns believable candidates
+ * with `source: "demo"` provenance when no commercial provider is configured —
+ * so the workspace is demoable end-to-end without a paid data subscription.
+ */
+export const PROVIDER_IDS = [
+  "apollo",
+  "pdl",
+  "cognism",
+  "crunchbase",
+  "demo",
+] as const;
 
 /** A registered provider's stable id; also the `source` stamped on its fields. */
 export type ProviderId = (typeof PROVIDER_IDS)[number];

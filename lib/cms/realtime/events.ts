@@ -74,13 +74,28 @@ export type DoeEventType =
   | "prospecting.search.completed"
   | "prospecting.target.recorded"
   | "prospecting.target.enriched"
+  | "prospecting.crm.checked"
   | "prospecting.target.promoted"
   | "prospecting.outreach.drafted"
   | "prospecting.outreach.approved"
   | "prospecting.outreach.sent"
   | "prospecting.outreach.suppressed"
   | "market.synced"
-  | "market.source.unconfigured";
+  | "market.source.unconfigured"
+  // Agentic Prospecting Batch (S?) — batch-run lifecycle + approval-queue
+  // lifecycle events (Req 3.1, 3.4, 10.4). `events.type` is plain `text`, so
+  // these need no DB migration — the same precedent S1 set for the `agent.*`
+  // family. As with every event family, callers MUST pass privacy-safe payloads
+  // (internal ids / salted `phone_hash`, never a raw E.164 number) per the
+  // payload privacy invariant documented on `DoeEvent` below.
+  | "prospecting.batch.started"
+  | "prospecting.batch.progress"
+  | "prospecting.batch.candidate.skipped"
+  | "prospecting.batch.completed"
+  | "prospecting.queue.item.queued"
+  | "prospecting.queue.item.approved"
+  | "prospecting.queue.item.rejected"
+  | "prospecting.queue.item.sent";
 
 /**
  * A single append-only event row.

@@ -200,6 +200,11 @@ function registryWith(adapter: ChannelAdapter, policy: NudgePolicy): JobHandlerR
     send_whatsapp_brief: noop,
     lead_nudge: createLeadNudgeHandler(adapter, policy),
     briefing_assembly: noop,
+    // S7 prospecting job kinds (task 6.3) — JobHandlerRegistry is a complete
+    // Record<JobKind, JobHandler>, so every kind must be present.
+    outreach_send: noop,
+    enrichment_fetch: noop,
+    market_sync: noop,
   };
 }
 

@@ -149,7 +149,7 @@ describe("seedRbac — prospecting-workspace agent identities (task 3.1)", () =>
       for (const other of PROSPECTING_AGENT_IDENTITIES) {
         if (other.roleName === identity.roleName) continue;
         for (const otherTool of other.tools) {
-          if (identity.tools.includes(otherTool)) continue;
+          if ((identity.tools as readonly string[]).includes(otherTool)) continue;
           expect(hasPermission(perms, prospectingToolPermission(otherTool))).toBe(false);
         }
       }

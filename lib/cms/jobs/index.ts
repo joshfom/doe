@@ -54,6 +54,14 @@ import { publishEvent } from "@/lib/cms/realtime/events";
  *     MarketDataAdapter and ingest it idempotently into the `market_*` mirror
  *     (Req 11.2). The long-lived polling loop is the worker (task 8.3); this
  *     handler performs a single fetch→ingest→emit cycle.
+ *
+ * `prospecting_batch` (Agentic Prospecting Batch S?, Req 2.1): the autonomous
+ * Batch_Run driver, added additively (mirroring S3/S5/S7). The handler runs one
+ * Batch_Run on the worker tier — discovering candidates, running the CRM_Check,
+ * scoring fit, and drafting grounded outreach for the cold-eligible ones through
+ * the Tool_Dispatcher — and is idempotent by the Batch_Run's deterministic
+ * re-run key (Req 9.1/9.2): the spine's `ON CONFLICT (job_key)` bounds enqueue
+ * and the per-candidate idempotency keys bound the side effects on a re-run.
  */
 export type JobKind =
   | "post_call_processing"
@@ -64,7 +72,8 @@ export type JobKind =
   | "briefing_assembly"
   | "outreach_send"
   | "enrichment_fetch"
-  | "market_sync";
+  | "market_sync"
+  | "prospecting_batch";
 
 const JOB_KINDS: readonly JobKind[] = [
   "post_call_processing",
@@ -76,6 +85,7 @@ const JOB_KINDS: readonly JobKind[] = [
   "outreach_send",
   "enrichment_fetch",
   "market_sync",
+  "prospecting_batch",
 ];
 
 /** True when `kind` is a supported {@link JobKind}. */
@@ -134,6 +144,7 @@ export const defaultJobHandlers: JobHandlerRegistry = {
   outreach_send: notImplemented("outreach_send"),
   enrichment_fetch: notImplemented("enrichment_fetch"),
   market_sync: notImplemented("market_sync"),
+  prospecting_batch: notImplemented("prospecting_batch"),
 };
 
 /**

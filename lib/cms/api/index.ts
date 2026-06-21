@@ -55,6 +55,7 @@ import { sitemapRoutes } from "./routes/sitemap";
 import { voiceRoutes } from "./routes/voice";
 import { toolsRoutes } from "./routes/tools";
 import { realtimeRoutes, realtimeLeadsRoutes } from "./routes/realtime";
+import { prospectingRoutes } from "./routes/prospecting";
 import { demoAdminRoutes } from "./routes/demo-admin";
 // Agent-First Home / Briefing Surface (S5, task 11). Bun-mounted Elysia
 // transports attached to THIS single app (no second mount): GET /home/briefing,
@@ -165,6 +166,14 @@ export const api = new Elysia({ prefix: "/api" })
   .use(toolsRoutes) // POST /api/tools/:toolName (service-token guarded)
   .use(realtimeRoutes) // GET /api/realtime/events (SSE) — durable on Bun mount only
   .use(realtimeLeadsRoutes) // GET /api/realtime/leads (SSE, leads:read) — Bun mount only
+  // ── Prospecting Workspace bridge (S7, task 8.4) ────────────────────────────
+  // The thin, AUDITED bridge for the outbound prospecting surface
+  // (`app/ora-panel/prospecting/`). Drives the flow through `dispatchTool` into
+  // the prospecting CatalogEntries (never importing the container-only Mastra
+  // agents/workflow). RBAC-gated (`leads:read`); the prospecting SSE stream
+  // (`GET /api/prospecting/events`) is durable on the Bun mount, same as the
+  // other realtime streams.
+  .use(prospectingRoutes)
   .use(demoAdminRoutes) // POST /api/demo/reset (admin-gated)
   // ── Agent-First Home / Briefing Surface (S5, task 11) ──────────────────────
   // GET /api/home/briefing, POST /api/home/chat, GET /api/home/health. The

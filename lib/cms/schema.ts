@@ -971,7 +971,17 @@ export const aiUnits = pgTable(
     constructionProgress: integer("construction_progress"),
     estimatedHandoverDate: date("estimated_handover_date"),
     // Free-text cluster / sub-zone label within a project (e.g. "Views 3").
+    // RETAINED (S7 increment): the backfill source and a transition fallback for
+    // the relational `clusterId` FK below — mirrors `projectName` alongside
+    // `projectId`.
     cluster: text("cluster"),
+    // Relational FK to `project_clusters` (S7 increment, Req 13.1). Nullable +
+    // additive; backfilled from the free-text `cluster` label. `onDelete: "set
+    // null"` mirrors the existing projectId/communityId posture — deleting a
+    // cluster never deletes a unit.
+    clusterId: uuid("cluster_id").references(() => projectClusters.id, {
+      onDelete: "set null",
+    }),
     // Total contracted price of the unit in AED.
     purchasePrice: numeric("purchase_price", { mode: "number" }),
     clientId: uuid("client_id").references(() => aiClients.id),
@@ -983,6 +993,7 @@ export const aiUnits = pgTable(
     index("ai_units_status_idx").on(table.status),
     index("ai_units_project_id_idx").on(table.projectId),
     index("ai_units_community_id_idx").on(table.communityId),
+    index("ai_units_cluster_id_idx").on(table.clusterId),
   ]
 );
 
@@ -1993,6 +2004,12 @@ export const marketPriceIndex = pgTable(
     indexValue: numeric("index_value", { mode: "number" }),
     avgPricePerSqft: numeric("avg_price_per_sqft", { mode: "number" }),
     yoyPct: numeric("yoy_pct", { mode: "number" }),
+    // S7 increment (§4, Req 14.7): Area_Trend figures carried from the reseller
+    // summary block. Additive + nullable.
+    roiPct: numeric("roi_pct", { mode: "number" }),
+    volume: integer("volume"),
+    // Raw summary block (avg-price + *_change figures) for provenance.
+    trend: jsonb("trend"),
     source: text("source").notNull(),
     asOf: timestamp("as_of"),
     demo: boolean("demo").notNull().default(false),
@@ -2030,6 +2047,74 @@ export const projectComparables = pgTable(
     uniqueIndex("project_comparables_pair_ux").on(
       t.projectId,
       t.marketProjectId
+    ),
+  ]
+);
+
+// ── Project Clusters (S7 increment) ──────────────────────────────────────────
+// Completes the OWN real-estate hierarchy (community → project → cluster → unit)
+// for the prospecting comparison resolver (Design §1, Req 13.1). A cluster is a
+// named sub-zone within an own project (e.g. "Views 3"), backfilled from the
+// retained free-text `ai_units.cluster` label and linked via `ai_units.cluster_id`.
+//
+// Prospecting-internal grouping only — never rendered on the public site
+// (Decision 7). Deleting a project cascades its clusters; deleting a cluster
+// sets `ai_units.cluster_id` to null (never deletes a unit).
+export const projectClusters = pgTable(
+  "project_clusters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // e.g. "Views 3"
+    nameAr: text("name_ar"),
+    slug: text("slug").notNull(), // normalized cluster key within the project
+    // Derived/allowed-null premium segment, same ladder as market_projects.
+    segment: text("segment", {
+      enum: ["ultra_luxury", "luxury", "premium", "mid"],
+    }),
+    unitTypes: jsonb("unit_types"), // string[] (raw ai_units.unit_type values)
+    bedroomsMin: integer("bedrooms_min"),
+    bedroomsMax: integer("bedrooms_max"),
+    priceMinAed: numeric("price_min_aed", { mode: "number" }),
+    priceMaxAed: numeric("price_max_aed", { mode: "number" }),
+    avgPricePerSqft: numeric("avg_price_per_sqft", { mode: "number" }),
+    handoverDate: date("handover_date"),
+    totalUnits: integer("total_units"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("project_clusters_project_slug_ux").on(
+      table.projectId,
+      table.slug
+    ),
+    index("project_clusters_project_idx").on(table.projectId),
+  ]
+);
+
+// ── Location Resolutions cache (S7 increment) ────────────────────────────────
+// Maps an own area name → an external provider's location_id (Design §3, Req
+// 14.3). Resolved once via the provider's Location AutoComplete endpoint and
+// reused, so the free-tier endpoint is hit at most once per distinct normalized
+// area name. Keyed uniquely on (source, area_name_normalized).
+export const locationResolutions = pgTable(
+  "location_resolutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: text("source").notNull(),
+    areaNameNormalized: text("area_name_normalized").notNull(),
+    locationId: text("location_id").notNull(),
+    displayName: text("display_name"),
+    asOf: timestamp("as_of"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("location_resolutions_key_ux").on(
+      t.source,
+      t.areaNameNormalized
     ),
   ]
 );
@@ -2159,6 +2244,9 @@ export const outreachDrafts = pgTable(
     approvedBy: uuid("approved_by").references(() => users.id),
     // Send idempotency key (CC-Idem, Req 7.2, 8.2).
     jobKey: text("job_key"),
+    // AI-original subject/body retained verbatim after a rep edit (Req 4.2).
+    aiOriginalSubject: text("ai_original_subject"),
+    aiOriginalBody: text("ai_original_body"),
     sentAt: timestamp("sent_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -2184,3 +2272,191 @@ export const prospectOptouts = pgTable(
     uniqueIndex("prospect_optouts_match_ux").on(t.matchKind, t.matchValue),
   ]
 );
+
+// ── Agentic Prospecting Batch ────────────────────────────────────────────────
+//
+// Strictly additive batch/approval/guardrail domain layered on the prospecting
+// tables above (0038) and own-project clusters (0039). Enums are stored as
+// plain `text` to match the prospecting domain. See agentic-prospecting-batch
+// design §Data Models. Mirrors drizzle/0040_agentic_prospecting_batch.sql.
+// Requirements: 1.3, 4.5, 6.2, 7.5, 9.1, 9.2, 10.1.
+
+// One autonomous batch job. `rerunKey` UNIQUE makes a re-run idempotent
+// (Req 1.3, 9.1).
+export const prospectingBatchRuns = pgTable(
+  "prospecting_batch_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerRep: uuid("owner_rep")
+      .notNull()
+      .references(() => users.id),
+    subject: jsonb("subject").notNull(),
+    clusterId: text("cluster_id"),
+    targetCount: integer("target_count").notNull(),
+    status: text("status").notNull().default("running"),
+    rerunKey: text("rerun_key").notNull(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("prospecting_batch_runs_rerun_key_ux").on(t.rerunKey),
+    index("prospecting_batch_runs_owner_idx").on(t.ownerRep),
+  ]
+);
+
+// One AI-drafted outreach entry awaiting review. UNIQUE (batch_run_id,
+// target_id) is the re-run idempotency key for a queue item
+// (Req 2.3, 2.4, 4.5, 9.2, 10.1).
+export const prospectingQueueItems = pgTable(
+  "prospecting_queue_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    batchRunId: uuid("batch_run_id")
+      .notNull()
+      .references(() => prospectingBatchRuns.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => targets.id),
+    draftId: uuid("draft_id").references(() => outreachDrafts.id, {
+      onDelete: "set null",
+    }),
+    eligibility: text("eligibility").notNull(),
+    skipReason: text("skip_reason"),
+    fitScore: numeric("fit_score"),
+    fitRationale: jsonb("fit_rationale"),
+    lawfulBasis: text("lawful_basis"),
+    dataSource: text("data_source"),
+    acquiredAt: timestamp("acquired_at"),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("prospecting_queue_items_run_target_ux").on(
+      t.batchRunId,
+      t.targetId
+    ),
+    index("prospecting_queue_items_run_idx").on(t.batchRunId),
+    index("prospecting_queue_items_status_idx").on(t.status),
+  ]
+);
+
+// Cross-rep claim on a privacy-safe identity. UNIQUE (match_kind, match_value)
+// → a candidate is claimed by at most one rep (Req 6.2).
+export const prospectingTargetClaims = pgTable(
+  "prospecting_target_claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchKind: text("match_kind").notNull(),
+    matchValue: text("match_value").notNull(),
+    ownerRep: uuid("owner_rep")
+      .notNull()
+      .references(() => users.id),
+    batchRunId: uuid("batch_run_id").references(() => prospectingBatchRuns.id, {
+      onDelete: "cascade",
+    }),
+    queueItemId: uuid("queue_item_id").references(
+      () => prospectingQueueItems.id,
+      { onDelete: "cascade" }
+    ),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("prospecting_target_claims_match_ux").on(
+      t.matchKind,
+      t.matchValue
+    ),
+  ]
+);
+
+// Consumed send count per scope per period. PK (scope_kind, scope_id,
+// period_bucket) resets by bucket (Req 7.1, 7.4, 7.5).
+export const prospectingSendCounters = pgTable(
+  "prospecting_send_counters",
+  {
+    scopeKind: text("scope_kind").notNull(),
+    scopeId: text("scope_id").notNull(),
+    periodBucket: text("period_bucket").notNull(),
+    consumed: integer("consumed").notNull().default(0),
+    cap: integer("cap"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({
+      name: "prospecting_send_counters_pk",
+      columns: [t.scopeKind, t.scopeId, t.periodBucket],
+    }),
+  ]
+);
+
+// Exactly-once guard so each scope counts at most once per send. UNIQUE
+// (draft_id, scope_kind) keeps rep + cluster increments independent
+// (Req 7.5, 7.6).
+export const prospectingSendLedger = pgTable(
+  "prospecting_send_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    draftId: uuid("draft_id")
+      .notNull()
+      .references(() => outreachDrafts.id, { onDelete: "cascade" }),
+    scopeKind: text("scope_kind").notNull(),
+    scopeId: text("scope_id").notNull(),
+    periodBucket: text("period_bucket").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("prospecting_send_ledger_draft_scope_ux").on(
+      t.draftId,
+      t.scopeKind
+    ),
+  ]
+);
+
+// Persisted Agent_Activity_Log (privacy-safe, internal ids only) with monotonic
+// `seq` for ordered retrieval (Req 3.2, 3.3, 3.4).
+export const prospectingBatchActivity = pgTable(
+  "prospecting_batch_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    batchRunId: uuid("batch_run_id")
+      .notNull()
+      .references(() => prospectingBatchRuns.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    action: text("action").notNull(),
+    reason: text("reason"),
+    targetId: uuid("target_id"),
+    payload: jsonb("payload"),
+    at: timestamp("at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("prospecting_batch_activity_run_seq_idx").on(t.batchRunId, t.seq),
+  ]
+);
+
+// ── Typed row / insert models for the new modules ────────────────────────────
+export type ProspectingBatchRun = typeof prospectingBatchRuns.$inferSelect;
+export type NewProspectingBatchRun = typeof prospectingBatchRuns.$inferInsert;
+
+export type ProspectingQueueItem = typeof prospectingQueueItems.$inferSelect;
+export type NewProspectingQueueItem = typeof prospectingQueueItems.$inferInsert;
+
+export type ProspectingTargetClaim =
+  typeof prospectingTargetClaims.$inferSelect;
+export type NewProspectingTargetClaim =
+  typeof prospectingTargetClaims.$inferInsert;
+
+export type ProspectingSendCounter =
+  typeof prospectingSendCounters.$inferSelect;
+export type NewProspectingSendCounter =
+  typeof prospectingSendCounters.$inferInsert;
+
+export type ProspectingSendLedgerEntry =
+  typeof prospectingSendLedger.$inferSelect;
+export type NewProspectingSendLedgerEntry =
+  typeof prospectingSendLedger.$inferInsert;
+
+export type ProspectingBatchActivity =
+  typeof prospectingBatchActivity.$inferSelect;
+export type NewProspectingBatchActivity =
+  typeof prospectingBatchActivity.$inferInsert;

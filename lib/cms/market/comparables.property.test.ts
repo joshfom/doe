@@ -8,11 +8,10 @@ import * as schema from "../schema";
 import { marketTransactions } from "../schema";
 import type { Database } from "../db";
 
-// PERF: the spec's baseline for this non-optional property (Property 3) is
-// >= 100 iterations. Per an explicit user instruction this test must run FAST
-// locally, so NUM_RUNS was reduced to 25. Raise it back to 100 to restore the
-// full baseline. Also overridable via FAST_CHECK_NUM_RUNS for CI.
-const NUM_RUNS = Number(process.env.FAST_CHECK_NUM_RUNS) || 25;
+// The spec pins this non-optional property (Property 3) at the >= 100 iteration
+// floor. Restored to 100 for final verification (task 9.1); still overridable
+// upward via FAST_CHECK_NUM_RUNS for CI. Never below the 100 floor.
+const NUM_RUNS = Math.max(100, Number(process.env.FAST_CHECK_NUM_RUNS) || 0);
 import {
   rankComparables,
   type MarketProjectRow,

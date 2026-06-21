@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face {
+    font-family: 'URW Geometric';
+    src: url('file:///Users/jfomubod/Dev/doe/app/fonts/urw/URWGeometricRegular.otf') format('opentype');
+    font-weight: 400; font-style: normal;
+  }
+  @font-face {
+    font-family: 'URW Geometric';
+    src: url('file:///Users/jfomubod/Dev/doe/app/fonts/urw/URWGeometricMedium.otf') format('opentype');
+    font-weight: 500; font-style: normal;
+  }
+  @font-face {
+    font-family: 'URW Geometric';
+    src: url('file:///Users/jfomubod/Dev/doe/app/fonts/urw/URWGeometricBold.otf') format('opentype');
+    font-weight: 700; font-style: normal;
+  }
+  @font-face {
+    font-family: 'URW Geometric';
+    src: url('file:///Users/jfomubod/Dev/doe/app/fonts/urw/URWGeometricExtraBold.otf') format('opentype');
+    font-weight: 800; font-style: normal;
+  }
+
+  :root{
+    --sand:#E3CBA8; --sand-light:#ECDABB; --cream:#FBF8F3; --cream2:#F7F1E6;
+    --sun:#EA8B6E; --sun-dark:#C76A4D; --ocean:#A4E0E6; --teal:#1A8A8A;
+    --charcoal:#262626; --charcoal-dark:#1A1A1A; --slate:#6B6B6B; --muted:#9A9A9A;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  @page{ size:A4; margin:0; }
+  html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  body{
+    font-family:'URW Geometric', 'Helvetica Neue', Arial, sans-serif;
+    color:var(--charcoal);
+    width:210mm; height:297mm;
+    background:
+      radial-gradient(950px 460px at 88% -8%, rgba(164,224,230,0.45), transparent 60%),
+      radial-gradient(820px 500px at -6% 108%, rgba(234,139,110,0.30), transparent 60%),
+      linear-gradient(160deg, #FFFFFF 0%, var(--cream) 46%, var(--cream2) 100%);
+    padding:7mm 11mm 7mm 11mm;
+    position:relative;
+  }
+
+  /* ── Hero ───────────────────────────────────────────── */
+  .hero{
+    position:relative; overflow:hidden;
+    border-radius:18px; padding:16px 24px 17px;
+    background:
+      radial-gradient(440px 280px at 100% 0%, rgba(234,139,110,0.55), transparent 62%),
+      radial-gradient(380px 260px at 0% 120%, rgba(26,138,138,0.40), transparent 60%),
+      linear-gradient(135deg, var(--charcoal-dark) 0%, var(--charcoal) 58%, #3a2a24 100%);
+    color:#fff;
+    box-shadow:0 14px 30px rgba(38,38,38,0.18);
+  }
+  .hero .corner{ position:absolute; top:-46px; right:-34px; opacity:.18; }
+  .hero-top{ display:flex; align-items:center; justify-content:space-between; }
+  .logo svg{ height:32px; width:auto; display:block; }
+  .eyebrow{
+    font-size:12px; letter-spacing:3px; font-weight:600; text-transform:uppercase;
+    color:var(--ocean);
+  }
+  .pill-new{
+    font-size:11px; letter-spacing:1.5px; font-weight:700; text-transform:uppercase;
+    color:var(--charcoal-dark); background:var(--sun);
+    padding:6px 13px; border-radius:999px;
+  }
+  h1{ font-size:38px; font-weight:800; letter-spacing:-0.5px; margin-top:10px; line-height:1.0; }
+  h1 .accent{ color:var(--sun); }
+  .sub{ font-size:14px; font-weight:600; color:var(--sand); margin-top:6px; letter-spacing:.2px; }
+  .tagline{ font-size:13px; color:#E6E2DC; font-weight:400; margin-top:7px; max-width:660px; line-height:1.42; }
+
+  /* ── Section scaffolding ───────────────────────────── */
+  .sec-title{
+    font-size:12px; letter-spacing:2.5px; font-weight:700; text-transform:uppercase;
+    color:var(--sun-dark); margin:6px 2px 6px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .sec-title::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--sand),transparent); }
+
+  /* ── Why prospecting ───────────────────────────────── */
+  .why{ display:grid; grid-template-columns:repeat(3,1fr); gap:11px; }
+  .why-card{
+    background:linear-gradient(150deg,#fff,#FCF7EF);
+    border:1px solid #EEE6D8; border-radius:13px; padding:10px 13px;
+    box-shadow:0 4px 10px rgba(38,38,38,0.05);
+  }
+  .why-card h4{ font-size:13.5px; font-weight:800; color:var(--charcoal-dark); margin-bottom:4px; }
+  .why-card p{ font-size:11.4px; color:var(--slate); line-height:1.4; }
+
+  /* ── Flow steps ────────────────────────────────────── */
+  .flow{ display:grid; grid-template-columns:repeat(3,1fr); gap:11px; }
+  .step{
+    background:#fff; border:1px solid #EEE6D8; border-radius:13px; padding:10px 13px;
+    box-shadow:0 4px 10px rgba(38,38,38,0.05); position:relative;
+  }
+  .step .num{
+    width:24px; height:24px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:13px; color:#fff;
+    background:linear-gradient(135deg,var(--sun),var(--sun-dark)); margin-bottom:7px;
+  }
+  .step h3{ font-size:13.5px; font-weight:700; margin-bottom:4px; }
+  .step p{ font-size:11.2px; color:var(--slate); line-height:1.42; }
+  .step .tag{ font-size:10px; color:var(--teal); font-weight:600; margin-top:6px; display:block; }
+
+  /* ── Two-column lower band ─────────────────────────── */
+  .cols{ display:grid; grid-template-columns:1.15fr 1fr; gap:16px; margin-top:2px; }
+
+  .sources{ display:flex; flex-direction:column; gap:10px; }
+  .src-row{ display:flex; align-items:center; gap:10px; }
+  .src-label{ font-size:11.5px; font-weight:700; color:var(--charcoal); width:106px; flex:none; }
+  .chip{
+    font-size:11.5px; font-weight:600; padding:6px 13px; border-radius:999px;
+    background:#fff; border:1px solid var(--sand); color:var(--charcoal);
+  }
+  .chip.soft{ color:var(--slate); border-style:dashed; }
+  .src-note{ font-size:10.5px; color:var(--muted); margin-top:2px; }
+
+  /* ── Metrics ───────────────────────────────────────── */
+  .metrics{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .metric{
+    background:linear-gradient(150deg,#fff, #FCF7EF);
+    border:1px solid #EEE6D8; border-radius:13px; padding:11px 13px;
+  }
+  .metric .big{ font-size:24px; font-weight:800; color:var(--charcoal-dark); line-height:1; }
+  .metric .big .unit{ font-size:13px; color:var(--sun-dark); font-weight:700; }
+  .metric .lbl{ font-size:10.5px; color:var(--slate); margin-top:4px; line-height:1.3; }
+
+  /* ── Trust strip ───────────────────────────────────── */
+  .trust{
+    margin-top:9px; display:flex; gap:10px; flex-wrap:wrap;
+    background:#fff; border:1px solid #EEE6D8; border-radius:13px; padding:11px 14px;
+  }
+  .trust .t{ font-size:11.3px; color:var(--charcoal); display:flex; align-items:center; gap:7px; }
+  .trust .t b{ font-weight:700; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); flex:none; }
+  .dot.sun{ background:var(--sun); } .dot.ocean{ background:#5bb8c0; }
+
+  /* ── Footer credit bar ─────────────────────────────── */
+  .credit{
+    margin-top:9px; border-radius:14px; padding:13px 20px;
+    background:linear-gradient(135deg, var(--charcoal-dark), var(--charcoal) 70%, #3a2a24);
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:11.5px; letter-spacing:2px; text-transform:uppercase;
+  }
+  .credit .left{ color:var(--sun); font-weight:700; }
+  .credit .right{ color:var(--ocean); font-weight:600; }
+</style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <div class="hero">
+    <svg class="corner" width="280" height="280" viewBox="0 0 72 72">
+      <circle cx="36" cy="36" r="34" fill="none" stroke="#EA8B6E" stroke-width="3"/>
+    </svg>
+    <div class="hero-top">
+      <div class="logo">
+        <svg viewBox="0 0 196 72" xmlns="http://www.w3.org/2000/svg">
+          <path d="M157.107 1.55636L118.209 69.2891H196L157.107 1.55636ZM157.107 30.3405L171.682 55.7177H142.539L157.107 30.3405ZM129.175 16.1352H98.3209V69.2891H82.8629V2.56941H129.175V16.1352ZM35.8078 0C16.0659 0 0 16.1465 0 36C0 55.8535 16.0603 72 35.8078 72C55.5553 72 71.6156 55.8535 71.6156 36C71.6156 16.1465 55.5553 0 35.8078 0ZM35.8078 57.6589C24.1721 57.6589 14.7037 47.9415 14.7037 36C14.7037 24.0585 24.1721 14.3411 35.8078 14.3411C47.4435 14.3411 56.9119 24.0585 56.9119 36C56.9119 47.9415 47.4491 57.6589 35.8078 57.6589Z" fill="#FFFFFF"/>
+        </svg>
+      </div>
+      <span class="pill-new">New Module</span>
+    </div>
+    <div class="eyebrow" style="margin-top:16px;">Digital &amp; Technology Team</div>
+    <h1>Prospecting<span class="accent">.</span></h1>
+    <div class="sub">Prospecting with AI agentic capabilities</div>
+    <p class="tagline">An AI agent reaches out to wealthy investors most likely to buy into Bayn — many of whom don't yet know it exists for them. It studies a unit, finds the right people, and writes each a personalized approach, with your team in full control.</p>
+  </div>
+
+  <!-- WHY PROSPECTING -->
+  <div class="sec-title">Why prospecting?</div>
+  <div class="why">
+    <div class="why-card">
+      <h4>Demand we never see</h4>
+      <p>The best buyers for premium Bayn clusters rarely raise their hand. Many ultra-high-net-worth individuals simply don't know a project like this exists for them — so we go to them first.</p>
+    </div>
+    <div class="why-card">
+      <h4>Follow the funding train</h4>
+      <p>Track fresh liquidity — fundraises, exits, IPOs — and reach <b>new money</b> while it's actively looking for somewhere to land. The earlier the touch, the warmer the deal.</p>
+    </div>
+    <div class="why-card">
+      <h4>Create pipeline, don't wait</h4>
+      <p>Stop depending on inbound. Proactively put the right unit in front of the right investor — turning quiet, high-value clusters into active conversations.</p>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="sec-title">How it works</div>
+  <div class="flow">
+    <div class="step">
+      <div class="num">1</div>
+      <h3>Pick the unit</h3>
+      <p>Select <b>Bayn → a cluster</b> (e.g. Views 3), then set <b>price range, unit type &amp; bedrooms</b> — the DNA that defines who buys and what to compare it to.</p>
+      <span class="tag">Bayn → Cluster</span>
+    </div>
+    <div class="step">
+      <div class="num">2</div>
+      <h3>Ground in the market</h3>
+      <p>Instantly pulls real <b>comparable sales</b>, price/sqft, velocity and the area price trend (YoY, yield). Every figure is sourced — never invented.</p>
+      <span class="tag">Property Monitor · DLD</span>
+    </div>
+    <div class="step">
+      <div class="num">3</div>
+      <h3>Infer the buyer</h3>
+      <p>From <b>who actually bought</b> comparable units, the AI proposes the investor profile — segments, feeder markets, titles. The rep can edit it.</p>
+      <span class="tag">AI buyer hypothesis</span>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <h3>Find real prospects</h3>
+      <p>Searches investor databases over API for <b>named people</b> matching the profile — title, company, country — as a shortlist to curate.</p>
+      <span class="tag">Apollo · Crunchbase</span>
+    </div>
+    <div class="step">
+      <div class="num">5</div>
+      <h3>AI writes the outreach</h3>
+      <p>One click drafts a <b>personalized</b> Email, WhatsApp or <b>call script</b> (EN/AR) fusing the unit, the prospect &amp; real comps. Rep edits, approves, sends.</p>
+      <span class="tag">Channel-aware · bilingual</span>
+    </div>
+    <div class="step">
+      <div class="num">6</div>
+      <h3>Promote to Lead</h3>
+      <p>An engaged prospect is promoted into a <b>Lead</b> and flows into <b>Salesforce</b> — owner assignment, routing, one reportable funnel.</p>
+      <span class="tag">→ Salesforce</span>
+    </div>
+  </div>
+
+  <!-- LOWER BAND -->
+  <div class="cols">
+    <div>
+      <div class="sec-title">Powered by</div>
+      <div class="sources">
+        <div class="src-row">
+          <span class="src-label">Market data</span>
+          <span class="chip">Property Monitor</span>
+          <span class="chip soft">DLD / Dubai Pulse · phase 2</span>
+        </div>
+        <div class="src-row">
+          <span class="src-label">Investor data</span>
+          <span class="chip">Apollo</span>
+          <span class="chip">Crunchbase</span>
+        </div>
+        <div class="src-row">
+          <span class="src-label">AI &amp; pipeline</span>
+          <span class="chip">DOE AI Agent</span>
+          <span class="chip">Salesforce</span>
+        </div>
+        <div class="src-note">Source-agnostic by design — swap or add a provider without re-engineering.</div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title">Why it matters</div>
+      <div class="metrics">
+        <div class="metric"><div class="big">~1hr→2<span class="unit">min</span></div><div class="lbl">per qualified, contacted prospect</div></div>
+        <div class="metric"><div class="big">100<span class="unit">%</span></div><div class="lbl">sends human-approved &amp; data-grounded</div></div>
+        <div class="metric"><div class="big">EN<span class="unit"> / AR</span></div><div class="lbl">native bilingual outreach</div></div>
+        <div class="metric"><div class="big">1<span class="unit"> funnel</span></div><div class="lbl">outbound + inbound, in Salesforce</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRUST -->
+  <div class="sec-title">Built-in trust &amp; control</div>
+  <div class="trust">
+    <span class="t"><span class="dot"></span><b>Human-in-the-loop</b> — AI drafts, a person approves every send</span>
+    <span class="t"><span class="dot sun"></span><b>No fabricated facts</b> — every figure pinned to a real record</span>
+    <span class="t"><span class="dot ocean"></span><b>Compliant</b> — provenance stamped, opt-out respected</span>
+  </div>
+
+  <!-- CREDIT -->
+  <div class="credit">
+    <span class="left">DOE · ORA </span>
+    <span class="right">Digital &amp; Technology Team</span>
+  </div>
+
+</body>
+</html>

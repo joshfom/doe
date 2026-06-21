@@ -30,6 +30,7 @@ import {
   PhoneCall,
   Sparkles,
   Bot,
+  Telescope,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -51,6 +52,7 @@ const queryClient = new QueryClient({
 const navItems = [
   { href: '/ora-panel', label: 'Feed', icon: LayoutDashboard, permission: null },
   { href: '/ora-panel/leads', label: 'Lead Engine', icon: Sparkles, permission: 'leads:read' },
+  { href: '/ora-panel/prospecting', label: 'Prospecting', icon: Telescope, permission: 'leads:read' },
   { href: '/ora-panel/tickets', label: 'Tickets', icon: Ticket, permission: 'tickets:read' },
   { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
   { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },

@@ -31,7 +31,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 
 // ── usePathname drives the chromeless branch; useRouter must be a no-op. ──────
-const pathnameMock = vi.fn<[], string>();
+const pathnameMock = vi.fn<() => string>();
 const replaceMock = vi.fn();
 
 vi.mock("next/navigation", () => ({

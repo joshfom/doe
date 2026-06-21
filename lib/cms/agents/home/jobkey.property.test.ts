@@ -489,6 +489,11 @@ function makeCountingRegistry(): {
     send_whatsapp_brief: counting,
     lead_nudge: counting,
     briefing_assembly: counting,
+    // S7 prospecting job kinds (task 6.3) — JobHandlerRegistry is a complete
+    // Record<JobKind, JobHandler>, so every kind must be present.
+    outreach_send: counting,
+    enrichment_fetch: counting,
+    market_sync: counting,
   };
   return { registry, sideEffects: () => count };
 }

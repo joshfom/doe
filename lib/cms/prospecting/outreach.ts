@@ -10,6 +10,14 @@
  * `grounding` manifest to a real record in a named SQL source (the Market_Mirror
  * or the party graph), with its `asOf` stamp — the model writes prose only and
  * never invents figures (CC-SQL).
+ *
+ * S7 increment (Design §4, Req 14.8 — extends Req 6.2): the `sourceTable` enum
+ * already names BOTH market tables, so this contract is unchanged. A claim
+ * grounded in an Area_Trend pins to a `market_price_index` row by `recordId`
+ * (the stable id surfaced by `market_comps`, now carrying ROI / volume / YoY);
+ * a claim grounded in a specific comparable pins to a `market_transactions` row
+ * by `id`. Every market / Area_Trend figure a draft embeds therefore traces to a
+ * real `market_*` record — never model-computed.
  */
 
 import { z } from "zod";
@@ -28,6 +36,11 @@ export const outreachDraftSchema = z.object({
   grounding: z.array(
     z.object({
       claim: z.string().max(200),
+      // The named SQL source the claim's figure is read back from. Unchanged by
+      // the S7 increment (§4, Req 14.8): an Area_Trend claim pins to
+      // `market_price_index`, a specific-comp claim pins to `market_transactions`
+      // (both already permitted); party-graph claims pin to `leads_mirror` /
+      // `parties`. No figure is ever model-computed.
       sourceTable: z.enum([
         "market_transactions",
         "market_price_index",

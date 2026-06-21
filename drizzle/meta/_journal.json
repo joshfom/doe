@@ -239,6 +239,41 @@
       "when": 1781672415722,
       "tag": "0033_sour_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1781858869785,
+      "tag": "0034_soft_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1781858900000,
+      "tag": "0037_market_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781858910000,
+      "tag": "0038_prospecting",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781858920000,
+      "tag": "0039_project_clusters",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781858930000,
+      "tag": "0040_agentic_prospecting_batch",
+      "breakpoints": true
     }
   ]
 }
