@@ -26,7 +26,7 @@ import { approvalConfigRoutes } from "./routes/approval-config";
 import { approvalRoutes } from "./routes/approvals";
 import { usersRoutes } from "./routes/users";
 import { ticketsRoutes } from "./routes/tickets";
-import { leadsRoutes } from "./routes/leads";
+import { leadsRoutes, leadsConsoleRoutes } from "./routes/leads";
 import { ticketCategoriesRoutes } from "./routes/ticket-categories";
 import { communitiesRoutes } from "./routes/communities";
 import { projectsRoutes } from "./routes/projects";
@@ -38,6 +38,7 @@ import { aiKnowledgeBaseRoutes } from "./routes/ai-knowledge-base";
 import { aiRecordsRoutes } from "./routes/ai-records";
 import { aiAppointmentsRoutes } from "./routes/ai-appointments";
 import { aiAnalyticsRoutes } from "./routes/ai-analytics";
+import { aiAnalyticsEmailRoutes } from "./routes/ai-analytics-email";
 import { aiConfigRoutes } from "./routes/ai-config";
 import { calendarRoutes } from "./routes/calendar";
 import { interestRoutes } from "./routes/interest";
@@ -134,7 +135,8 @@ export const api = new Elysia({ prefix: "/api" })
   .use(approvalRoutes)
   .use(usersRoutes)
   .use(ticketsRoutes)
-  .use(leadsRoutes) // POST /api/leads/simulate (+ inspect) — lead-engine test harness
+  .use(leadsRoutes) // POST /api/leads/simulate (+ /sources) — token-guarded test harness
+  .use(leadsConsoleRoutes) // GET /api/leads/inbound(/:id) + sync-sf/analyze — RBAC leads:read (dashboard)
   .use(ticketCategoriesRoutes)
   .use(communitiesRoutes)
   .use(projectsRoutes)
@@ -146,6 +148,7 @@ export const api = new Elysia({ prefix: "/api" })
   .use(aiRecordsRoutes)
   .use(aiAppointmentsRoutes)
   .use(aiAnalyticsRoutes)
+  .use(aiAnalyticsEmailRoutes)
   .use(aiConfigRoutes)
   .use(calendarRoutes)
   .use(interestRoutes)

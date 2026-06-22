@@ -15,6 +15,7 @@ import {
 } from "../../leads/inbound";
 import { registeredSources } from "../../leads/adapters";
 import { RateLimiter } from "../../tickets/rate-limit";
+import { identityGuard, requirePermission } from "../../rbac/middleware";
 
 // ── Lead simulation / test-harness routes ────────────────────────────────────
 //
@@ -205,7 +206,21 @@ export const leadsRoutes = new Elysia({ name: "leads", prefix: "/leads" })
         message: err instanceof Error ? err.message : String(err),
       };
     }
-  })
+  });
+
+// ── Lead Engine console routes (RBAC-gated staff surface) ────────────────────
+//
+// The inbound-lead reads + Console actions that back the `/ora-panel/leads`
+// dashboard. Unlike the simulation harness above (which is a shared-secret
+// test surface), these are an authenticated STAFF surface: a logged-in rep
+// reads them with their Better Auth session cookie. They are gated by the same
+// `identityGuard` + `requirePermission("leads:read")` pair the lead-engine SSE
+// stream (`GET /api/realtime/leads`) and the prospecting workspace already use,
+// so the dashboard's initial list fetch authorizes exactly like its live
+// stream rather than 401-ing against the simulation token.
+export const leadsConsoleRoutes = new Elysia({ name: "leads-console", prefix: "/leads" })
+  .use(identityGuard)
+  .use(requirePermission("leads:read"))
 
   // GET /api/leads/inbound — inspect recently recorded inbound leads and their
   // intake status. Never returns the transient raw phone (privacy); phones are

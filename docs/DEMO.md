@@ -121,11 +121,18 @@ set `baseUrl` (e.g. `http://localhost:3000`) and `simulationToken` (the
 
 | Request | What it shows |
 |---|---|
-| `GET /api/leads/sources` | Valid sources + which have a live adapter |
-| `POST /api/leads/simulate` (Meta / Email / Web / Portal) | A lead lands and is recorded |
+| `GET /api/leads/sources` | Valid sources + which have a live adapter (token-guarded harness) |
+| `POST /api/leads/simulate` (Meta / Email / Web / Portal) | A lead lands and is recorded (token-guarded harness) |
 | `POST /api/leads/simulate` (Dedupe — fixed `idempotencyKey`) | **Send twice** → same id, `deduped: true` |
-| `GET /api/leads/inbound?limit=20` | The intake ledger with statuses |
-| `GET /api/leads/inbound/:id` | One lead's detail — **never** returns a raw phone |
+| `GET /api/leads/inbound?limit=20` | The intake ledger with statuses — **staff session** (`leads:read`), as the dashboard uses |
+| `GET /api/leads/inbound/:id` | One lead's detail — **never** returns a raw phone — **staff session** (`leads:read`) |
+
+> **Auth note:** the `inbound` reads (and the `sync-sf` / `analyze` Console
+> actions) are the authenticated `/ora-panel/leads` dashboard surface, gated by
+> a Better Auth staff session + `leads:read` — the same gate as the leads SSE
+> stream. Only the `simulate` write + `sources` harness endpoints use the
+> `LEAD_SIMULATION_TOKEN`. To exercise the reads from Postman, send the session
+> cookie of a logged-in staff user rather than the simulation token.
 
 **Talk track:** *"A lead just arrived from WhatsApp → the engine parsed,
 deduped, and recorded it idempotently, with attribution, and never stored the
