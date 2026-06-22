@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "../../db";
 import { authGuard } from "../auth";
+import { loadUserRoles } from "../../rbac/engine";
 import { runAdminAgent } from "../../ai/admin-agent";
 import { adminChatSessions, adminChatMessages } from "../../schema";
 
@@ -128,8 +129,21 @@ export const aiAdminRoutes = new Elysia({ name: "ai-admin" })
         }
       }
 
+      // Resolve the requesting user's RBAC roles so the twin exposes the
+      // executive (C-Level) tools only to a C-Level user (Requirement 12.5).
+      // Best-effort: a role load failure threads no roles (non-C-Level), never
+      // blocking the turn. The dispatcher remains the hard authorization gate.
+      let roles: string[] = [];
+      try {
+        const rows = await loadUserRoles(db, userId);
+        roles = rows.map((r) => r.name);
+      } catch (err) {
+        console.error("[ai-admin] role load failed (non-fatal)", err);
+      }
+
       const result = await runAdminAgent(db, {
         userId,
+        roles,
         message: parsed.data.message,
         confirmationToken: parsed.data.confirmationToken,
         history,

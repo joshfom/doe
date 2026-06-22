@@ -76,6 +76,10 @@ import {
   crmAnalyticsCapabilityEntries,
   CRM_ANALYTICS_TOOL_NAMES,
 } from "./crm-analytics-capability";
+import {
+  executiveCapabilityEntries,
+  EXECUTIVE_TOOL_NAMES,
+} from "./executive-capabilities";
 import { tickets, partyIdentities } from "../../schema";
 import type { TicketRequestType, TicketStatus } from "../../types";
 import { createTicket, getTicketById } from "../../tickets/service";
@@ -172,6 +176,15 @@ export const HOME_PLATFORM_TOOL_NAMES = [...PLATFORM_TOOL_NAMES] as const;
 export const HOME_CRM_TOOL_NAMES = [...CRM_ANALYTICS_TOOL_NAMES] as const;
 
 /**
+ * The executive (C-Level) data tool name(s) the Home_Agent introduces (all
+ * leads, leads by user, a user's pipeline, compare two users, user count).
+ * Sourced from `executive-capabilities.ts`. These names ARE bound (so the twin
+ * can call them on a C-Level turn) but their `home:tool:<name>` permissions are
+ * DELIBERATELY EXCLUDED from {@link AGENT_HOME_PERMISSIONS} below — the gate.
+ */
+export const HOME_EXECUTIVE_TOOL_NAMES = [...EXECUTIVE_TOOL_NAMES] as const;
+
+/**
  * The full set of tool names the Home_Agent binds via `bindCatalog` (Design
  * §Components #2). Lists the consumed tools (re-exposed in this file), the task
  * tools (task 4.2), the Combined_Report tool (task 8.1), the Platform_Brain
@@ -184,6 +197,7 @@ export const HOME_TOOL_NAMES: string[] = [
   ...HOME_REPORT_TOOL_NAMES,
   ...HOME_PLATFORM_TOOL_NAMES,
   ...HOME_CRM_TOOL_NAMES,
+  ...HOME_EXECUTIVE_TOOL_NAMES,
 ];
 
 /**
@@ -205,7 +219,15 @@ export const HOME_TOOL_NAMES: string[] = [
  * given user can see.
  */
 export const AGENT_HOME_PERMISSIONS: ReadonlySet<string> = new Set([
-  ...HOME_TOOL_NAMES.map((name) => homeToolPermission(name)),
+  // The executive (C-Level) tools are bound but their `home:tool:<name>`
+  // permissions are DELIBERATELY NOT granted to the agent identity (the gate,
+  // Requirement 12.2): a delegated executive dispatch can only be authorized
+  // through the REQUESTING USER's RBAC (a `c_level` user via `home:*`), never
+  // the agent's static grant. So the agent grant is built from the NON-executive
+  // home tool names only.
+  ...HOME_TOOL_NAMES.filter(
+    (name) => !HOME_EXECUTIVE_TOOL_NAMES.includes(name as never),
+  ).map((name) => homeToolPermission(name)),
   // The actual permission the dispatcher checks for each re-exposed registry tool.
   ...HOME_TOOL_NAMES.filter((name) => isToolName(name)).map((name) =>
     toolPermission(name as Parameters<typeof toolPermission>[0])
@@ -865,6 +887,7 @@ export const homeCapabilityEntries: CatalogEntry[] = [
   ...homeReportToolEntries,
   ...platformCapabilityEntries,
   ...crmAnalyticsCapabilityEntries,
+  ...executiveCapabilityEntries,
 ];
 
 /**
@@ -878,3 +901,30 @@ export const homeCapabilityEntries: CatalogEntry[] = [
 export function loadHomeCapabilities(): CatalogLoadResult {
   return loadCatalog(homeCapabilityEntries);
 }
+
+// ── Per-turn tool exposure (Requirement 12.5; Property 17) ─────────────────────
+
+/**
+ * Whether a turn's requesting roles are C-Level. The server signal mirrors the
+ * RBAC role that holds `home:*`: `c_level` (or `super_admin`, which holds
+ * `*:*`). Pure over the supplied roles.
+ */
+export function isCLevelRoles(roles: string[]): boolean {
+  return roles.includes("super_admin") || roles.includes("c_level");
+}
+
+/**
+ * The per-turn active tool name set the agent is offered, keyed on the
+ * requesting user's roles. A non-C-Level turn is offered NONE of the executive
+ * tools (they are removed from the active set), so the model cannot select
+ * them; a C-Level turn is offered the full home tool set. The dispatcher denial
+ * remains the hard guarantee (Property 14) — this exposure filter is the
+ * `SHALL exclude` UX layer (Requirement 12.5). Pure and deterministic.
+ */
+export function activeToolNames(roles: string[]): string[] {
+  if (isCLevelRoles(roles)) return [...HOME_TOOL_NAMES];
+  return HOME_TOOL_NAMES.filter(
+    (name) => !HOME_EXECUTIVE_TOOL_NAMES.includes(name as never),
+  );
+}
+

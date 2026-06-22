@@ -10,14 +10,16 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react';
-import { ArrowUp, Loader2, Send, Slash } from 'lucide-react';
+import { ArrowUp, Loader2, Send, Slash, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import {
   SLASH_COMMANDS,
   filterSlashCommands,
+  sanitizeCommands,
   type SlashCommand,
-} from '@/components/chat/slash-commands';
+  type SampleQuestion,
+} from '@/components/chat/prompt-sets';
 
 // ── Shared chat composer ──────────────────────────────────────────────────────
 // One composer for every chat surface (Home feed twin + AI control room). It
@@ -46,6 +48,10 @@ export interface ChatComposerProps {
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   /** Slash commands to expose; defaults to the shared SLASH_COMMANDS. */
   commands?: ReadonlyArray<SlashCommand>;
+  /** Clickable sample questions for the Prompt_Helper popup. */
+  sampleQuestions?: ReadonlyArray<SampleQuestion>;
+  /** Show the Prompt_Helper trigger (the sample-question popup). */
+  promptHelper?: boolean;
   autoFocus?: boolean;
   /** Show a voice-call button next to Send (opens the voice experience). */
   voice?: boolean;
@@ -66,6 +72,8 @@ export function ChatComposer({
   variant = 'panel',
   inputRef,
   commands = SLASH_COMMANDS,
+  sampleQuestions = [],
+  promptHelper = false,
   autoFocus = false,
   voice = false,
   voiceMode = 'lead',
@@ -74,10 +82,16 @@ export function ChatComposer({
   const ref = inputRef ?? innerRef;
   const [activeIdx, setActiveIdx] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
+
+  // A custom command set that cannot satisfy the shared command contract is
+  // dropped command-by-command; the valid remainder keeps the standard
+  // interaction model (Requirement 5.4, 5.5).
+  const safeCommands = useMemo(() => sanitizeCommands(commands), [commands]);
 
   const matches = useMemo(
-    () => filterSlashCommands(value, commands),
-    [value, commands],
+    () => filterSlashCommands(value, safeCommands),
+    [value, safeCommands],
   );
   const menuVisible = matches.length > 0 && !dismissed;
 
@@ -101,7 +115,13 @@ export function ChatComposer({
   }, [value, resize]);
 
   const handleChange = (v: string) => {
-    if (dismissed) setDismissed(false);
+    // `/` immediately followed by whitespace is free text, not a command —
+    // actively dismiss the menu so the slash is treated literally (Req 2.2).
+    if (/^\/\s/.test(v)) {
+      setDismissed(true);
+    } else if (dismissed) {
+      setDismissed(false);
+    }
     onChange(v);
   };
 
@@ -115,9 +135,24 @@ export function ChatComposer({
     onSubmit(trimmed);
   };
 
+  // Fill, NOT send: import the prompt text into the composer, close the
+  // originating menu/popup, and focus the textarea with the caret at the end so
+  // the user can edit before submitting (Req 1.2–1.5, 3.2, 3.3, 13.1).
+  const fillFromPrompt = (text: string) => {
+    onChange(text);
+    setDismissed(true);
+    setHelperOpen(false);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      const end = text.length;
+      el.setSelectionRange(end, end);
+    });
+  };
+
   const selectCommand = (cmd: SlashCommand) => {
-    submit(cmd.message);
-    requestAnimationFrame(() => ref.current?.focus());
+    fillFromPrompt(cmd.message);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -225,6 +260,57 @@ export function ChatComposer({
             })}
           </ul>
         </div>
+      )}
+
+      {/* Prompt helper — a role-aware popup of clickable sample questions.
+          Clicking a question fills (never sends) the composer (Req 3.1\u20133.4). */}
+      {promptHelper && sampleQuestions.length > 0 && helperOpen && (
+        <div
+          role="listbox"
+          aria-label="Sample questions"
+          className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md overflow-hidden rounded-xl border border-ora-sand/70 bg-ora-white shadow-lg"
+        >
+          <div className="flex items-center gap-1.5 border-b border-ora-sand/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-ora-muted">
+            <Sparkles className="h-3 w-3 stroke-1" />
+            Try asking
+          </div>
+          <ul className="max-h-64 overflow-y-auto py-1">
+            {sampleQuestions.map((q) => (
+              <li key={q.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onMouseDown={(e) => {
+                    // Keep textarea focus through the click before we fill.
+                    e.preventDefault();
+                    fillFromPrompt(q.prompt);
+                  }}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-ora-cream-light"
+                >
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 stroke-1 text-ora-gold-dark" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-ora-charcoal">
+                    {q.label}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {promptHelper && sampleQuestions.length > 0 && (
+        <button
+          type="button"
+          aria-label="Sample questions"
+          aria-haspopup="listbox"
+          aria-expanded={helperOpen}
+          title="Sample questions"
+          onClick={() => setHelperOpen((o) => !o)}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ora-sand/70 bg-ora-white text-ora-gold-dark transition hover:border-ora-gold/40 hover:bg-ora-cream-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ora-gold focus-visible:ring-offset-2"
+        >
+          <Sparkles className="h-4 w-4 stroke-1" />
+        </button>
       )}
 
       <div className={fieldWrapClass}>

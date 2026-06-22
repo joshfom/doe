@@ -97,6 +97,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import {
   HOME_AGENT_ACTOR,
   HOME_TOOL_NAMES,
+  activeToolNames,
   loadHomeCapabilities,
 } from "../ai/tools/home-capabilities";
 
@@ -482,8 +483,16 @@ export async function runHomeAgentTurn(
     ) ?? homeAgent;
 
   const budget = options.budget ?? HOME_RUN_BUDGET;
+  // Per-turn tool exposure (Requirement 12.5): a non-C-Level turn is offered
+  // none of the executive tools, so the model cannot select them. The
+  // dispatcher denial remains the hard guarantee (Property 14).
+  const activeTools = activeToolNames(input.roles);
   const outcome = await runWithBudget(budget, (signal) =>
-    registeredAgent.generate(messages, { abortSignal: signal, requestContext }),
+    registeredAgent.generate(messages, {
+      abortSignal: signal,
+      requestContext,
+      activeTools,
+    }),
   );
 
   if (!outcome.ok) {

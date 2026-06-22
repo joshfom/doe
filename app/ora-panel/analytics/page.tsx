@@ -26,6 +26,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { ChatComposer } from '@/components/chat/ChatComposer';
+import { resolvePromptSet } from '@/components/chat/prompt-sets';
 import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import { ToolResultCards } from '@/app/ora-panel/_home/ToolCards';
 import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
@@ -69,13 +70,6 @@ interface ToastState {
   text: string;
 }
 
-const SUGGESTIONS: ReadonlyArray<{ label: string; prompt: string }> = [
-  { label: 'This month vs last', prompt: 'Compare this month against last month across the pipeline.' },
-  { label: 'Cost per qualified lead', prompt: 'What is our cost per qualified lead by channel right now?' },
-  { label: 'Speed-to-lead', prompt: 'How is our median speed-to-lead trending?' },
-  { label: 'Tier funnel', prompt: 'Show me the lead tier funnel and where we are leaking.' },
-];
-
 const WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
@@ -103,6 +97,7 @@ export default function AnalyticsPage() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [emailing, setEmailing] = useState(false);
@@ -127,6 +122,7 @@ export default function AnalyticsPage() {
       })
       .then((data) => {
         if (cancelled) return;
+        setSession(data);
         if (!hasAnalyticsAccess(data)) setUnauthorized(true);
         setAuthLoading(false);
       })
@@ -159,6 +155,12 @@ export default function AnalyticsPage() {
 
   // The latest assistant answer (skipping the static welcome) is what "Email me
   // this" sends; the most recent user question becomes the email heading.
+  // The role-aware prompt set (general + executive for C-Level) sourced from
+  // the single shared definition module. Drives the composer's fill-not-send
+  // slash menu and Prompt_Helper; executive prompts never surface to a
+  // non-C-Level session (resolved server-side authority still applies).
+  const promptSet = useMemo(() => resolvePromptSet(session), [session]);
+
   const { lastSummary, lastQuestion } = useMemo(() => {
     let summary = '';
     let question = '';
@@ -318,22 +320,6 @@ export default function AnalyticsPage() {
               <span aria-live="polite">{PROGRESS_STEPS[progressStep]}</span>
             </div>
           )}
-          {messages.filter((m) => m.role === 'user').length === 0 && (
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  onClick={() => void send(s.prompt)}
-                  disabled={busy}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-ora-sand/70 bg-ora-white px-4 text-xs text-ora-charcoal transition hover:border-ora-gold/40 hover:bg-ora-cream-light disabled:opacity-50"
-                >
-                  <Sparkles className="h-3.5 w-3.5 stroke-1 text-ora-gold-dark" />
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -348,6 +334,9 @@ export default function AnalyticsPage() {
           disabled={busy}
           voice
           voiceMode="staff"
+          promptHelper
+          commands={promptSet.commands}
+          sampleQuestions={promptSet.sampleQuestions}
           placeholder="Ask to compare, explain a figure, or show a trend…"
         />
       </div>
