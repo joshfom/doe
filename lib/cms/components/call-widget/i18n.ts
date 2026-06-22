@@ -20,6 +20,8 @@ export interface CallWidgetStrings {
   /** Hint shown next to the optional name field. */
   nameOptional: string;
   consentLabel: string;
+  /** Error shown when the caller submits without checking consent. */
+  consentRequired: string;
   submit: string;
   close: string;
   invalidPhone: string;
@@ -41,6 +43,7 @@ export const callWidgetI18n: Record<"en" | "ar", CallWidgetStrings> = {
     nameOptional: "Optional",
     consentLabel:
       "I consent to being contacted about ORA projects and to this call being processed.",
+    consentRequired: "Please accept the consent notice to start the call.",
     submit: "Start call",
     close: "Close",
     invalidPhone: "Please enter a valid phone number.",
@@ -60,6 +63,7 @@ export const callWidgetI18n: Record<"en" | "ar", CallWidgetStrings> = {
     nameOptional: "اختياري",
     consentLabel:
       "أوافق على أن يتم التواصل معي بشأن مشاريع ORA وعلى معالجة هذه المكالمة.",
+    consentRequired: "يرجى الموافقة على إشعار الموافقة لبدء المكالمة.",
     submit: "ابدأ المكالمة",
     close: "إغلاق",
     invalidPhone: "يرجى إدخال رقم هاتف صحيح.",

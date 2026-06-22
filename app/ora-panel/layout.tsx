@@ -35,7 +35,7 @@ import {
 import type { SessionData } from '@/lib/types/session';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DemoPersonaProvider } from './_components/demo-persona';
-import { PanelTopBar } from './_components/PanelTopBar';
+import { PanelTopNav } from './_components/PanelTopNav';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -195,12 +195,22 @@ export default function OraPanelLayout({
     (item) => item.permission === null || hasPermission(userPermissions, item.permission)
   );
 
+  // Resolve the current section label for the top nav (longest matching href).
+  const activeNavItem = [...navItems]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((item) =>
+      item.href === '/ora-panel'
+        ? pathname === '/ora-panel'
+        : pathname.startsWith(item.href),
+    );
+  const activeLabel = activeNavItem?.label ?? 'Dashboard';
+
   return (
     <QueryClientProvider client={queryClient}>
       <DemoPersonaProvider>
       <div className="flex min-h-screen" style={{ fontFamily: "var(--font-poppins), Poppins, system-ui, sans-serif" }}>
-        {/* Top-right user menu + session-only persona toggle (demo). */}
-        <PanelTopBar userName={session?.name} />
+        {/* Full-width glassmorphic top nav: section title + user/persona menu. */}
+        <PanelTopNav title={activeLabel} userName={session?.name} />
         {/* Sidebar — expands on hover, collapses on mouse leave */}
         <aside
           onMouseEnter={() => setCollapsed(false)}
@@ -267,8 +277,8 @@ export default function OraPanelLayout({
           </div>
         </aside>
 
-        {/* Main content */}
-        <main className="ml-16 flex-1 bg-ora-cream-light p-8 min-h-screen transition-all duration-200">
+        {/* Main content — top padding clears the fixed glassmorphic top nav. */}
+        <main className="ml-16 flex-1 bg-ora-cream-light px-8 pb-8 pt-24 min-h-screen transition-all duration-200">
           {children}
         </main>
       </div>

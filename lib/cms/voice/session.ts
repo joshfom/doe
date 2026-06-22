@@ -68,49 +68,66 @@ export async function createVoiceSession(
   db: Database,
   input: CreateVoiceSessionInput
 ): Promise<CreateVoiceSessionResult> {
-  // 1) Normalise + resolve the caller into the party graph (phone is hashed,
-  //    never stored raw — Req 3.2, 3.3, 14.5).
-  const e164 = normalizePhoneToE164(input.phone);
-  const { partyId, known } = await resolveParty(db, {
-    e164,
-    email: input.email,
-    name: input.name,
-    consent: input.consent,
-    demo: false,
-  });
+  const isStaff = input.staff === true;
 
-  // 2) Build the mirror-only ring-time context. The form identities are carried
-  //    so an unknown caller is attributed to the web form source and the agent
-  //    never re-asks for the phone number (Req 3.4, 3.5, 3.10).
-  const context = await buildCallContext(db, partyId, {
-    formIdentities: {
-      email: input.email,
-      phone: e164,
-      name: input.name,
-      source: input.page,
-    },
-  });
-
-  // 3) Provision LiveKit BEFORE persisting the conversation, so a provisioning
-  //    failure never leaves a dangling `connecting` row (Req 3.6).
+  // The room name is derived locally (no I/O), so room creation can start
+  // immediately and overlap the party-resolution DB round-trip below. This
+  // shaves the LiveKit `createRoom` latency off the caller's perceived
+  // start-call time without changing any invariant.
+  const e164 = isStaff || !input.phone ? undefined : normalizePhoneToE164(input.phone);
   const roomName = generateRoomName();
-  await createRoom(roomName);
-  const token = await mintParticipantToken(roomName, partyId);
+
+  // 1) Resolve the caller into the party graph (Req 3.2, 3.3, 14.5) WHILE the
+  //    LiveKit room is being created — the two are independent. A staff "talk
+  //    to your twin" connect has no phone: it resolves by email only and is
+  //    marked demo-scoped so it is reset-safe and never counts as an inbound
+  //    lead (Property 10).
+  const [{ partyId, known }] = await Promise.all([
+    resolveParty(db, {
+      e164,
+      email: input.email,
+      name: input.name,
+      consent: input.consent,
+      demo: isStaff,
+    }),
+    createRoom(roomName),
+  ]);
+
+  // 2) Build the mirror-only ring-time context AND mint the participant token
+  //    in parallel — both depend only on the resolved party / room name and are
+  //    independent of each other. The form identities are carried so an unknown
+  //    caller is attributed to the web form source and the agent never re-asks
+  //    for the phone number (Req 3.4, 3.5, 3.10).
+  const [context, token] = await Promise.all([
+    buildCallContext(db, partyId, {
+      formIdentities: {
+        email: input.email,
+        ...(e164 ? { phone: e164 } : {}),
+        name: input.name,
+        source: input.page ?? (isStaff ? "ora-panel-staff" : undefined),
+      },
+    }),
+    mintParticipantToken(roomName, partyId),
+  ]);
+
+  // 3) Finish LiveKit provisioning (dispatch the agent) BEFORE persisting the
+  //    conversation, so a provisioning failure never leaves a dangling
+  //    `connecting` row (Req 3.6). Room + token are already in hand above.
   await dispatchAgent(roomName, context);
 
   // 4) Persist the conversation. `channel = "web_call"`, the resolved party,
   //    and status `"connecting"` (design §7.2). Participant identities mirror
-  //    existing channel behaviour (design §9.2).
+  //    existing channel behaviour (design §9.2). A staff connect has no phone.
   const [conversation] = await db
     .insert(aiConversations)
     .values({
-      channel: "web_call",
+      channel: isStaff ? "staff_twin" : "web_call",
       partyId,
       status: "connecting",
       language: context.language,
       participantName: input.name,
       participantEmail: input.email,
-      participantPhone: e164,
+      participantPhone: e164 ?? null,
     })
     .returning({ id: aiConversations.id });
 

@@ -49,6 +49,11 @@ export interface ChatComposerProps {
   autoFocus?: boolean;
   /** Show a voice-call button next to Send (opens the voice experience). */
   voice?: boolean;
+  /**
+   * Who the voice button connects as: `lead` opens the public pre-call form,
+   * `staff` connects the signed-in operator directly to their twin (no form).
+   */
+  voiceMode?: 'lead' | 'staff';
 }
 
 export function ChatComposer({
@@ -63,6 +68,7 @@ export function ChatComposer({
   commands = SLASH_COMMANDS,
   autoFocus = false,
   voice = false,
+  voiceMode = 'lead',
 }: ChatComposerProps) {
   const innerRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = inputRef ?? innerRef;
@@ -238,7 +244,9 @@ export function ChatComposer({
       </div>
 
       <SendButton variant={variant} sending={sending} disabled={disabled || value.trim() === ''} />
-      {voice && <VoiceCallButton size={variant === 'hero' ? 'md' : 'sm'} />}
+      {voice && (
+        <VoiceCallButton size={variant === 'hero' ? 'md' : 'sm'} mode={voiceMode} />
+      )}
     </form>
   );
 }

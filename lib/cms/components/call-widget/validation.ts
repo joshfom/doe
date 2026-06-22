@@ -27,12 +27,15 @@ export const DEFAULT_DIAL_CODE = "+971" as const;
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 
 /**
- * Pragmatic RFC-compatible email pattern (the WHATWG/HTML5 email validation
- * regex). Mirrors the server-side `z.string().email()` used by
- * `createVoiceSessionInputSchema` so client and server agree. (Requirement 1.4)
+ * Pragmatic RFC-compatible email pattern. Mirrors the server-side
+ * `z.string().email()` used by `createVoiceSessionInputSchema` so client and
+ * server agree (Requirement 1.4). The trailing dotted-label group is `+`
+ * (one-or-more), so a domain MUST carry a TLD — `foo@bar` is rejected here
+ * exactly as the server rejects it, instead of passing the client gate and then
+ * 400-ing on submit.
  */
 const EMAIL_REGEX =
-  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 /** True when `value` is a syntactically valid E.164 phone number. */
 export function isValidE164(value: string): boolean {

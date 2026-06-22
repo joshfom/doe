@@ -1,0 +1,54 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 1681ea850dea8d7a61d4d003d41fa10db018bd5c..670b2547eabc2453b6a91a72ab27dcb326dc72b2 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -2857,15 +2857,15 @@ Note: This migration may take some time for large tables.
+    * Used to skip deduplication when the constraint already exists (migration already complete).
+    */
+   async spansPrimaryKeyExists() {
+-    const parsedSchemaName = this.schemaName ? utils.parseSqlIdentifier(this.schemaName, "schema name") : "";
+-    const constraintName = buildConstraintName({
+-      baseName: "mastra_ai_spans_traceid_spanid_pk",
+-      schemaName: parsedSchemaName || void 0
+-    });
+     const schemaFilter = this.schemaName || "public";
+     const result = await this.client.oneOrNone(
+-      `SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = lower($1) AND connamespace = (SELECT oid FROM pg_namespace WHERE nspname = $2)) as exists`,
+-      [constraintName, schemaFilter]
++      `SELECT EXISTS (
++        SELECT 1 FROM pg_constraint c
++        JOIN pg_class t ON t.oid = c.conrelid
++        JOIN pg_namespace n ON n.oid = t.relnamespace
++        WHERE c.contype = 'p' AND t.relname = 'mastra_ai_spans' AND n.nspname = $1
++      ) as exists`,
++      [schemaFilter]
+     );
+     return result?.exists ?? false;
+   }
+diff --git a/dist/index.js b/dist/index.js
+index f830f85b7f887c14345922f0cd5c0d4e61921ecd..9694cf58a20f319de49642f781783cd4b8f100ef 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2832,15 +2832,15 @@ Note: This migration may take some time for large tables.
+    * Used to skip deduplication when the constraint already exists (migration already complete).
+    */
+   async spansPrimaryKeyExists() {
+-    const parsedSchemaName = this.schemaName ? parseSqlIdentifier(this.schemaName, "schema name") : "";
+-    const constraintName = buildConstraintName({
+-      baseName: "mastra_ai_spans_traceid_spanid_pk",
+-      schemaName: parsedSchemaName || void 0
+-    });
+     const schemaFilter = this.schemaName || "public";
+     const result = await this.client.oneOrNone(
+-      `SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = lower($1) AND connamespace = (SELECT oid FROM pg_namespace WHERE nspname = $2)) as exists`,
+-      [constraintName, schemaFilter]
++      `SELECT EXISTS (
++        SELECT 1 FROM pg_constraint c
++        JOIN pg_class t ON t.oid = c.conrelid
++        JOIN pg_namespace n ON n.oid = t.relnamespace
++        WHERE c.contype = 'p' AND t.relname = 'mastra_ai_spans' AND n.nspname = $1
++      ) as exists`,
++      [schemaFilter]
+     );
+     return result?.exists ?? false;
+   }

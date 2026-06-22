@@ -150,8 +150,12 @@ function normalizeEmail(email: string): string {
 }
 
 export interface ResolvePartyInput {
-  /** Normalised E.164 phone number (will be hashed, never stored raw). */
-  e164: string;
+  /**
+   * Normalised E.164 phone number (will be hashed, never stored raw). Optional:
+   * a staff "talk to your twin" connect has no phone, so resolution falls back
+   * to email-only matching and no `phone_hash` identity is linked.
+   */
+  e164?: string;
   /** Caller email (matched/stored lower-cased). */
   email: string;
   /** Optional caller name; set on a newly-created party. */
@@ -171,8 +175,11 @@ export interface ResolvePartyResult {
   partyId: string;
   /** True when an existing party matched on phone_hash or email. */
   known: boolean;
-  /** The salted phone hash that was matched/linked (never the raw number). */
-  phoneHash: string;
+  /**
+   * The salted phone hash that was matched/linked, or `null` for an email-only
+   * (staff, no-phone) resolution where no phone identity exists.
+   */
+  phoneHash: string | null;
 }
 
 /**
@@ -236,11 +243,14 @@ export async function resolveParty(
   db: Database,
   input: ResolvePartyInput
 ): Promise<ResolvePartyResult> {
-  const phoneHash = computePhoneHash(input.e164, input.salt);
+  // A staff connect has no phone — resolve by email only and link no phone_hash.
+  const phoneHash = input.e164 ? computePhoneHash(input.e164, input.salt) : null;
   const email = normalizeEmail(input.email);
 
-  // 1) Match on phone_hash, 2) else email.
-  let partyId = await findPartyIdByIdentity(db, "phone_hash", phoneHash);
+  // 1) Match on phone_hash (when a phone was supplied), 2) else email.
+  let partyId = phoneHash
+    ? await findPartyIdByIdentity(db, "phone_hash", phoneHash)
+    : null;
   let known = partyId !== null;
 
   if (!partyId) {
@@ -279,8 +289,11 @@ export async function resolveParty(
   }
 
   // Link both identities idempotently (covers the case where a party matched on
-  // one identity but the other is newly supplied).
-  await linkIdentity(db, partyId, "phone_hash", phoneHash);
+  // one identity but the other is newly supplied). The phone_hash is only
+  // linked when a phone was supplied (a staff connect links email only).
+  if (phoneHash) {
+    await linkIdentity(db, partyId, "phone_hash", phoneHash);
+  }
   await linkIdentity(db, partyId, "email", email);
 
   return { partyId, known, phoneHash };

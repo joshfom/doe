@@ -126,5 +126,8 @@
   "trustedDependencies": [
     "sharp",
     "unrs-resolver"
-  ]
+  ],
+  "patchedDependencies": {
+    "@mastra/pg@1.13.0": "patches/@mastra%2Fpg@1.13.0.patch"
+  }
 }

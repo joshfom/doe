@@ -399,6 +399,7 @@ export function HomeChat({ firstName, prompts = DEFAULT_PROMPTS }: HomeChatProps
       sending={sending}
       disabled={sending}
       voice
+      voiceMode="staff"
       placeholder="Message your twin…  (type / for commands)"
     />
   );

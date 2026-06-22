@@ -1,0 +1,126 @@
+# ============================================================================
+# Dokploy deployment stack for DOE (Hetzner, single host).
+#
+# This is the file to point a Dokploy "Compose" application at. One image
+# (built from ./Dockerfile) runs FOUR always-on services — so a single deploy
+# (git push → Dokploy build) brings up the site, the API, the background
+# workers AND the voice agent together:
+#
+#   app      Next.js site + api.handle        :3000  (also runs DB migrations)
+#   api      Bun/Elysia standalone (SSE)       :3001
+#   workers  long-lived loops (outbox, sf, jobs, lead, nudge)
+#   voice    LiveKit voice agent worker        (joins call rooms → DOE answers)
+#
+# Differences vs the local docker-compose.yml:
+#   • No Caddy — Dokploy's built-in Traefik terminates HTTPS and routes the
+#     public domain to the `app` service (attach the domain in the Dokploy UI:
+#     service = app, port = 3000). Add a second domain → api:3001 only if you
+#     expose the durable SSE stream publicly.
+#   • `voice` is a normal always-on service (no opt-in profile), so the agent
+#     is live on every deploy. It needs its creds in the Dokploy env (see below).
+#
+# Required Dokploy environment variables (Settings → Environment):
+#   DATABASE_URL / DOCKER_DATABASE_URL  — your external/managed Postgres (Neon).
+#                                         MUST be reachable from the container;
+#                                         there is no host Postgres on Hetzner.
+#   BETTER_AUTH_SECRET, PHONE_HASH_SALT  — required secrets.
+#   LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET / LIVEKIT_AGENT_NAME
+#   DEEPGRAM_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID  — voice creds.
+#   NEXT_PUBLIC_*  — baked into the browser bundle at BUILD time (build args).
+#
+# NOTE: NEXT_PUBLIC_* must be set as Dokploy build-time variables, not just
+# runtime env — they are inlined into the client bundle during `next build`.
+# ============================================================================
+
+name: doe
+
+# Shared build + env so every app-image service is identical bar its command.
+x-app-build: &app-build
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+      NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      NEXT_PUBLIC_POSTHOG_REVERSE_PROXY: ${NEXT_PUBLIC_POSTHOG_REVERSE_PROXY:-/ingest}
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
+      NEXT_PUBLIC_CLARITY_ID: ${NEXT_PUBLIC_CLARITY_ID:-}
+      NEXT_PUBLIC_GA4_ID: ${NEXT_PUBLIC_GA4_ID:-}
+      NEXT_PUBLIC_META_PIXEL_ID: ${NEXT_PUBLIC_META_PIXEL_ID:-}
+  image: doe/app:dokploy
+
+x-app-env: &app-env
+  # Container-tier DB connection: prefer DOCKER_DATABASE_URL, else DATABASE_URL.
+  DATABASE_URL: ${DOCKER_DATABASE_URL:-${DATABASE_URL:-}}
+  # Internal service discovery on the compose network.
+  API_URL: http://app:3000
+  INTERNAL_API_URL: http://api:3001
+
+services:
+  # ── Next.js site + api.handle (owns DB migrations on boot) ────────────────
+  app:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      RUN_MIGRATIONS: "true"
+    command: ["bun", "run", "start"]
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "bun -e \"fetch('http://localhost:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  # ── Standalone Bun/Elysia API: durable SSE (/api/realtime/*, /ws/*) ───────
+  api:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      API_PORT: "3001"
+      RUN_MIGRATIONS: "false"
+    command: ["bun", "run", "api:start"]
+    expose:
+      - "3001"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Container-tier workers (outbox, sf, jobs, lead, nudge) ────────────────
+  workers:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+    command: ["bun", "scripts/start-workers.ts", "core"]
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── LiveKit voice agent worker — ALWAYS ON so DOE answers calls ───────────
+  voice:
+    <<: *app-build
+    env_file: .env
+    environment:
+      <<: *app-env
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+    command: ["bun", "scripts/start-workers.ts", "voice"]
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped

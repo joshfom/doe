@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock ./
+# Patched dependencies (bun applies these during install; the files must be
+# present before `bun install` runs or the patch is silently skipped).
+COPY patches ./patches
 # Install with the lockfile frozen so the image matches the committed deps.
 # NODE_ENV=development ensures devDependencies (next build, tailwind) install.
 RUN NODE_ENV=development bun install --frozen-lockfile

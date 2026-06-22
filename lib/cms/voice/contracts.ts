@@ -34,19 +34,38 @@ export type Tier = z.infer<typeof tierSchema>;
  * Body of `POST /api/voice/sessions`. Re-validated server-side; the widget
  * validates the same shape client-side. `consent` MUST be the literal `true`
  * (a timestamped consent is required — SEC-1 / Req 14.1).
+ *
+ * Two callers:
+ *  • Public pre-call form (lead capture) — supplies `phone` + `email`.
+ *  • Authenticated staff "talk to your twin" — sets `staff: true` and supplies
+ *    only the signed-in identity (`email`, optional `name`). No `phone` is
+ *    collected because it is not a lead; the session connects the operator
+ *    directly to the agent.
  */
-export const createVoiceSessionInputSchema = z.object({
-  /** E.164 phone number (e.g. "+9715xxxxxxxx"). */
-  phone: z.string().trim().min(1, "Phone is required"),
-  /** RFC-format email address. */
-  email: z.string().trim().email("A valid email is required"),
-  /** Optional caller name. */
-  name: z.string().trim().min(1).optional(),
-  /** Required consent — must be exactly `true`. */
-  consent: z.literal(true),
-  /** Optional originating page / utm / source passthrough. */
-  page: z.string().trim().optional(),
-});
+export const createVoiceSessionInputSchema = z
+  .object({
+    /** E.164 phone number (e.g. "+9715xxxxxxxx"). Required for lead calls. */
+    phone: z.string().trim().min(1, "Phone is required").optional(),
+    /** RFC-format email address. */
+    email: z.string().trim().email("A valid email is required"),
+    /** Optional caller name. */
+    name: z.string().trim().min(1).optional(),
+    /** Required consent — must be exactly `true`. */
+    consent: z.literal(true),
+    /** Optional originating page / utm / source passthrough. */
+    page: z.string().trim().optional(),
+    /**
+     * Set by an authenticated staff member connecting to their twin. When true
+     * the `phone` requirement is waived and the session is attributed to the
+     * operator (a demo-scoped party), not treated as an inbound lead.
+     */
+    staff: z.boolean().optional(),
+  })
+  // A phone is mandatory for lead calls but never collected for a staff connect.
+  .refine((v) => v.staff === true || (typeof v.phone === "string" && v.phone.length > 0), {
+    message: "Phone is required",
+    path: ["phone"],
+  });
 
 export type CreateVoiceSessionInput = z.infer<
   typeof createVoiceSessionInputSchema

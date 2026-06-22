@@ -80,6 +80,9 @@
     "sharp",
     "unrs-resolver",
   ],
+  "patchedDependencies": {
+    "@mastra/pg@1.13.0": "patches/@mastra%2Fpg@1.13.0.patch",
+  },
   "overrides": {
     "@tiptap/core": "3.23.5",
     "@tiptap/extension-blockquote": "3.23.5",

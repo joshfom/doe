@@ -35,16 +35,13 @@ export function PanelTopBar({ userName }: { userName?: string | null }) {
   }, [open]);
 
   return (
-    <div
-      ref={ref}
-      className="fixed right-5 top-4 z-50"
-    >
+    <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 rounded-full border border-ora-sand/70 bg-ora-white/90 py-1.5 pl-2.5 pr-3 shadow-ora-sm backdrop-blur transition-colors hover:bg-ora-white"
+        className="flex items-center gap-2.5 rounded-full border border-ora-sand/70 bg-ora-white/70 py-1.5 pl-2.5 pr-3 shadow-ora-sm backdrop-blur transition-colors hover:bg-ora-white"
       >
         <UserCircle2 className="h-6 w-6 stroke-[1.5] text-ora-charcoal-light" />
         <span className="flex flex-col items-start leading-tight">

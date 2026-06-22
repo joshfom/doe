@@ -60,6 +60,10 @@ export function PreCallForm({
   const [form, setForm] = useState<PreCallFormState>(EMPTY_STATE);
   const [emailTouched, setEmailTouched] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
+  // Set when the caller attempts to submit; reveals every field's error at once
+  // (including still-empty required fields) so they see exactly what's missing
+  // before any call is initiated.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   // Close on Escape and lock body scroll while open.
   const handleKeyDown = useCallback(
@@ -87,19 +91,28 @@ export function PreCallForm({
       setForm(EMPTY_STATE);
       setEmailTouched(false);
       setPhoneTouched(false);
+      setAttemptedSubmit(false);
     }, 300);
     return () => window.clearTimeout(id);
   }, [open]);
 
   const submittable = canSubmitPreCall(form);
-  const emailInvalid = emailTouched && form.email.length > 0 && !isValidEmail(form.email);
-  const phoneInvalid =
-    phoneTouched && form.phone.length > 0 && !(form.phoneValid ?? false);
+  // Reveal field errors once the field is blurred OR the caller has tried to
+  // submit. On an attempted submit we also flag empty required fields.
+  const showEmailError =
+    (emailTouched || attemptedSubmit) && !isValidEmail(form.email);
+  const showPhoneError =
+    (phoneTouched || attemptedSubmit) && !(form.phoneValid ?? false);
+  const showConsentError = attemptedSubmit && !form.consent;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Surface every problem at once, then gate hard. No call is initiated
+    // unless phone (valid E.164), email (RFC + TLD) and consent all pass.
+    setAttemptedSubmit(true);
+    setEmailTouched(true);
+    setPhoneTouched(true);
     const input = buildSessionInput(form, page);
-    // Consent gate + validity gate (Requirements 1.5, 1.3, 1.4).
     if (!input) return;
     onSubmit(input);
   };
@@ -167,7 +180,7 @@ export function PreCallForm({
                         "!w-full border-b border-ora-charcoal-light/30 bg-transparent py-3 text-base leading-normal text-ora-charcoal focus:border-ora-charcoal focus:outline-none transition-colors",
                     }}
                   />
-                  {phoneInvalid && (
+                  {showPhoneError && (
                     <p
                       data-testid="call-widget-phone-error"
                       className="mt-1 text-[11px] text-ora-error"
@@ -192,10 +205,10 @@ export function PreCallForm({
                     setForm((s) => ({ ...s, email: e.target.value }))
                   }
                   onBlur={() => setEmailTouched(true)}
-                  aria-invalid={emailInvalid}
+                  aria-invalid={showEmailError}
                   className="w-full border-b border-ora-charcoal-light/30 bg-transparent py-3 text-base text-ora-charcoal placeholder:text-ora-muted focus:border-ora-charcoal focus:outline-none transition-colors"
                 />
-                {emailInvalid && (
+                {showEmailError && (
                   <p
                     data-testid="call-widget-email-error"
                     className="mt-1 text-[11px] text-ora-error"
@@ -239,6 +252,14 @@ export function PreCallForm({
                   {strings.consentLabel}
                 </span>
               </label>
+              {showConsentError && (
+                <p
+                  data-testid="call-widget-consent-error"
+                  className="text-[11px] text-ora-error"
+                >
+                  {strings.consentRequired}
+                </p>
+              )}
 
               <p className="text-sm leading-relaxed text-ora-charcoal-light">
                 {strings.privacyNote}{" "}

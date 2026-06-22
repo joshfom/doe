@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, Telescope, CheckCircle2, AlertCircle, Info, X, Activity, Inbox } from 'lucide-react';
 import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
+import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import type { SessionData } from '@/lib/types/session';
 import {
   BriefIntake,
@@ -57,6 +58,18 @@ import type {
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+/**
+ * Spoken-style prototype notice shown FIRST when the rep opens the voice agent,
+ * framed like a customer-service "this call may be recorded" disclaimer: it sets
+ * expectations (early prototype, may have flaws), states the purpose (a demo of
+ * hands-free agentic prospecting), reassures on the guardrail (nothing sends
+ * without approval), and invites the rep to interrupt.
+ */
+const VOICE_PROSPECTING_NOTICE =
+  'Quick heads-up — this voice prospecting agent is an early prototype with a short training window, so it may have a few rough edges. ' +
+  'It\u2019s a demo of hands-free, agentic prospecting: just tell me who you\u2019re looking for and which project, and I\u2019ll line everything up in your review inbox. ' +
+  'Nothing is sent without your approval, and you can interrupt me anytime.';
 
 /** Lightweight in-page toast (no new dependency) for action feedback. */
 interface ToastState {
@@ -960,6 +973,17 @@ export default function ProspectingPage() {
             Property-led outbound — comparables, buyer hypothesis, grounded outreach
           </p>
         </div>
+
+        {/* Hands-free entry: opens the voice agent in staff mode behind a short
+            prototype notice. Talk through who you're after; it preps the run
+            for your review (nothing sends without approval). */}
+        <VoiceCallButton
+          mode="staff"
+          page="ora-panel-prospecting"
+          label="Ask voice agent"
+          title="Voice prospecting"
+          introNotice={VOICE_PROSPECTING_NOTICE}
+        />
       </div>
 
       {error && (
