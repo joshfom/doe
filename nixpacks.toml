@@ -1,0 +1,20 @@
+# Nixpacks build/run plan for Dokploy (Hetzner).
+#
+# Dokploy auto-detects Nixpacks for this repo (NOT the Dockerfile or the compose
+# files), and by default it only runs ONE start command — `bun run start` —
+# which serves the Next.js site alone. That is why the API, the background
+# workers and the voice agent never came up.
+#
+# This file changes the start command to the single-process launcher
+# (scripts/start-all.ts), which runs DB migrations once and then spawns, in one
+# container: the web app, the standalone SSE API, the core workers AND the voice
+# agent. So a single `git push` brings up the frontend AND voice together.
+#
+# The @mastra/pg spans-table fix is applied by the package.json `postinstall`
+# hook (scripts/ensure-mastra-pg-patch.mjs), so it works here even though the
+# install phase is `npm ci` (which ignores bun's patchedDependencies).
+#
+# Toggles (set as Dokploy env vars if needed): START_VOICE=false, START_API=false.
+
+[start]
+cmd = "bun scripts/start-all.ts"
