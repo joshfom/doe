@@ -65,6 +65,29 @@ export async function runVoiceTurnRouted(
   deps: VoiceDeps,
   turn: OrchestratorTurn,
 ): Promise<OrchestratorResult> {
+  // Staff "talk to your twin" turns are a different conversation entirely: the
+  // signed-in employee is a teammate, served by the employee Twin (the
+  // Home_Agent) under THEIR identity — not the public lead-qualification agent.
+  // The presence of `employeeUserId` on the prefetched context is the gate. On
+  // ANY Twin failure we fall back to the proven lean path for this turn so the
+  // call never drops (the lean path still dispatches through the audited
+  // `dispatchTool`); a public/lead call never has `employeeUserId`, so its
+  // behaviour is unchanged.
+  if (turn.context.employeeUserId) {
+    try {
+      const { runEmployeeVoiceTurn } = await import("./employee-twin");
+      return await runEmployeeVoiceTurn(deps, turn);
+    } catch (err) {
+      try {
+        await recordDivergence(deps.db, "voice_lead", err);
+      } catch {
+        // swallow — fallback correctness takes precedence over bookkeeping
+      }
+      // fall through to the lean path — STILL audited via deps.callTool.
+      return runVoiceTurn(deps, turn);
+    }
+  }
+
   const path = await selectVoiceServingPath(deps.db);
 
   if (path === "agent") {

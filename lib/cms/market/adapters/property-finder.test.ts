@@ -240,10 +240,13 @@ describe("PropertyFinderAdapter — pure helpers", () => {
     });
     expect(url).toContain("/get-transactions?");
     expect(url).toContain("transaction_type=sold");
-    expect(url).toContain("sort=newest");
     expect(url).toContain("page=2");
     expect(url).toContain("location_id=L1");
     expect(url).toContain("period=1y");
+    // Empty optional filters must NOT be sent (the reseller 400s on an empty
+    // `property_type` enum).
+    expect(url).not.toContain("property_type=");
+    expect(url).not.toContain("bedrooms=");
   });
 
   it("parses a malformed payload into empty arrays (no invented rows)", () => {

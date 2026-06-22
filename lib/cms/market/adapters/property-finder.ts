@@ -29,6 +29,7 @@ import type {
   MarketBatch,
   MarketDataAdapter,
   RawIndex,
+  RawProject,
   RawTransaction,
   UnconfiguredSource,
 } from "../adapter";
@@ -114,6 +115,8 @@ export interface LocationResolutionCache {
 export interface CachedPage {
   transactions: RawTransaction[];
   priceIndex: RawIndex[];
+  /** Competitor projects derived from this page's transactions (Req 14.x). */
+  projects: RawProject[];
   totalPages: number;
 }
 
@@ -227,6 +230,7 @@ interface PfTransaction {
   id?: string | number;
   high_level_location_name?: string | null;
   location_name?: string | null;
+  location_slug?: string | null;
   price?: number | null;
   price_per_sqft?: number | null;
   property_size?: number | null; // sqft
@@ -320,6 +324,7 @@ export class PropertyFinderAdapter implements MarketDataAdapter {
       const next = this.advance(current, cached.totalPages, resolved, period);
       return {
         ...EMPTY_BATCH(encodeCursor(next)),
+        projects: cached.projects ?? [],
         transactions: cached.transactions,
         priceIndex: cached.priceIndex,
       };
@@ -355,9 +360,20 @@ export class PropertyFinderAdapter implements MarketDataAdapter {
 
     const mappedTxns = mapTransactions(transactions, asOf);
     const mappedIndex = mapSummary(summary, areaName, period, asOf);
+
+    // Derive competitor projects from this page's transactions and link each
+    // mapped transaction to its project, so `find_comparables` ranks LIVE
+    // projects (not just demo-seeded ones).
+    const { projects, projectRefByTxnId } = deriveProjects(transactions, asOf);
+    for (const m of mappedTxns) {
+      const ref = projectRefByTxnId.get(m.sourceRef);
+      if (ref) m.projectSourceRef = ref;
+    }
+
     const page: CachedPage = {
       transactions: mappedTxns,
       priceIndex: mappedIndex,
+      projects,
       totalPages,
     };
     await this.pageCache.set(cacheKey, page);
@@ -365,6 +381,7 @@ export class PropertyFinderAdapter implements MarketDataAdapter {
     const next = this.advance(current, totalPages, resolved, period);
     return {
       ...EMPTY_BATCH(encodeCursor(next)),
+      projects,
       transactions: mappedTxns,
       priceIndex: mappedIndex,
     };
@@ -494,11 +511,11 @@ export function pageCacheKey(c: CursorState): string {
 
 /** Build the `/get-transactions` request URL for a cursor (CONFIRMED query). */
 export function buildTransactionsUrl(host: string, c: CursorState): string {
+  // Only the required params — the reseller rejects an EMPTY `property_type` /
+  // `bedrooms` (invalid_enum_value), so optional filters are omitted, not sent
+  // blank.
   const params = new URLSearchParams({
-    sort: "newest",
-    property_type: "",
     page: String(c.page),
-    bedrooms: "",
     period: c.period,
     location_id: c.locationId,
     transaction_type: "sold",
@@ -574,6 +591,10 @@ export function mapSummary(
   asOf: Date
 ): RawIndex[] {
   if (!summary || !areaName) return [];
+  // `summary.volume` is a (possibly fractional) volume-change figure, but the
+  // mirror's `volume` column is an integer — round it so ingest never fails on a
+  // float (the raw figure is still carried verbatim in `trend`).
+  const rawVolume = numOrNull(summary.volume);
   return [
     {
       areaName,
@@ -582,7 +603,7 @@ export function mapSummary(
       avgPricePerSqft: numOrNull(summary.sale_avg_price_per_sqft),
       yoyPct: numOrNull(summary.sale_avg_price_per_sqft_change),
       roiPct: numOrNull(summary.roi),
-      volume: numOrNull(summary.volume),
+      volume: rawVolume == null ? null : Math.round(rawVolume),
       trend: {
         saleAvgPrice: summary.sale_avg_price ?? null,
         saleAvgPriceChange: summary.sale_avg_price_change ?? null,
@@ -590,6 +611,108 @@ export function mapSummary(
       asOf,
     },
   ];
+}
+
+/** Slugify a name for a stable project sourceRef fallback. */
+function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/** Classify a project's market segment from its average price-per-sqft (AED). */
+function segmentFromPpsf(
+  ppsf: number
+): "ultra_luxury" | "luxury" | "premium" | "mid" {
+  if (ppsf >= 3500) return "ultra_luxury";
+  if (ppsf >= 2200) return "luxury";
+  if (ppsf >= 1500) return "premium";
+  return "mid";
+}
+
+/** Map a provider `property_type` → the mirror's unit-type vocabulary. */
+function projectUnitType(t: string | null | undefined): string {
+  const s = (t ?? "").toLowerCase();
+  if (s.includes("villa")) return "villa";
+  if (s.includes("penthouse")) return "penthouse";
+  if (s.includes("town")) return "townhouse";
+  if (s.includes("office") || s.includes("retail") || s.includes("commercial"))
+    return "office";
+  return "apartment";
+}
+
+/**
+ * Derive competitor {@link RawProject}s from a page of provider transactions,
+ * grouping by `location_slug` (or a slug of `location_name`). Each project's
+ * price band + avg price-per-sqft + segment + unit mix are aggregated from its
+ * transactions on this page, and a `projectSourceRef → txn id` map is returned
+ * so the caller can link each mapped transaction to its project (which lets
+ * `find_comparables` rank LIVE projects, not just demo-seeded ones). Re-ingest
+ * stays idempotent because the project `sourceRef` is stable per `(source, ref)`.
+ */
+export function deriveProjects(
+  transactions: PfTransaction[],
+  asOf: Date
+): { projects: RawProject[]; projectRefByTxnId: Map<string, string> } {
+  interface Group {
+    name: string;
+    area: string | null;
+    ppsfs: number[];
+    prices: number[];
+    unitTypes: Set<string>;
+  }
+  const groups = new Map<string, Group>();
+  const projectRefByTxnId = new Map<string, string>();
+
+  for (const t of transactions) {
+    const name = (t.location_name ?? "").trim();
+    if (!name || t.id == null || String(t.id).length === 0) continue;
+    const slug = (t.location_slug ?? "").trim() || slugifyName(name);
+    const ref = `pf-proj-${slug}`;
+    projectRefByTxnId.set(String(t.id), ref);
+
+    let g = groups.get(ref);
+    if (!g) {
+      g = {
+        name,
+        area: t.high_level_location_name ?? null,
+        ppsfs: [],
+        prices: [],
+        unitTypes: new Set(),
+      };
+      groups.set(ref, g);
+    }
+    if (typeof t.price_per_sqft === "number" && t.price_per_sqft > 0)
+      g.ppsfs.push(t.price_per_sqft);
+    if (typeof t.price === "number" && t.price > 0) g.prices.push(t.price);
+    g.unitTypes.add(projectUnitType(t.property_type));
+  }
+
+  const projects: RawProject[] = [];
+  for (const [ref, g] of groups) {
+    const avgPpsf =
+      g.ppsfs.length > 0
+        ? Math.round(g.ppsfs.reduce((a, b) => a + b, 0) / g.ppsfs.length)
+        : null;
+    projects.push({
+      sourceRef: ref,
+      name: g.name,
+      communityName: g.area,
+      city: "Dubai",
+      region: "Dubai",
+      country: "AE",
+      segment: avgPpsf != null ? segmentFromPpsf(avgPpsf) : null,
+      status: "completed",
+      unitTypes: [...g.unitTypes],
+      priceMin: g.prices.length > 0 ? Math.min(...g.prices) : null,
+      priceMax: g.prices.length > 0 ? Math.max(...g.prices) : null,
+      avgPricePerSqft: avgPpsf,
+      asOf,
+    });
+  }
+  return { projects, projectRefByTxnId };
 }
 
 /**

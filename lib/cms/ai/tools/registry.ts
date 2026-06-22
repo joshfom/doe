@@ -329,6 +329,22 @@ const METRICS_VIEW_SET: ReadonlySet<string> = new Set(METRICS_VIEWS);
 /** Period values that mean "all-time / exec single-scope" rather than a week. */
 const OVERALL_PERIODS: ReadonlySet<string> = new Set(["", "overall", "all", "all-time"]);
 
+/**
+ * Is `s` a real calendar date in strict `YYYY-MM-DD` form? Only such a value is
+ * safe to feed the week-bucketed views' `week = $1::date` filter. Any other
+ * non-empty period (a natural-language "this week", "June 2026", …) would make
+ * the `::date` cast throw at the database and surface to the user as the
+ * pipeline summary being "unavailable" — so the planner routes anything that is
+ * NOT a valid ISO date to the all-time/overall scope instead (the read then
+ * always succeeds; the LLM can still describe the latest week from
+ * `metrics_week_over_week`, which is unfiltered).
+ */
+function isIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 /** An equality filter applied to a view read as `WHERE column = value[::cast]`. */
 export interface MetricFilter {
   column: string;
@@ -371,7 +387,11 @@ export function planPipelineSummary(input: {
     input.scope ?? (input.repId ? "rep" : "exec");
 
   const rawPeriod = (input.period ?? "").trim();
-  const isOverall = OVERALL_PERIODS.has(rawPeriod.toLowerCase());
+  // Overall when it's an explicit all-time keyword OR not a valid ISO date — the
+  // latter guard stops a free-text period (e.g. "this week") from reaching the
+  // throwing `week = $1::date` filter (a healthy DB otherwise reports
+  // "unavailable"). A genuine `YYYY-MM-DD` still selects the weekly views.
+  const isOverall = OVERALL_PERIODS.has(rawPeriod.toLowerCase()) || !isIsoDate(rawPeriod);
   const period = isOverall ? "overall" : rawPeriod;
 
   if (scope === "rep") {

@@ -1,5 +1,8 @@
 import { Elysia } from "elysia";
+import { eq } from "drizzle-orm";
 import { db } from "../../db";
+import { users } from "../../schema";
+import { identityGuard, requirePermission } from "../../rbac/middleware";
 import { RateLimiter } from "../../tickets/rate-limit";
 import { createVoiceSessionInputSchema } from "../../voice/contracts";
 import { createVoiceSession, getVoiceSession, endVoiceSession } from "../../voice/session";
@@ -104,4 +107,59 @@ export const voiceRoutes = new Elysia({ name: "voice", prefix: "/voice" })
     } catch {
       return { ok: false };
     }
+  });
+
+// ── Staff "talk to your twin" session (AUTHENTICATED) ─────────────────────────
+//
+// A separate, GUARDED Elysia instance so the public `/voice/sessions` path above
+// stays unauthenticated. `identityGuard` + `requirePermission()` (auth-only,
+// mirroring `homeRoutes`) establish the signed-in EMPLOYEE; their id + RBAC
+// roles are threaded into the session so the worker serves the call through the
+// employee Twin (the Home_Agent) under THAT user — every Delegated_Action is
+// audited + RBAC-scoped to them (Requirement 8.2). The employee identity is
+// taken from the validated session ONLY, never from the request body, so a
+// caller can never impersonate another user.
+export const voiceStaffRoutes = new Elysia({ name: "voice-staff", prefix: "/voice" })
+  .use(identityGuard)
+  .use(requirePermission())
+
+  // POST /api/voice/staff-sessions — start an employee "talk to your twin" call.
+  .post("/staff-sessions", async (ctx: any) => {
+    const userId: string = ctx.userId;
+    const roles: string[] = ctx.resolvedRoles ?? [];
+    if (!userId) {
+      ctx.set.status = 401;
+      return { error: "Authentication required" };
+    }
+
+    // The session's email/name come from the authenticated user record — never
+    // the request body — so the staff connect is bound to the real employee.
+    const [user] = await db
+      .select({ email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user?.email) {
+      ctx.set.status = 401;
+      return { error: "Authentication required" };
+    }
+
+    const result = await createVoiceSession(
+      db,
+      {
+        email: user.email,
+        name: user.name ?? undefined,
+        consent: true,
+        staff: true,
+        page: "ora-panel-staff",
+      },
+      { employeeUserId: userId, employeeRoles: roles }
+    );
+
+    return {
+      roomName: result.roomName,
+      token: result.token,
+      livekitUrl: result.livekitUrl,
+      conversationId: result.conversationId,
+    };
   });

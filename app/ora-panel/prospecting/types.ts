@@ -139,6 +139,18 @@ export interface ProviderCandidate {
   lawfulBasis: string;
 }
 
+/**
+ * Provider fan-out status for a prospect search — which providers were skipped
+ * because they were unconfigured, failed, or hit their request quota (429). The
+ * workspace surfaces a banner from this so the rep understands when results are
+ * live vs. representative fallback data.
+ */
+export interface ProviderSearchStatus {
+  unconfiguredProviders: string[];
+  failedProviders: string[];
+  rateLimitedProviders: string[];
+}
+
 /** A recorded Target row (privacy-safe projection — phone hash only). */
 export interface TargetRow {
   id: string;

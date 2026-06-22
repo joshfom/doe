@@ -42,6 +42,7 @@ import { aiAppointments, aiConversations } from "../schema";
 import { publishEvent } from "../realtime/events";
 import type {
   AppointmentResultContract,
+  CallContext,
   CreateVoiceSessionInput,
   CreateVoiceSessionResult,
   GetVoiceSessionResult,
@@ -61,12 +62,19 @@ import {
  *
  * @param db    Drizzle database handle.
  * @param input Validated session request (`consent === true`).
+ * @param opts  Optional staff identity. For an authenticated "talk to your
+ *   twin" connect, the route passes the signed-in EMPLOYEE's `employeeUserId`
+ *   (and RBAC `employeeRoles`); these are stamped onto the dispatched
+ *   {@link CallContext} so the worker serves the call through the employee Twin
+ *   (the Home_Agent) under THAT user's identity — never the public
+ *   lead-qualification agent. Ignored unless `input.staff === true`.
  * @returns the room name, ephemeral token, LiveKit URL, and conversation id the
  *   widget needs to join the call (Req 3.7, 3.8, 3.9).
  */
 export async function createVoiceSession(
   db: Database,
-  input: CreateVoiceSessionInput
+  input: CreateVoiceSessionInput,
+  opts: { employeeUserId?: string; employeeRoles?: string[] } = {}
 ): Promise<CreateVoiceSessionResult> {
   const isStaff = input.staff === true;
 
@@ -110,10 +118,23 @@ export async function createVoiceSession(
     mintParticipantToken(roomName, partyId),
   ]);
 
+  // For an authenticated staff connect, stamp the signed-in employee's identity
+  // onto the dispatched context so the worker routes the call to the employee
+  // Twin (the Home_Agent) under THAT user (Requirement 8.2). Only honoured for
+  // staff sessions; a public/lead call never carries an employee identity.
+  const dispatchContext: CallContext =
+    isStaff && opts.employeeUserId
+      ? {
+          ...context,
+          employeeUserId: opts.employeeUserId,
+          ...(opts.employeeRoles ? { employeeRoles: opts.employeeRoles } : {}),
+        }
+      : context;
+
   // 3) Finish LiveKit provisioning (dispatch the agent) BEFORE persisting the
   //    conversation, so a provisioning failure never leaves a dangling
   //    `connecting` row (Req 3.6). Room + token are already in hand above.
-  await dispatchAgent(roomName, context);
+  await dispatchAgent(roomName, dispatchContext);
 
   // 4) Persist the conversation. `channel = "web_call"`, the resolved party,
   //    and status `"connecting"` (design §7.2). Participant identities mirror

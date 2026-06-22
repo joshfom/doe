@@ -80,6 +80,10 @@ import {
   executiveCapabilityEntries,
   EXECUTIVE_TOOL_NAMES,
 } from "./executive-capabilities";
+import {
+  actionConfirmationEntries,
+  HOME_CONFIRM_TOOL_NAMES,
+} from "./action-confirmation";
 import { tickets, partyIdentities } from "../../schema";
 import type { TicketRequestType, TicketStatus } from "../../types";
 import { createTicket, getTicketById } from "../../tickets/service";
@@ -197,6 +201,7 @@ export const HOME_TOOL_NAMES: string[] = [
   ...HOME_REPORT_TOOL_NAMES,
   ...HOME_PLATFORM_TOOL_NAMES,
   ...HOME_CRM_TOOL_NAMES,
+  ...HOME_CONFIRM_TOOL_NAMES,
   ...HOME_EXECUTIVE_TOOL_NAMES,
 ];
 
@@ -887,6 +892,7 @@ export const homeCapabilityEntries: CatalogEntry[] = [
   ...homeReportToolEntries,
   ...platformCapabilityEntries,
   ...crmAnalyticsCapabilityEntries,
+  ...actionConfirmationEntries,
   ...executiveCapabilityEntries,
 ];
 

@@ -404,11 +404,20 @@ export function useVoiceCall(_options: UseVoiceCallOptions): UseVoiceCallReturn 
       setPhase("creating-session");
       let session: SessionResponse;
       try {
-        const res = await fetch("/api/voice/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
-        });
+        // A staff "talk to your twin" call goes to the AUTHENTICATED endpoint,
+        // which derives the employee identity from the session cookie (sent via
+        // `credentials: "include"`) — never from the body. Public/lead calls use
+        // the unauthenticated endpoint exactly as before.
+        const isStaffCall = input.staff === true;
+        const res = await fetch(
+          isStaffCall ? "/api/voice/staff-sessions" : "/api/voice/sessions",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            ...(isStaffCall ? { credentials: "include" as const } : {}),
+            body: JSON.stringify(input),
+          },
+        );
         if (!res.ok) throw new Error(`session request failed: ${res.status}`);
         session = (await res.json()) as SessionResponse;
         if (!session?.token || !session?.livekitUrl) {

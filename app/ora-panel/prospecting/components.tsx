@@ -46,6 +46,7 @@ import type {
   BuyerHypothesis,
   Comparable,
   ProviderCandidate,
+  ProviderSearchStatus,
   TargetRow,
   OutreachDraftRow,
   Channel,
@@ -177,6 +178,51 @@ export function ProgressStepper({ items }: { items: StepperItem[] }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Top-level workspace mode switch: separate the GUIDED per-prospect flow from
+ * the AUTONOMOUS batch so the rep faces one mental model at a time instead of
+ * two competing workflows stacked on a single long screen.
+ */
+export function WorkspaceModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'guided' | 'autonomous';
+  onChange: (m: 'guided' | 'autonomous') => void;
+}) {
+  const opts = [
+    { id: 'guided', icon: Layers, title: 'Guided', sub: 'One prospect at a time' },
+    { id: 'autonomous', icon: Bot, title: 'Autonomous batch', sub: 'Agent runs a batch → you review' },
+  ] as const;
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-xl border border-ora-sand/60 bg-ora-white p-1.5">
+      {opts.map((o) => {
+        const active = mode === o.id;
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onChange(o.id)}
+            aria-pressed={active}
+            className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-left transition ${
+              active ? 'bg-ora-charcoal text-ora-white' : 'text-ora-charcoal hover:bg-ora-cream-light'
+            }`}
+          >
+            <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-ora-gold' : 'text-ora-gold-dark'}`} />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{o.title}</span>
+              <span className={`block text-[11px] ${active ? 'text-ora-white/70' : 'text-ora-muted'}`}>
+                {o.sub}
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -683,11 +729,28 @@ export function ComparablesPanel({
   comparables,
   unconfigured,
   areaTrend = [],
+  dataSource = null,
 }: {
   comparables: Comparable[];
   unconfigured: boolean;
   areaTrend?: AreaTrendRow[];
+  /** Whether the comparables came from LIVE provider rows or the demo fallback. */
+  dataSource?: 'live' | 'demo' | null;
 }) {
+  const asOf = comparables[0]?.asOf ?? areaTrend[0]?.asOf ?? null;
+  const sourceBadge =
+    dataSource === 'live' ? (
+      <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
+        <RadioTower className="h-3 w-3" />
+        Live · Property Finder{asOf ? ` · as of ${new Date(asOf).toLocaleDateString()}` : ''}
+      </div>
+    ) : dataSource === 'demo' ? (
+      <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-ora-cream-dark px-2.5 py-1 text-[11px] font-medium text-ora-charcoal-light ring-1 ring-ora-sand/60">
+        <ScrollText className="h-3 w-3" />
+        Representative data{asOf ? ` · captured ${new Date(asOf).toLocaleDateString()}` : ''}
+      </div>
+    ) : null;
+
   if (unconfigured && comparables.length === 0) {
     return (
       <>
@@ -710,6 +773,7 @@ export function ComparablesPanel({
   }
   return (
     <>
+      {sourceBadge}
       <AreaTrendHeadline rows={areaTrend} />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {comparables.map((c) => (
@@ -878,47 +942,110 @@ function ListField({
 
 export function CandidatesPanel({
   candidates,
+  status,
   recordingId,
   onRecord,
 }: {
   candidates: ProviderCandidate[];
+  status?: ProviderSearchStatus | null;
   recordingId: string | null;
   onRecord: (c: ProviderCandidate) => void;
 }) {
+  const banner = providerStatusBanner(status, candidates);
   if (candidates.length === 0) {
     return (
-      <p className="text-xs text-ora-muted">
-        No candidates yet. Run a search — results stream in from the configured
-        Account/Person providers (Apollo, PDL, Cognism, Crunchbase). Providers
-        without credentials are skipped without failing the search.
-      </p>
+      <div className="space-y-3">
+        {banner}
+        <p className="text-xs text-ora-muted">
+          No candidates yet. Run a search — results stream in from the configured
+          Account/Person providers (Apollo, PDL, Cognism, Crunchbase). Providers
+          without credentials are skipped without failing the search.
+        </p>
+      </div>
     );
   }
   return (
-    <ul className="divide-y divide-ora-sand/40">
-      {candidates.map((c, i) => {
-        const key = c.email || c.sourceRef || `${c.displayName}-${i}`;
-        return (
-          <li key={key} className="flex items-center justify-between gap-3 py-2.5">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-ora-charcoal">
-                {c.displayName || c.companyName || 'Unnamed'}
+    <div className="space-y-3">
+      {banner}
+      <ul className="divide-y divide-ora-sand/40">
+        {candidates.map((c, i) => {
+          const key = c.email || c.sourceRef || `${c.displayName}-${i}`;
+          return (
+            <li key={key} className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-ora-charcoal">
+                  {c.displayName || c.companyName || 'Unnamed'}
+                </div>
+                <div className="truncate text-[11px] text-ora-muted">
+                  {[c.title, c.companyName, c.country].filter(Boolean).join(' · ') || c.targetType}
+                  {' · '}
+                  <span className="uppercase tracking-wide">{c.sourceProvider}</span>
+                </div>
               </div>
-              <div className="truncate text-[11px] text-ora-muted">
-                {[c.title, c.companyName, c.country].filter(Boolean).join(' · ') || c.targetType}
-                {' · '}
-                <span className="uppercase tracking-wide">{c.sourceProvider}</span>
-              </div>
-            </div>
-            <button type="button" className={btnGhost} disabled={recordingId === key} onClick={() => onRecord(c)}>
-              {recordingId === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-              Record
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+              <button type="button" className={btnGhost} disabled={recordingId === key} onClick={() => onRecord(c)}>
+                {recordingId === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                Record
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
+}
+
+/**
+ * Render a data-source banner for the candidate search: an amber "request limit
+ * reached" notice when a provider returned 429 (results are representative
+ * fallback data), or a neutral "no live provider configured" note when only the
+ * demo provider answered. Returns `null` when live providers carried the search.
+ */
+function providerStatusBanner(
+  status: ProviderSearchStatus | null | undefined,
+  candidates: ProviderCandidate[]
+) {
+  if (!status) return null;
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const allDemo =
+    candidates.length > 0 && candidates.every((c) => c.sourceProvider === 'demo');
+
+  if (status.rateLimitedProviders.length > 0) {
+    const names = status.rateLimitedProviders.map(cap).join(', ');
+    return (
+      <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs text-amber-800 ring-1 ring-amber-200">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          <strong>{names} request limit reached.</strong> The live buyer provider
+          hit its quota, so the candidates below are <em>representative
+          fallback data</em> — recorded and drafted the same way. Live results
+          resume automatically when the quota resets.
+        </span>
+      </div>
+    );
+  }
+
+  if (allDemo && status.unconfiguredProviders.length > 0) {
+    return (
+      <div className="flex items-start gap-2 rounded-lg bg-ora-cream-light/70 px-3 py-2.5 text-xs text-ora-charcoal-light ring-1 ring-ora-sand/60">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-ora-muted" />
+        <span>
+          No live buyer provider is connected, so these are{' '}
+          <em>representative prospects</em>. Connect Apollo to pull live
+          contacts.
+        </span>
+      </div>
+    );
+  }
+
+  if (status.failedProviders.length > 0) {
+    return (
+      <div className="flex items-start gap-2 rounded-lg bg-ora-cream-light/70 px-3 py-2.5 text-[11px] text-ora-muted ring-1 ring-ora-sand/50">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>Some providers were unavailable ({status.failedProviders.map(cap).join(', ')}). Showing what the rest returned.</span>
+      </div>
+    );
+  }
+  return null;
 }
 
 // ── 5. Recorded targets ─────────────────────────────────────────────────────

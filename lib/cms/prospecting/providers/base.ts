@@ -35,6 +35,7 @@ import type {
   TargetRef,
   Unconfigured,
 } from "./index";
+import { ProviderRateLimitError } from "./index";
 
 /**
  * The default lawful basis stamped onto purchased PII (B2B cold prospecting under
@@ -171,6 +172,12 @@ export abstract class BaseEnrichmentProvider implements EnrichmentProvider {
     const base = this.config?.baseUrl.replace(/\/+$/, "") ?? "";
     const url = `${base}${path}`;
     const res = await this.transport(url, init);
+    if (res.status === 429) {
+      // Quota exhausted — surface distinctly so the fan-out records this as a
+      // RATE-LIMITED provider (rep sees "limit reached") and the demo fallback
+      // carries the search, rather than a silent generic failure.
+      throw new ProviderRateLimitError(this.id, res.status);
+    }
     if (!res.ok) {
       throw new Error(`${this.id} request to ${path} failed (${res.status})`);
     }

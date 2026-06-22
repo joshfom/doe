@@ -147,6 +147,23 @@ describe("planPipelineSummary — scope/period view selection (Req 6.9, 10.1)", 
     expect(wow?.filters).toEqual([]);
   });
 
+  it("routes a non-ISO-date period to overall (never the throwing ::date filter)", () => {
+    // A free-text period the model might emit ("this week") must NOT reach the
+    // weekly `week = $1::date` filter — that cast throws on a healthy DB and
+    // surfaces to the user as "unavailable". It falls back to the overall views.
+    for (const period of ["this week", "last week", "June 2026", "2026-13-45"]) {
+      const plan = planPipelineSummary({ scope: "exec", period });
+      expect(plan.period).toBe("overall");
+      const views = plan.sources.map((s) => s.view);
+      expect(views).toContain("metrics_tier_funnel_overall");
+      expect(views).not.toContain("metrics_tier_funnel");
+      // No source carries a ::date cast filter.
+      for (const src of plan.sources) {
+        expect(src.filters.some((f) => f.cast === "date")).toBe(false);
+      }
+    }
+  });
+
   it("infers rep scope from a repId and reads that rep's load row", () => {
     const plan = planPipelineSummary({ repId: "rep-123" });
     expect(plan.scope).toBe("rep");

@@ -569,6 +569,49 @@ export const homeRoutes = new Elysia({ name: "home", prefix: "/home" })
     return { data: response };
   })
 
+  // POST /home/confirm — commit a high-impact write the user reviewed in a
+  // confirmation card (confirm-before-commit). Dispatches `confirm_action` under
+  // the SIGNED-IN USER as the audit actor (Req 8.2), with the Home_Agent
+  // identity carrying the delegated grant; the bound write then commits exactly
+  // once through the audited dispatcher. The single-use token is validated +
+  // consumed inside `confirm_action` (wrong-user / expired / replayed tokens are
+  // refused), so this route adds no new trust — it is just the button's
+  // transport.
+  .post("/confirm", async (ctx: any) => {
+    const userId: string = ctx.userId;
+    const body = (ctx.body ?? {}) as { token?: unknown };
+    const token = typeof body.token === "string" ? body.token.trim() : "";
+    if (!userId) {
+      ctx.set.status = 401;
+      return { error: "Authentication required" };
+    }
+    if (!token) {
+      ctx.set.status = 400;
+      return { error: "token is required" };
+    }
+
+    const [{ dispatchTool }, { HOME_AGENT_ACTOR }] = await Promise.all([
+      import("../../ai/tools/dispatch"),
+      import("../../ai/tools/home-capabilities"),
+    ]);
+    const result = await dispatchTool(
+      db,
+      "confirm_action",
+      { token },
+      { actor: userId, agentActor: HOME_AGENT_ACTOR, userId },
+    );
+    if (!result.ok) {
+      return {
+        data: {
+          executed: false,
+          message: "That didn't go through.",
+          error: result.error.code,
+        },
+      };
+    }
+    return { data: result.result };
+  })
+
   // GET /home/health — Agent_Availability_Check probe (AvailabilityProbe shape).
   .get("/health", async () => {
     const probe = await probeAgentHealth();

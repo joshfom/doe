@@ -691,6 +691,8 @@ const prospectSearchOutput = z.object({
   unconfiguredProviders: z.array(z.string()),
   /** Provider ids that threw and were skipped (the search still succeeds). */
   failedProviders: z.array(z.string()),
+  /** Provider ids skipped because their request quota was exhausted (429). */
+  rateLimitedProviders: z.array(z.string()),
 });
 
 const prospectSearchEntry = entry({
@@ -709,7 +711,7 @@ const prospectSearchEntry = entry({
   // The ONLY place the provider search fan-out happens. Caching window / job
   // idempotency is task 4.2; here we wire the fan-out and return candidates.
   handler: async (_db, _ctx, input) => {
-    const { results, unconfiguredProviders, failedProviders } =
+    const { results, unconfiguredProviders, failedProviders, rateLimitedProviders } =
       await searchAllProviders(input.filter as ProspectFilter);
 
     return {
@@ -728,6 +730,7 @@ const prospectSearchEntry = entry({
       })),
       unconfiguredProviders,
       failedProviders,
+      rateLimitedProviders,
     };
   },
 });

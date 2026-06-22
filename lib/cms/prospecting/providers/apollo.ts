@@ -32,16 +32,61 @@ import type {
 /** Default Apollo API base; override with `APOLLO_API_BASE_URL`. */
 export const APOLLO_DEFAULT_BASE_URL = "https://api.apollo.io/v1";
 
-/** Resolve Apollo config from env; `null` when `APOLLO_API_KEY` is absent. */
+/**
+ * RapidAPI marketplace host for Apollo (`apollo-io-no-cookies-required`). Used
+ * when no native `APOLLO_API_KEY` is set but a shared RapidAPI key is available
+ * (`APOLLO_RAPIDAPI_KEY` / `RAPIDAPI_KEY`). Override via `APOLLO_RAPIDAPI_HOST`.
+ */
+export const APOLLO_RAPIDAPI_DEFAULT_HOST =
+  "apollo-io-no-cookies-required.p.rapidapi.com";
+
+/** Resolve Apollo config from env; `null` when no usable credential is present. */
 export function apolloConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env
 ): ProviderConfig | null {
-  return configFromEnv(
+  // 1. Explicit RapidAPI marketplace key wins — it is chosen deliberately for
+  //    this deployment, even when a (possibly stale) native key is also present.
+  const explicitRapid = (env.APOLLO_RAPIDAPI_KEY ?? "").trim();
+  if (explicitRapid) {
+    const host = env.APOLLO_RAPIDAPI_HOST ?? APOLLO_RAPIDAPI_DEFAULT_HOST;
+    return { apiKey: explicitRapid, baseUrl: `https://${host}` };
+  }
+
+  // 2. Native Apollo key + endpoint.
+  const native = configFromEnv(
     "APOLLO_API_KEY",
     "APOLLO_API_BASE_URL",
     APOLLO_DEFAULT_BASE_URL,
     env
   );
+  if (native) return native;
+
+  // 3. Fall back to the shared RapidAPI marketplace key. The base URL carries the
+  //    RapidAPI host so {@link isRapidApiConfig} can detect the mode and build the
+  //    right `x-rapidapi-*` headers.
+  const rapidKey = (env.RAPIDAPI_KEY ?? "").trim();
+  if (rapidKey) {
+    const host = env.APOLLO_RAPIDAPI_HOST ?? APOLLO_RAPIDAPI_DEFAULT_HOST;
+    return { apiKey: rapidKey, baseUrl: `https://${host}` };
+  }
+  return null;
+}
+
+/** True when the resolved config targets the RapidAPI marketplace host. */
+function isRapidApiConfig(config: ProviderConfig): boolean {
+  return config.baseUrl.includes("rapidapi");
+}
+
+/**
+ * Build an Apollo app people-search URL from the ICP filter for the RapidAPI
+ * `/search_people_via_url` endpoint (which takes an Apollo app URL + page).
+ */
+function buildApolloPeopleUrl(filter: ProspectFilter): string {
+  const params = new URLSearchParams();
+  params.set("page", "1");
+  for (const t of filter.titles ?? []) params.append("personTitles[]", t);
+  for (const g of filter.geography ?? []) params.append("personLocations[]", g);
+  return `https://app.apollo.io/#/people?${params.toString()}`;
 }
 
 /** Shape of an Apollo person record (the subset this adapter reads). */
@@ -79,6 +124,28 @@ export class ApolloProvider extends BaseEnrichmentProvider {
     config: ProviderConfig,
     filter: ProspectFilter
   ): Promise<ProviderResult[]> {
+    // RapidAPI marketplace mode: real call via `/search_people_via_url`. A 429
+    // (quota exhausted) is thrown as a ProviderRateLimitError by `requestJson`,
+    // so the fan-out records Apollo as rate-limited and the demo provider carries
+    // the search.
+    if (isRapidApiConfig(config)) {
+      const host = new URL(config.baseUrl).host;
+      const payload = (await this.requestJson("/search_people_via_url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-rapidapi-key": config.apiKey,
+          "x-rapidapi-host": host,
+        },
+        body: JSON.stringify({
+          url: buildApolloPeopleUrl(filter),
+          page: 1,
+        }),
+      })) as { people?: ApolloPerson[]; contacts?: ApolloPerson[] };
+      const people = payload.people ?? payload.contacts ?? [];
+      return people.map((person) => this.mapPerson(filter, person));
+    }
+
     const body = {
       person_titles: filter.titles,
       person_seniorities: filter.seniority,

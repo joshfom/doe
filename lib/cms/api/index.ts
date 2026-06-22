@@ -53,7 +53,7 @@ import { sitemapRoutes } from "./routes/sitemap";
 // DOE Voice Surface route modules (task 19.1). voice/tools/demo-admin resolve on
 // the Next mount (request/response); realtime SSE is effective only on the Bun
 // mount (`api.listen`), where the stream can stay open. See design §3, §10.
-import { voiceRoutes } from "./routes/voice";
+import { voiceRoutes, voiceStaffRoutes } from "./routes/voice";
 import { toolsRoutes } from "./routes/tools";
 import { realtimeRoutes, realtimeLeadsRoutes } from "./routes/realtime";
 import { prospectingRoutes } from "./routes/prospecting";
@@ -166,6 +166,7 @@ export const api = new Elysia({ prefix: "/api" })
   // includes the voice surface. `realtimeRoutes` rides the same instance but is
   // only useful on the Bun mount (`server.ts`), where the SSE stream stays open.
   .use(voiceRoutes) // POST /api/voice/sessions, GET /api/voice/sessions/:id
+  .use(voiceStaffRoutes) // POST /api/voice/staff-sessions (authenticated employee Twin)
   .use(toolsRoutes) // POST /api/tools/:toolName (service-token guarded)
   .use(realtimeRoutes) // GET /api/realtime/events (SSE) — durable on Bun mount only
   .use(realtimeLeadsRoutes) // GET /api/realtime/leads (SSE, leads:read) — Bun mount only

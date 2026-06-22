@@ -36,16 +36,18 @@ export const outreachDraftSchema = z.object({
   grounding: z.array(
     z.object({
       claim: z.string().max(200),
-      // The named SQL source the claim's figure is read back from. Unchanged by
-      // the S7 increment (§4, Req 14.8): an Area_Trend claim pins to
-      // `market_price_index`, a specific-comp claim pins to `market_transactions`
-      // (both already permitted); party-graph claims pin to `leads_mirror` /
-      // `parties`. No figure is ever model-computed.
+      // The named SQL source the claim's figure is read back from. An Area_Trend
+      // claim pins to `market_price_index`, a specific-comp claim pins to
+      // `market_transactions`; party-graph claims pin to `leads_mirror` /
+      // `parties`. A claim about the OWN unit being sold (its asking price, size,
+      // floor, handover) pins to `ai_units` — the rep's own catalog record, the
+      // actual Own_Subject of the outreach. No figure is ever model-computed.
       sourceTable: z.enum([
         "market_transactions",
         "market_price_index",
         "leads_mirror",
         "parties",
+        "ai_units",
       ]),
       recordId: z.string(),
       asOf: z.string().datetime(),

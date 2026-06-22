@@ -3,6 +3,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../../db";
 import {
+  aiUnits,
   communities,
   marketTransactions,
   outreachDrafts,
@@ -130,6 +131,7 @@ function unwrap(
 type ComparableRow = {
   marketProjectId: string;
   name: string;
+  communityName: string | null;
   segment: string | null;
   score: number;
   stats: {
@@ -629,6 +631,31 @@ export const prospectingRoutes = new Elysia({
       unconfigured: boolean;
     };
 
+    // Honest data-source signal for the workspace: do we hold LIVE provider
+    // transactions for the comparable areas, or only the demo-stamped fallback
+    // catalog? Derived from the mirror's `demo` flag on `market_transactions`
+    // for the matched areas (the live market-sync ingests transactions + area
+    // trends, so this flips to "live" once a sync has run). `null` when there is
+    // nothing to classify.
+    let marketDataSource: "live" | "demo" | null = null;
+    const compAreas = [
+      ...new Set(
+        comp.comparables
+          .map((c) => c.communityName)
+          .filter((a): a is string => Boolean(a))
+      ),
+    ];
+    if (compAreas.length > 0) {
+      const txnRows = await db
+        .select({ demo: marketTransactions.demo })
+        .from(marketTransactions)
+        .where(inArray(marketTransactions.areaName, compAreas))
+        .limit(500);
+      if (txnRows.length > 0) {
+        marketDataSource = txnRows.some((r) => !r.demo) ? "live" : "demo";
+      }
+    }
+
     await publishEvent(db, {
       type: EV_COMPARABLES_FOUND,
       payload: { briefId: brief.id, count: comp.comparables.length },
@@ -653,6 +680,7 @@ export const prospectingRoutes = new Elysia({
       hypothesis,
       areaTrend,
       gaps,
+      marketDataSource,
     };
   })
 
@@ -853,11 +881,13 @@ export const prospectingRoutes = new Elysia({
     type DraftHypothesis = { segments?: string[]; titles?: string[] };
     let spec: Record<string, unknown> = {};
     let hypothesis: DraftHypothesis | null = null;
+    let aiUnitId: string | null = null;
     if (target.briefId) {
       const [brief] = await db
         .select({
           spec: prospectingBriefs.spec,
           buyerHypothesis: prospectingBriefs.buyerHypothesis,
+          aiUnitId: prospectingBriefs.aiUnitId,
         })
         .from(prospectingBriefs)
         .where(eq(prospectingBriefs.id, target.briefId))
@@ -865,10 +895,50 @@ export const prospectingRoutes = new Elysia({
       if (brief) {
         spec = (brief.spec as Record<string, unknown>) ?? {};
         hypothesis = (brief.buyerHypothesis as DraftHypothesis | null) ?? null;
+        aiUnitId = brief.aiUnitId ?? null;
       }
     }
     const area = typeof spec.area === "string" ? spec.area : undefined;
     const segment = typeof spec.segment === "string" ? spec.segment : undefined;
+
+    // The actual unit the rep wants to sell (the Own_Subject), from ORA's own
+    // catalog. This is the SUBJECT of the outreach — what the message is ABOUT.
+    // Market comps below are only PRICING EVIDENCE, never the thing being sold.
+    // Its real figures (asking price, size, floor, handover) are grounded to the
+    // `ai_units` record so the model never invents them (CC-SQL).
+    let subjectUnit:
+      | {
+          id: string;
+          projectName: string;
+          unitNumber: string;
+          unitType: string;
+          floorNumber: number | null;
+          areaSqm: number | null;
+          purchasePrice: number | null;
+          status: string;
+          estimatedHandoverDate: string | null;
+          updatedAt: Date;
+        }
+      | null = null;
+    if (aiUnitId) {
+      const [unit] = await db
+        .select({
+          id: aiUnits.id,
+          projectName: aiUnits.projectName,
+          unitNumber: aiUnits.unitNumber,
+          unitType: aiUnits.unitType,
+          floorNumber: aiUnits.floorNumber,
+          areaSqm: aiUnits.areaSqm,
+          purchasePrice: aiUnits.purchasePrice,
+          status: aiUnits.status,
+          estimatedHandoverDate: aiUnits.estimatedHandoverDate,
+          updatedAt: aiUnits.updatedAt,
+        })
+        .from(aiUnits)
+        .where(eq(aiUnits.id, aiUnitId))
+        .limit(1);
+      if (unit) subjectUnit = unit;
+    }
 
     // SQL-grounded comparables for the same area/segment (audited tool).
     const compResult = await dispatchTool(
@@ -921,11 +991,42 @@ export const prospectingRoutes = new Elysia({
     // Build the grounding manifest + the Facts the model is allowed to cite.
     const grounding: Array<{
       claim: string;
-      sourceTable: "market_transactions" | "market_price_index";
+      sourceTable: "market_transactions" | "market_price_index" | "ai_units";
       recordId: string;
       asOf: string;
     }> = [];
     const facts: string[] = [];
+
+    // The SUBJECT unit's own real figures — what we are actually selling. These
+    // are grounded to the `ai_units` record and are the unit the message is
+    // about (NOT a comparable). Listed first so they anchor the draft.
+    const subjectFacts: string[] = [];
+    if (subjectUnit) {
+      const bits: string[] = [];
+      bits.push(
+        `${subjectUnit.unitType} ${subjectUnit.unitNumber} at ${subjectUnit.projectName}`,
+      );
+      if (subjectUnit.areaSqm != null)
+        bits.push(`${subjectUnit.areaSqm} sqm`);
+      if (subjectUnit.floorNumber != null)
+        bits.push(`floor ${subjectUnit.floorNumber}`);
+      if (subjectUnit.purchasePrice != null)
+        bits.push(
+          `asking AED ${Number(subjectUnit.purchasePrice).toLocaleString()}`,
+        );
+      if (subjectUnit.estimatedHandoverDate)
+        bits.push(`handover ${subjectUnit.estimatedHandoverDate}`);
+      const subjectClaim = bits.join(", ");
+      subjectFacts.push(subjectClaim);
+      grounding.push({
+        claim: subjectClaim.slice(0, 200),
+        sourceTable: "ai_units",
+        recordId: subjectUnit.id,
+        asOf: subjectUnit.updatedAt
+          ? new Date(subjectUnit.updatedAt).toISOString()
+          : new Date().toISOString(),
+      });
+    }
 
     for (const t of txns.slice(0, 4)) {
       if (t.price == null && t.ppsf == null) continue;
@@ -970,14 +1071,18 @@ export const prospectingRoutes = new Elysia({
         .join(" · ") || "a high-net-worth prospect";
     const signals =
       (hypothesis?.segments ?? []).filter(Boolean).join(", ") || "HNW investor";
-    const sellingShort =
-      `${segment ? segment.replace(/_/g, " ") : ""} ${
-        (spec.unitType as string) ?? "residence"
-      } in ${area ?? "Dubai"}` +
-      (spec.bedrooms ? `, ${spec.bedrooms} bedrooms` : "") +
-      (spec.priceMinAed
-        ? `, from AED ${Number(spec.priceMinAed).toLocaleString()}`
-        : "");
+    // What we're selling: the REAL subject unit when the brief names one;
+    // otherwise fall back to the brief's generic profile. The subject unit is
+    // the thing the message promotes — comps are only supporting evidence.
+    const sellingShort = subjectUnit
+      ? subjectFacts[0]!
+      : `${segment ? segment.replace(/_/g, " ") : ""} ${
+          (spec.unitType as string) ?? "residence"
+        } in ${area ?? "Dubai"}` +
+        (spec.bedrooms ? `, ${spec.bedrooms} bedrooms` : "") +
+        (spec.priceMinAed
+          ? `, from AED ${Number(spec.priceMinAed).toLocaleString()}`
+          : "");
     const wordTarget = channel === "email" ? "120–160 words" : "45–80 words";
     const channelGuidance =
       channel === "email"
@@ -990,7 +1095,10 @@ export const prospectingRoutes = new Elysia({
       `You are a senior Dubai prime-residential sales advisor writing a concise, warm, ` +
       `professional first-touch ${channel === "message" ? "call script" : channel} to a prospective buyer, in the rep's own voice. ` +
       `Personalize it to the recipient and their wealth/segment signals. ${channelGuidance} ` +
-      `You MAY cite ONLY the figures given under "Facts" — never invent numbers or names. ` +
+      `The message must promote the property under "What we're selling" — that is the unit on offer. ` +
+      `The figures under "Comparable evidence" are recent nearby SOLD transactions, given ONLY to justify value — ` +
+      `you may reference them as market proof (e.g. "comparable homes nearby recently traded at…"), but NEVER present a comparable as the unit for sale. ` +
+      `You MAY cite ONLY the figures given — never invent numbers or names. ` +
       (language === "ar" ? "Write entirely in Arabic. " : "Write in English. ") +
       `Keep the body around ${wordTarget}. Write finished, ready-to-send copy: NO placeholders, ` +
       `NO square brackets such as [Your Name], NO "Dear [name]" — address the recipient by their real first name. ` +
@@ -998,13 +1106,16 @@ export const prospectingRoutes = new Elysia({
       `Return STRICT JSON only: {"subject": string, "body": string}` +
       (channel === "email" ? "." : ' (subject must be an empty string).');
 
+    const comparableLines = facts.length
+      ? facts.join("\n- ")
+      : "(no market comps available yet)";
     const user =
       `Recipient: ${profile}.\n` +
       `Wealth/segment signals: ${signals}.\n` +
-      `What we're selling: ${sellingShort}.\n` +
-      `Facts (grounded market comparables you may cite, verbatim figures only):\n- ` +
-      (facts.length ? facts.join("\n- ") : "(no market comps available yet)") +
-      `\n\nWrite a personalized subject line and ${channel} body for this specific recipient.`;
+      `What we're selling (the unit on offer — make the message about THIS): ${sellingShort}.\n` +
+      `Comparable evidence (recent nearby SOLD homes, cite ONLY as market proof, verbatim figures, NEVER as the unit on offer):\n- ` +
+      comparableLines +
+      `\n\nWrite a personalized subject line and ${channel} body promoting the unit on offer to this specific recipient.`;
 
     try {
       const raw = await generateCompletion(

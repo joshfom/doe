@@ -183,6 +183,17 @@ export const callContextSchema = z.object({
    * for known callers, whose identities are already resolved from the mirror.
    */
   formIdentities: formIdentitiesSchema.optional(),
+  /**
+   * Set ONLY for an authenticated staff "talk to your twin" session: the
+   * signed-in EMPLOYEE's user id. Its presence flips the call from the public
+   * lead-qualification persona to the employee Twin (the Home_Agent), and every
+   * Delegated_Action the call dispatches is audited + RBAC-scoped under THIS
+   * user (Requirement 8.2) — never the static voice-lead agent. Absent for
+   * every public/lead caller, so the public path is unchanged.
+   */
+  employeeUserId: z.string().optional(),
+  /** The signed-in employee's RBAC roles, for the Twin's persona + tool scope. */
+  employeeRoles: z.array(z.string()).optional(),
 });
 
 export type CallContext = z.infer<typeof callContextSchema>;

@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Telescope, CheckCircle2, AlertCircle, Info, X, Activity, Inbox } from 'lucide-react';
+import { ShieldAlert, Telescope, CheckCircle2, AlertCircle, Info, X, Activity, Inbox, MapPin } from 'lucide-react';
 import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
 import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import type { SessionData } from '@/lib/types/session';
@@ -31,6 +31,7 @@ import {
   RunBatchControl,
   ReviewInboxPanel,
   BatchActivityLog,
+  WorkspaceModeToggle,
 } from './components';
 import { useProspectingRealtime, type ProspectingEvent } from './useProspectingRealtime';
 import type {
@@ -55,6 +56,7 @@ import type {
   ApproveResult,
   BulkApproveResult,
   BatchActivityEntry,
+  ProviderSearchStatus,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -149,14 +151,25 @@ export default function ProspectingPage() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Which workflow the rep is in: a GUIDED, one-prospect-at-a-time flow, or the
+  // AUTONOMOUS batch (agent runs N prospects → review inbox). Showing one at a
+  // time keeps the workspace from stacking two competing mental models.
+  const [mode, setMode] = useState<'guided' | 'autonomous'>('guided');
+
+  // Brief intake defaults to the own-catalog picker; the free-form fields stay
+  // tucked behind a disclosure so the first screen isn't two input modes at once.
+  const [showManualBrief, setShowManualBrief] = useState(false);
+
   // Flow state.
   const [brief, setBrief] = useState<ProspectingBrief | null>(null);
   const [comparables, setComparables] = useState<Comparable[]>([]);
   const [areaTrend, setAreaTrend] = useState<AreaTrendRow[]>([]);
+  const [marketDataSource, setMarketDataSource] = useState<'live' | 'demo' | null>(null);
   const [unconfigured, setUnconfigured] = useState(false);
   const [gaps, setGaps] = useState<string[]>([]);
   const [hypothesis, setHypothesis] = useState<BuyerHypothesis | null>(null);
   const [candidates, setCandidates] = useState<ProviderCandidate[]>([]);
+  const [searchStatus, setSearchStatus] = useState<ProviderSearchStatus | null>(null);
   const [targets, setTargets] = useState<TargetRow[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<TargetRow | null>(null);
   const [draft, setDraft] = useState<OutreachDraftRow | null>(null);
@@ -379,10 +392,12 @@ export default function ProspectingPage() {
         hypothesis: BuyerHypothesis;
         areaTrend?: AreaTrendRow[];
         gaps?: string[];
+        marketDataSource?: 'live' | 'demo' | null;
       }>('/briefs', { method: 'POST', body: JSON.stringify(payload) });
       setBrief(data.brief);
       setComparables(data.comparables);
       setAreaTrend(data.areaTrend ?? []);
+      setMarketDataSource(data.marketDataSource ?? null);
       setUnconfigured(data.unconfigured);
       setHypothesis(data.hypothesis);
       setGaps(data.gaps ?? []);
@@ -629,11 +644,28 @@ export default function ProspectingPage() {
     setBusySearch(true);
     logActivity('Agent: searching investor databases (Apollo, Crunchbase) for matching profiles…');
     try {
-      const data = await api<{ candidates: ProviderCandidate[] }>(
+      const data = await api<{
+        candidates: ProviderCandidate[];
+        unconfiguredProviders?: string[];
+        failedProviders?: string[];
+        rateLimitedProviders?: string[];
+      }>(
         `/briefs/${brief.id}/search`,
         { method: 'POST', body: JSON.stringify({}) }
       );
       setCandidates(data.candidates);
+      setSearchStatus({
+        unconfiguredProviders: data.unconfiguredProviders ?? [],
+        failedProviders: data.failedProviders ?? [],
+        rateLimitedProviders: data.rateLimitedProviders ?? [],
+      });
+      if ((data.rateLimitedProviders ?? []).length > 0) {
+        const names = (data.rateLimitedProviders ?? [])
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+          .join(', ');
+        logActivity(`Agent: ${names} request limit reached — falling back to representative buyer data.`);
+        pushToast('info', `${names} request limit reached — showing representative buyers`);
+      }
       logActivity(
         `Agent: returned ${data.candidates.length} candidate prospect${data.candidates.length === 1 ? '' : 's'} matching the buyer profile.`
       );
@@ -922,22 +954,21 @@ export default function ProspectingPage() {
   const activeStep = useMemo<number>(() => {
     if (!brief) return 1;
     if (!hypothesis) return 3;
-    if (candidates.length === 0) return 4;
-    if (targets.length === 0) return 4;
-    if (!selectedTarget) return 5;
-    return 6;
-  }, [brief, hypothesis, candidates.length, targets.length, selectedTarget]);
+    // Step 4 ("Prospects") covers finding candidates, saving the shortlist, and
+    // picking one to draft — the rep stays here until a target is selected.
+    if (!selectedTarget) return 4;
+    return 5;
+  }, [brief, hypothesis, selectedTarget]);
 
   const stepperItems = useMemo(
     () => [
       { n: 1, label: 'Brief', done: hasBrief, active: activeStep === 1 },
       { n: 2, label: 'Market', done: comparables.length > 0, active: activeStep === 2 },
       { n: 3, label: 'Buyer', done: Boolean(hypothesis), active: activeStep === 3 },
-      { n: 4, label: 'Prospects', done: candidates.length > 0, active: activeStep === 4 },
-      { n: 5, label: 'Targets', done: targets.length > 0, active: activeStep === 5 },
-      { n: 6, label: 'Outreach', done: draft?.status === 'sent', active: activeStep === 6 },
+      { n: 4, label: 'Prospects', done: targets.length > 0, active: activeStep === 4 },
+      { n: 5, label: 'Outreach', done: draft?.status === 'sent', active: activeStep === 5 },
     ],
-    [hasBrief, comparables.length, hypothesis, candidates.length, targets.length, draft?.status, activeStep]
+    [hasBrief, comparables.length, hypothesis, targets.length, draft?.status, activeStep]
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -992,16 +1023,10 @@ export default function ProspectingPage() {
         </div>
       )}
 
-      <ProgressStepper items={stepperItems} />
+      <WorkspaceModeToggle mode={mode} onChange={setMode} />
 
-      <RunBatchControl
-        clusterId={pickClusterId}
-        clusterName={pickedCluster?.name ?? null}
-        busy={busyBatch}
-        onRun={runBatch}
-      />
-
-
+      {/* Agent activity — a live log of what the agent is doing. Shown in both
+          modes (guided per-action logs + autonomous batch decisions). */}
       {activity.length > 0 && (
         <div className="rounded-xl border border-ora-sand/60 bg-ora-cream-light/50">
           <header className="flex items-center gap-2 border-b border-ora-sand/50 px-4 py-2.5">
@@ -1024,127 +1049,204 @@ export default function ProspectingPage() {
         </div>
       )}
 
-      {/* Persisted Agent_Activity_Log fallback (task 10.4). The live feed above
-          is fed by SSE, which may not stay open under `next dev`; this reads the
-          ordered, persisted log for a run on demand (Req 3.5) and surfaces a
-          retrieval error explicitly rather than an empty success (Req 3.6). */}
-      <BatchActivityLog
-        runId={batchLogRunId ?? latestBatchRunId}
-        entries={batchLog}
-        busy={batchLogBusy}
-        error={batchLogError}
-        loaded={batchLogRunId !== null}
-        onView={viewActivityLog}
-      />
+      {/* ── AUTONOMOUS BATCH ─────────────────────────────────────────────────
+          Pick a subject → run a batch → the agent's cold-eligible drafts land in
+          the Review inbox for approval. Self-contained: nothing here depends on
+          the guided flow. */}
+      {mode === 'autonomous' && (
+        <>
+          <div className="rounded-xl border border-ora-sand/60 bg-ora-white">
+            <header className="flex items-center gap-2.5 px-5 py-3">
+              <MapPin className="h-4 w-4 text-ora-gold-dark" />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold text-ora-charcoal">Subject</h2>
+                <p className="text-xs text-ora-muted">Pick the community / project / cluster the batch will prospect for.</p>
+              </div>
+            </header>
+            <div className="border-t border-ora-sand/50 px-5 py-4">
+              <OwnSubjectPicker
+                catalog={ownCatalog}
+                selectedCommunityId={pickCommunityId}
+                selectedProjectId={pickProjectId}
+                selectedClusterId={pickClusterId}
+                busy={busyBatch}
+                onSelectCommunity={onSelectCommunity}
+                onSelectProject={onSelectProject}
+                onSelectCluster={setPickClusterId}
+                onUseCluster={(c) => setPickClusterId(c.id)}
+              />
+            </div>
+          </div>
 
-      <SectionCard step={1} title="Brief" subtitle="What are you selling?" active={activeStep === 1}>
-        <div className="space-y-4">
-          <OwnSubjectPicker
-            catalog={ownCatalog}
-            selectedCommunityId={pickCommunityId}
-            selectedProjectId={pickProjectId}
-            selectedClusterId={pickClusterId}
-            busy={busyBrief}
-            onSelectCommunity={onSelectCommunity}
-            onSelectProject={onSelectProject}
-            onSelectCluster={setPickClusterId}
-            onUseCluster={useCluster}
+          <RunBatchControl
+            clusterId={pickClusterId}
+            clusterName={pickedCluster?.name ?? null}
+            busy={busyBatch}
+            onRun={runBatch}
           />
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-ora-sand/50" />
-            <span className="text-[10px] uppercase tracking-wide text-ora-muted">or describe it</span>
-            <div className="h-px flex-1 bg-ora-sand/50" />
-          </div>
-          <BriefIntake busy={busyBrief} onSubmit={createBrief} />
-        </div>
-      </SectionCard>
 
-      <SectionCard step={2} title="Market comparables" subtitle="SQL-grounded competitor stats + area trend" muted={!hasBrief} badge={comparables.length || undefined} complete={comparables.length > 0} active={activeStep === 2}>
-        {gaps.length > 0 && (
-          <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200">
-            The selected subject couldn&apos;t resolve {gaps.join(', ')} from our own
-            catalog. Fill these in via the free-form brief above to sharpen the
-            comparison — nothing was invented.
-          </div>
-        )}
-        <ComparablesPanel comparables={comparables} unconfigured={unconfigured} areaTrend={areaTrend} />
-      </SectionCard>
-
-      <SectionCard step={3} title="Buyer hypothesis" subtitle="Editable proposal — adjust before search" muted={!hypothesis} complete={Boolean(hypothesis)} active={activeStep === 3}>
-        {hypothesis ? (
-          <HypothesisEditor hypothesis={hypothesis} busy={busySearch} onSave={saveHypothesis} onSearch={runSearch} />
-        ) : (
-          <p className="text-xs text-ora-muted">Submit a brief to derive a buyer hypothesis.</p>
-        )}
-      </SectionCard>
-
-      <SectionCard step={4} title="Candidate targets" subtitle="From the configured providers" muted={!hasBrief} badge={candidates.length || undefined} complete={candidates.length > 0} active={activeStep === 4}>
-        <CandidatesPanel candidates={candidates} recordingId={recordingId} onRecord={recordTarget} />
-      </SectionCard>
-
-      <SectionCard step={5} title="Targets" subtitle="Research, promote, draft" muted={targets.length === 0} badge={targets.length || undefined} complete={targets.length > 0} active={activeStep === 5}>
-        <TargetsPanel
-          targets={targets}
-          selectedId={selectedTarget?.id ?? null}
-          pendingId={pendingTargetId}
-          onSelect={selectForDraft}
-          onEnrich={enrichTarget}
-          onPromote={promoteTarget}
-          onDraft={selectForDraft}
-        />
-      </SectionCard>
-
-      <SectionCard step={6} title="Outreach" subtitle="Editable draft → approve → send" muted={!selectedTarget} complete={draft?.status === 'sent'} active={activeStep === 6}>
-        <OutreachPanel
-          target={selectedTarget}
-          draft={draft}
-          approval={approval}
-          busy={busyOutreach}
-          crmCheck={crmCheck}
-          crmChecking={crmChecking}
-          onCreateDraft={createDraft}
-          onChangeDraft={changeDraft}
-          onCompose={composeDraft}
-          onApprove={approveDraft}
-          onSend={sendDraft}
-        />
-      </SectionCard>
-
-      {/* Approval Queue / Review Inbox — the autonomous batch's output for human
-          review (task 10.3). Additive to the per-prospect flow above. */}
-      <section className="rounded-xl border border-ora-gold-dark/30 bg-ora-white">
-        <header className="flex items-center gap-2.5 px-5 py-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ora-gold-dark text-ora-white">
-            <Inbox className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-ora-charcoal">Review inbox</h2>
-            <p className="text-xs text-ora-muted">
-              AI-drafted outreach awaiting your approval — edit, approve &amp; send,
-              reject, or bulk-approve. Nothing sends without you.
-            </p>
-          </div>
-          {queueItems.length > 0 && (
-            <span className="rounded-full bg-ora-cream-dark px-2 py-0.5 text-[10px] font-semibold text-ora-charcoal-light">
-              {queueItems.length} pending
-            </span>
-          )}
-        </header>
-        <div className="border-t border-ora-sand/50 px-5 py-4">
-          <ReviewInboxPanel
-            items={queueItems}
-            selectedIds={queueSelected}
-            busyId={queueBusyId}
-            bulkBusy={bulkBusy}
-            onToggleSelect={toggleQueueSelect}
-            onToggleAll={toggleQueueAll}
-            onEdit={editQueueItem}
-            onApprove={approveQueueItem}
-            onReject={rejectQueueItem}
-            onBulkApprove={bulkApprove}
+          {/* Persisted Agent_Activity_Log fallback (task 10.4): reads the
+              ordered, persisted log for a run on demand when the live SSE stream
+              is unavailable, surfacing a retrieval error explicitly. */}
+          <BatchActivityLog
+            runId={batchLogRunId ?? latestBatchRunId}
+            entries={batchLog}
+            busy={batchLogBusy}
+            error={batchLogError}
+            loaded={batchLogRunId !== null}
+            onView={viewActivityLog}
           />
-        </div>
-      </section>
+
+          {/* Approval Queue / Review Inbox — the autonomous batch's output for
+              human review (task 10.3). */}
+          <section className="rounded-xl border border-ora-gold-dark/30 bg-ora-white">
+            <header className="flex items-center gap-2.5 px-5 py-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ora-gold-dark text-ora-white">
+                <Inbox className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold text-ora-charcoal">Review inbox</h2>
+                <p className="text-xs text-ora-muted">
+                  AI-drafted outreach awaiting your approval — edit, approve &amp; send,
+                  reject, or bulk-approve. Nothing sends without you.
+                </p>
+              </div>
+              {queueItems.length > 0 && (
+                <span className="rounded-full bg-ora-cream-dark px-2 py-0.5 text-[10px] font-semibold text-ora-charcoal-light">
+                  {queueItems.length} pending
+                </span>
+              )}
+            </header>
+            <div className="border-t border-ora-sand/50 px-5 py-4">
+              <ReviewInboxPanel
+                items={queueItems}
+                selectedIds={queueSelected}
+                busyId={queueBusyId}
+                bulkBusy={bulkBusy}
+                onToggleSelect={toggleQueueSelect}
+                onToggleAll={toggleQueueAll}
+                onEdit={editQueueItem}
+                onApprove={approveQueueItem}
+                onReject={rejectQueueItem}
+                onBulkApprove={bulkApprove}
+              />
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ── GUIDED FLOW ──────────────────────────────────────────────────────
+          One prospect at a time: brief → comparables → buyer → candidates →
+          targets → outreach. The stepper drives focus; completed steps collapse. */}
+      {mode === 'guided' && (
+        <>
+          <ProgressStepper items={stepperItems} />
+
+          <SectionCard step={1} title="Brief" subtitle="What are you selling?" active={activeStep === 1}>
+            <div className="space-y-4">
+              <OwnSubjectPicker
+                catalog={ownCatalog}
+                selectedCommunityId={pickCommunityId}
+                selectedProjectId={pickProjectId}
+                selectedClusterId={pickClusterId}
+                busy={busyBrief}
+                onSelectCommunity={onSelectCommunity}
+                onSelectProject={onSelectProject}
+                onSelectCluster={setPickClusterId}
+                onUseCluster={useCluster}
+              />
+              {showManualBrief ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-ora-sand/50" />
+                    <span className="text-[10px] uppercase tracking-wide text-ora-muted">or describe it manually</span>
+                    <div className="h-px flex-1 bg-ora-sand/50" />
+                  </div>
+                  <BriefIntake busy={busyBrief} onSubmit={createBrief} />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowManualBrief(true)}
+                  className="text-xs font-medium text-ora-gold-dark underline-offset-2 hover:underline"
+                >
+                  Can&apos;t find it in the catalog? Describe the subject manually instead
+                </button>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard step={2} title="Market comparables" subtitle="SQL-grounded competitor stats + area trend" muted={!hasBrief} badge={comparables.length || undefined} complete={comparables.length > 0} active={activeStep === 2}>
+            {gaps.length > 0 && (
+              <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200">
+                The selected subject couldn&apos;t resolve {gaps.join(', ')} from our own
+                catalog. Fill these in via the free-form brief above to sharpen the
+                comparison — nothing was invented.
+              </div>
+            )}
+            <ComparablesPanel comparables={comparables} unconfigured={unconfigured} areaTrend={areaTrend} dataSource={marketDataSource} />
+          </SectionCard>
+
+          <SectionCard step={3} title="Buyer hypothesis" subtitle="Editable proposal — adjust before search" muted={!hypothesis} complete={Boolean(hypothesis)} active={activeStep === 3}>
+            {hypothesis ? (
+              <HypothesisEditor hypothesis={hypothesis} busy={busySearch} onSave={saveHypothesis} onSearch={runSearch} />
+            ) : (
+              <p className="text-xs text-ora-muted">Submit a brief to derive a buyer hypothesis.</p>
+            )}
+          </SectionCard>
+
+          <SectionCard step={4} title="Prospects" subtitle="Find buyers, save your shortlist, draft outreach" muted={!hasBrief} badge={targets.length || candidates.length || undefined} complete={targets.length > 0} active={activeStep === 4}>
+            <div className="space-y-5">
+              {/* Saved shortlist (recorded Targets) — the rows you act on. */}
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-ora-charcoal-light">
+                    Your shortlist
+                  </h3>
+                  {targets.length > 0 && (
+                    <span className="rounded-full bg-ora-cream-dark px-1.5 py-0.5 text-[10px] font-semibold text-ora-charcoal-light">
+                      {targets.length}
+                    </span>
+                  )}
+                </div>
+                <TargetsPanel
+                  targets={targets}
+                  selectedId={selectedTarget?.id ?? null}
+                  pendingId={pendingTargetId}
+                  onSelect={selectForDraft}
+                  onEnrich={enrichTarget}
+                  onPromote={promoteTarget}
+                  onDraft={selectForDraft}
+                />
+              </div>
+
+              {/* Candidates from the providers — "Record" lifts one into the shortlist. */}
+              <div className="border-t border-ora-sand/40 pt-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ora-charcoal-light">
+                  Candidates from providers
+                </h3>
+                <CandidatesPanel candidates={candidates} status={searchStatus} recordingId={recordingId} onRecord={recordTarget} />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard step={5} title="Outreach" subtitle="Editable draft → approve → send" muted={!selectedTarget} complete={draft?.status === 'sent'} active={activeStep === 5}>
+            <OutreachPanel
+              target={selectedTarget}
+              draft={draft}
+              approval={approval}
+              busy={busyOutreach}
+              crmCheck={crmCheck}
+              crmChecking={crmChecking}
+              onCreateDraft={createDraft}
+              onChangeDraft={changeDraft}
+              onCompose={composeDraft}
+              onApprove={approveDraft}
+              onSend={sendDraft}
+            />
+          </SectionCard>
+        </>
+      )}
 
       {/* Toasts — immediate feedback for every action */}
       <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex max-w-sm flex-col gap-2">

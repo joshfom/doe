@@ -68,6 +68,23 @@ export function isUnconfigured<T>(
   );
 }
 
+/**
+ * Thrown by a provider when the upstream source answers HTTP 429 (request quota
+ * exhausted). Distinct from a generic failure so the fan-out can record it as a
+ * RATE-LIMITED provider (surfaced to the rep as "provider limit reached — showing
+ * representative data") rather than a silent skip. The demo provider then carries
+ * the search so the workspace still produces candidates.
+ */
+export class ProviderRateLimitError extends Error {
+  constructor(
+    readonly providerId: string,
+    readonly status: number = 429
+  ) {
+    super(`${providerId} request limit reached (HTTP ${status})`);
+    this.name = "ProviderRateLimitError";
+  }
+}
+
 // ── The ICP filter (Requirement 2.1) ───────────────────────────────────────────
 
 /**
@@ -302,6 +319,8 @@ export interface SearchAllResult {
   unconfiguredProviders: ProviderId[];
   /** Ids of providers that threw and were skipped (the search still succeeds). */
   failedProviders: ProviderId[];
+  /** Ids of providers skipped because their request quota was exhausted (429). */
+  rateLimitedProviders: ProviderId[];
 }
 
 /**
@@ -327,6 +346,7 @@ export async function searchAllProviders(
   const results: ProviderResult[] = [];
   const unconfiguredProviders: ProviderId[] = [];
   const failedProviders: ProviderId[] = [];
+  const rateLimitedProviders: ProviderId[] = [];
 
   const settled = await Promise.allSettled(
     providers.map((provider) => provider.search(filter))
@@ -335,7 +355,14 @@ export async function searchAllProviders(
   settled.forEach((outcome, i) => {
     const provider = providers[i];
     if (outcome.status === "rejected") {
-      failedProviders.push(provider.id);
+      // A 429 is recorded distinctly so the rep sees "limit reached" (and the
+      // demo provider's results carry the search); any other error is a plain
+      // isolated failure.
+      if (outcome.reason instanceof ProviderRateLimitError) {
+        rateLimitedProviders.push(provider.id);
+      } else {
+        failedProviders.push(provider.id);
+      }
       return;
     }
     if (isUnconfigured(outcome.value)) {
@@ -345,5 +372,5 @@ export async function searchAllProviders(
     results.push(...outcome.value);
   });
 
-  return { results, unconfiguredProviders, failedProviders };
+  return { results, unconfiguredProviders, failedProviders, rateLimitedProviders };
 }

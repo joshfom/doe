@@ -16,8 +16,10 @@ import {
   BarChart3,
   Mail,
   CalendarClock,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 export interface ToolCardData {
   toolName: string;
@@ -218,6 +220,88 @@ function ReportQueued({ result }: { result: unknown }) {
   );
 }
 
+// The confirm-before-commit review card. The Twin proposes a high-impact write
+// (propose_action) WITHOUT committing it; the user reviews the plain-language
+// summary here and clicks Confirm — which commits it exactly once via the
+// single-use token (POST /api/home/confirm) — or Cancel, which changes nothing.
+// A low-stakes propose (staged=false) renders nothing: the Twin did it directly.
+function ConfirmAction({ result }: { result: unknown }) {
+  const r = obj(result);
+  const staged = r.staged === true && r.requiresConfirmation === true;
+  const token = str(r.token);
+  const summary = str(r.summary);
+  const affected = typeof r.affectedCount === 'number' ? (r.affectedCount as number) : undefined;
+  const [status, setStatus] = useState<'idle' | 'committing' | 'done' | 'error' | 'cancelled'>('idle');
+  const [note, setNote] = useState('');
+
+  if (!staged || !token) return null;
+
+  async function commit() {
+    setStatus('committing');
+    try {
+      const res = await fetch('/api/home/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token }),
+      });
+      const json = (await res.json().catch(() => null)) as { data?: unknown } | null;
+      const data = obj(json?.data);
+      if (res.ok && data.executed === true) {
+        setStatus('done');
+        setNote(str(data.message) || 'Done.');
+      } else {
+        setStatus('error');
+        setNote(str(data.message) || "That didn't go through.");
+      }
+    } catch {
+      setStatus('error');
+      setNote("Couldn't reach the server. Please try again.");
+    }
+  }
+
+  return (
+    <Card icon={<ShieldCheck className="h-4 w-4 stroke-[1.5]" />} title="Confirm before it commits">
+      <p className="text-sm text-ora-charcoal">{summary || 'Confirm this change?'}</p>
+      {affected ? (
+        <p className="mt-0.5 text-[0.7rem] text-ora-muted">
+          {affected} record{affected === 1 ? '' : 's'} affected
+        </p>
+      ) : null}
+
+      {status === 'done' ? (
+        <p className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-700">
+          <Check className="h-4 w-4" /> {note}
+        </p>
+      ) : status === 'cancelled' ? (
+        <p className="mt-2 text-sm text-ora-muted">Cancelled — nothing was changed.</p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={commit}
+            disabled={status === 'committing'}
+            className="inline-flex items-center gap-1 rounded-lg bg-ora-gold px-3 py-1.5 text-sm font-medium text-ora-white transition hover:bg-ora-gold/90 disabled:opacity-60"
+          >
+            {status === 'committing' ? 'Committing…' : 'Confirm'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatus('cancelled')}
+            disabled={status === 'committing'}
+            className="inline-flex items-center rounded-lg border border-ora-sand px-3 py-1.5 text-sm text-ora-charcoal-light transition hover:bg-ora-cream-light disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          {status === 'error' ? (
+            <span className="text-[0.7rem] text-red-600">{note}</span>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── dispatcher ────────────────────────────────────────────────────────────────
 
 function renderCard(tr: ToolCardData, key: string): ReactNode {
@@ -235,6 +319,8 @@ function renderCard(tr: ToolCardData, key: string): ReactNode {
     case 'queue_combined_report':
     case 'queue_report_email':
       return <ReportQueued key={key} result={tr.result} />;
+    case 'propose_action':
+      return <ConfirmAction key={key} result={tr.result} />;
     default:
       return null;
   }
