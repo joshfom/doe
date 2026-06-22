@@ -73,11 +73,26 @@ export function __setCrmAnalyticsRunner(runner: AggregateRunner | null): void {
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
+// LLMs frequently emit booleans as the strings "true"/"false" (or "1"/"0")
+// rather than real JSON booleans. A strict `z.boolean()` then fails validation,
+// the agent is told to "fix and retry", and each retry is another slow model
+// round-trip (the cause of the multi-second CRM-analytics turns). Accept the
+// stringified forms and normalise them to a real boolean so the first call
+// validates.
+const lenientBoolean = z.preprocess((v) => {
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "true" || s === "1" || s === "yes") return true;
+    if (s === "false" || s === "0" || s === "no") return false;
+  }
+  return v;
+}, z.boolean());
+
 const getCrmAnalyticsInput = z.object({
   /** Comparison granularity: current vs previous week / month / quarter. */
   granularity: z.enum(["week", "month", "quarter"]).default("quarter"),
   /** Include the open-pipeline-by-stage breakdown. */
-  includePipeline: z.boolean().default(true),
+  includePipeline: lenientBoolean.default(true),
 });
 
 const comparisonSchema = z.object({

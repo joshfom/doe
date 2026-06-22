@@ -59,6 +59,10 @@ export const PERMISSIONS = [
   // single-colon split in {@link ROLE_PERMISSION_MAP}.
   { resource: "report", action: "*", description: "Full executive reporting & analytics tools (all report scopes and tools)" },
   { resource: "home", action: "*", description: "Full access to all home/twin agent tools" },
+  // Cross-business analytics surfaces (Marketing dashboard, UTM analytics, and
+  // the C-level AI Analytics twin). Gated by `analytics:read` in the panel nav
+  // and the analytics routes; granted to c_level (executive) + super_admin.
+  { resource: "analytics", action: "read", description: "View cross-business analytics surfaces" },
   // Settings
   { resource: "settings", action: "read", description: "View settings" },
   { resource: "settings", action: "update", description: "Update settings" },
@@ -252,6 +256,7 @@ export const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   // addition by {@link seedExecutiveReportingScopes}.
   c_level: [
     "report:*", "home:*",
+    "analytics:read",
     "reports:read", "leads:read", "bookings:read", "brokers:read",
     "marketing:read", "commissions:read", "invoices:read",
     "audit:read", "settings:read", "users:read", "roles:read",

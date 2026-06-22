@@ -244,7 +244,7 @@ function parseDraftJson(raw: string): { subject?: string; body?: string } {
     .replace(/^\s*```(?:json)?/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  // Try a direct parse, then the first {...} block.
+  // 1) Try a direct parse, then the first {...} block.
   for (const candidate of [cleaned, cleaned.match(/\{[\s\S]*\}/)?.[0] ?? ""]) {
     if (!candidate) continue;
     try {
@@ -257,7 +257,39 @@ function parseDraftJson(raw: string): { subject?: string; body?: string } {
       /* fall through */
     }
   }
+  // 2) Tolerant field extraction. Models frequently emit a `body` containing
+  //    RAW newlines (multi-paragraph copy), which is invalid JSON and makes
+  //    `JSON.parse` above throw — without this fallback the caller would dump
+  //    the whole `{...}` blob into the body field. The `[^"\\]` class matches
+  //    newlines, so we recover the string content even when it spans lines,
+  //    then unescape the common JSON escapes.
+  const subject = extractJsonStringField(cleaned, "subject");
+  const body = extractJsonStringField(cleaned, "body");
+  if (subject !== undefined || body !== undefined) {
+    return { subject, body };
+  }
   return {};
+}
+
+/**
+ * Extract a single JSON string field's value by key, tolerant of raw newlines
+ * inside the value (which strict `JSON.parse` rejects). Returns the unescaped
+ * string, or `undefined` when the key is absent.
+ */
+function extractJsonStringField(
+  text: string,
+  key: string
+): string | undefined {
+  const re = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`);
+  const m = text.match(re);
+  if (!m) return undefined;
+  return m[1]
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\//g, "/")
+    .replace(/\\\\/g, "\\");
 }
 
 /**

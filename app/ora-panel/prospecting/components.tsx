@@ -1050,6 +1050,37 @@ function CrmStatusBanner({
   );
 }
 
+/**
+ * Defensive guard: if an outreach value arrives as a raw `{"subject","body"}`
+ * JSON blob (e.g. a draft saved before the server-side parser was hardened, or
+ * a model reply that slipped through), pull out the requested field so the
+ * textarea/subject input never shows JSON. Plain text passes through untouched.
+ */
+function cleanOutreachField(
+  raw: string | null | undefined,
+  field: 'subject' | 'body',
+): string {
+  if (typeof raw !== 'string') return '';
+  const t = raw.trim();
+  if (!(t.startsWith('{') && t.includes('"body"'))) return raw;
+  try {
+    const obj = JSON.parse(t) as Record<string, unknown>;
+    if (typeof obj[field] === 'string') return obj[field] as string;
+  } catch {
+    // Tolerant extraction for JSON with raw newlines in the body.
+    const m = t.match(new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`));
+    if (m) {
+      return m[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+  }
+  return raw;
+}
+
 export function OutreachPanel({
   target,
   draft,
@@ -1092,8 +1123,8 @@ export function OutreachPanel({
     setComposeError(null);
     try {
       const result = await onCompose(channel, language);
-      setSubject(result.subject ?? '');
-      setBody(result.body ?? '');
+      setSubject(cleanOutreachField(result.subject, 'subject'));
+      setBody(cleanOutreachField(result.body, 'body'));
       setGrounding(result.grounding ?? []);
     } catch (e) {
       setComposeError(e instanceof Error ? e.message : 'AI draft failed');
@@ -1136,7 +1167,8 @@ export function OutreachPanel({
           <input className={inputCls} placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
         )}
         <textarea
-          className={`${inputCls} min-h-[140px]`}
+          className={`${inputCls} min-h-[260px] leading-relaxed`}
+          rows={12}
           placeholder={`Click "Generate ${channelNoun} with AI" to draft a personalized message for ${target.displayName || target.companyName} grounded in comparable sales — then edit before saving.`}
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -1171,11 +1203,12 @@ export function OutreachPanel({
         </span>
       </div>
       {draft.channel === 'email' && (
-        <input className={inputCls} defaultValue={draft.subject ?? ''} disabled={sent} onBlur={(e) => onChangeDraft(e.target.value, body || draft.body)} placeholder="Subject" />
+        <input className={inputCls} defaultValue={cleanOutreachField(draft.subject, 'subject')} disabled={sent} onBlur={(e) => onChangeDraft(e.target.value, body || draft.body)} placeholder="Subject" />
       )}
       <textarea
-        className={`${inputCls} min-h-[140px]`}
-        defaultValue={draft.body}
+        className={`${inputCls} min-h-[260px] leading-relaxed`}
+        rows={12}
+        defaultValue={cleanOutreachField(draft.body, 'body')}
         disabled={sent}
         onChange={(e) => setBody(e.target.value)}
         onBlur={(e) => onChangeDraft(draft.subject ?? '', e.target.value)}

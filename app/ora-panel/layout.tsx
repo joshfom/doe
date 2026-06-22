@@ -33,7 +33,6 @@ import {
   Telescope,
 } from 'lucide-react';
 import type { SessionData } from '@/lib/types/session';
-import { Skeleton } from '@/components/ui/skeleton';
 import { DemoPersonaProvider } from './_components/demo-persona';
 import { PanelTopNav } from './_components/PanelTopNav';
 
@@ -57,6 +56,7 @@ const navItems = [
   { href: '/ora-panel/ai/appointments', label: 'Appointments', icon: CalendarDays, permission: 'ai:appointments:manage' },
   { href: '/ora-panel/calendar', label: 'Calendar', icon: CalendarDays, permission: 'tickets:read' },
   { href: '/ora-panel/ai', label: 'My AI', icon: Bot, permission: 'ai:conversations:read' },
+  { href: '/ora-panel/analytics', label: 'AI Analytics', icon: BarChart3, permission: 'analytics:read' },
   { href: '/ora-panel/ai/clients', label: 'People', icon: Users, permission: 'ai:clients:manage' },
   { href: '/ora-panel/pages', label: 'Pages', icon: FileText, permission: 'pages:read' },
   { href: '/ora-panel/blog', label: 'Blog', icon: Newspaper, permission: 'posts:read' },
@@ -151,27 +151,15 @@ export default function OraPanelLayout({
   };
 
   if (loading) {
+    // Pre-auth: show a neutral, brand-only loader — never the panel chrome.
+    // The sidebar/nav/content shell must not render until the session is
+    // confirmed (and an unauthenticated user is redirected to login below).
     return (
-      <div className="flex min-h-screen bg-ora-cream-light">
-        {/* Sidebar shell */}
-        <aside className="hidden w-60 shrink-0 flex-col gap-2 border-r border-ora-sand/60 bg-ora-white p-4 md:flex">
-          <Skeleton className="mb-4 h-8 w-32" />
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-full" />
-          ))}
-        </aside>
-        {/* Content shell */}
-        <main className="flex-1 p-6">
-          <div className="mb-6 space-y-2">
-            <Skeleton className="h-7 w-56" />
-            <Skeleton className="h-4 w-72" />
-          </div>
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
-        </main>
+      <div className="flex min-h-screen items-center justify-center bg-ora-cream-light">
+        <div className="flex flex-col items-center gap-4">
+          <Image src="/logo.svg" alt="ORA" width={52} height={20} className="opacity-80" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-ora-sand border-t-ora-gold-dark" />
+        </div>
       </div>
     );
   }
