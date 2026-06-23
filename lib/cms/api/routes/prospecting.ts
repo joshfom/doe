@@ -13,6 +13,7 @@ import {
   prospectingBatchRuns,
   prospectingBriefs,
   prospectingQueueItems,
+  prospectingSequenceEnrollments,
   prospectingSequences,
   targets,
 } from "../../schema";
@@ -30,6 +31,13 @@ import {
 import { isOptedOut } from "../../prospecting/optout";
 import { releaseClaim } from "../../prospecting/batch/claim";
 import { readActivity } from "../../prospecting/batch/activity";
+import {
+  createDraftSequence,
+  updateSequenceConfig,
+  transitionSequence,
+  loadOwnedSequence,
+} from "../../prospecting/sequences/service";
+import type { SequenceAction } from "../../prospecting/sequences/lifecycle";
 import { enqueueJob } from "../../jobs";
 import {
   resolveComparisonSpec,
@@ -129,6 +137,53 @@ function unwrap(
             ? 404
             : 500;
   return { error: result.error.message, code };
+}
+
+// ── Sequence lifecycle helper ─────────────────────────────────────────────────
+
+/**
+ * Shared handler for the four Sequence lifecycle routes
+ * (`publish` / `pause` / `resume` / `archive`). Loads the Sequence owner-scoped
+ * (a non-owned id → `404`, no cross-rep disclosure), delegates the legality
+ * decision to the pure `transitionSequence` / `applyTransition`, and maps a
+ * rejected transition onto the right status: `409 illegal_transition` for an
+ * illegal edge (row left unchanged) and `400 invalid_subject` when publishing a
+ * Sequence whose Subject no longer resolves (kept `draft`).
+ */
+async function runSequenceTransition(
+  c: {
+    params: { id: string };
+    set: { status?: number | string };
+    userId?: string;
+  },
+  action: SequenceAction
+): Promise<unknown> {
+  const userId = c.userId;
+  if (!userId) {
+    c.set.status = 401;
+    return { error: "Not authenticated" };
+  }
+  const seq = await loadOwnedSequence(db, c.params.id, userId);
+  if (!seq) {
+    c.set.status = 404;
+    return { error: "Sequence not found" };
+  }
+  const result = await transitionSequence(db, seq, action);
+  if (!result.ok) {
+    if (result.code === "illegal_transition") {
+      c.set.status = 409;
+      return {
+        error: `Cannot ${action} a sequence in status ${seq.status ?? "draft"}.`,
+        code: "illegal_transition",
+      };
+    }
+    c.set.status = 400;
+    return {
+      error: "A sequence requires a resolvable subject to publish.",
+      code: "invalid_subject",
+    };
+  }
+  return { sequence: result.sequence };
 }
 
 // ── Buyer_Hypothesis derivation (serverless, SQL-grounded, editable) ──────────
@@ -1231,7 +1286,9 @@ export const prospectingRoutes = new Elysia({
     const system =
       `You are a senior Dubai prime-residential sales advisor writing a concise, warm, ` +
       `professional first-touch ${channel === "message" ? "call script" : channel} to a prospective buyer, in the rep's own voice. ` +
-      `Personalize it to the recipient and their wealth/segment signals. ${channelGuidance} ` +
+      `You write on behalf of ORA — a Dubai-based prime-residential developer behind the Bayn master community — ` +
+      `so briefly and naturally establish who ORA is in the opening (one short clause, not a hard sell). ` +
+      `Personalize it to the recipient: use their name, role/company and wealth/segment signals, and tailor the framing to whether they are an individual buyer, a company/principal, or an intermediary acting for clients. ${channelGuidance} ` +
       `The message must promote the property under "What we're selling" — that is the unit on offer. ` +
       `The figures under "Comparable evidence" are recent nearby SOLD transactions, given ONLY to justify value — ` +
       `you may reference them as market proof (e.g. "comparable homes nearby recently traded at…"), but NEVER present a comparable as the unit for sale. ` +
@@ -1246,8 +1303,15 @@ export const prospectingRoutes = new Elysia({
     const comparableLines = facts.length
       ? facts.join("\n- ")
       : "(no market comps available yet)";
+    const recipientKind =
+      target.targetType === "company"
+        ? "a company / institutional principal (frame around portfolio fit)"
+        : target.targetType === "intermediary"
+          ? "an intermediary acting for their own clients (frame around what their clients would value)"
+          : "an individual prospective buyer (frame around personal fit)";
     const user =
       `Recipient: ${profile}.\n` +
+      `Recipient type: ${recipientKind}.\n` +
       `Wealth/segment signals: ${signals}.\n` +
       `What we're selling (the unit on offer — make the message about THIS): ${sellingShort}.\n` +
       `Comparable evidence (recent nearby SOLD homes, cite ONLY as market proof, verbatim figures, NEVER as the unit on offer):\n- ` +
@@ -1519,6 +1583,11 @@ export const prospectingRoutes = new Elysia({
   // sequences run in parallel (each is an independent row + independent runs).
 
   // POST /api/prospecting/sequences — create a sequence (starts in `draft`).
+  // The Sequence is the durable, owner-scoped campaign; creation no longer
+  // requires a target count N (the campaign is open-ended — the per-refresh size
+  // defaults and the cadence/cap govern enrollment). Validation is delegated to
+  // `createDraftSequence`: a non-empty name (`400 invalid_name`) and a resolvable
+  // Subject (`400 invalid_subject`); on a rejected validation no row is created.
   .post("/sequences", async ({ body, set, ...ctx }) => {
     const userId = (ctx as { userId?: string }).userId;
     if (!userId) {
@@ -1530,55 +1599,41 @@ export const prospectingRoutes = new Elysia({
       description?: unknown;
       subject?: Partial<BatchSubject>;
       targetCount?: unknown;
+      refreshIntervalMinutes?: unknown;
+      enrollmentCap?: unknown;
+      enrollmentPeriod?: unknown;
     };
 
-    const name = typeof payload.name === "string" ? payload.name.trim() : "";
-    if (!name) {
-      set.status = 400;
-      return { error: "A sequence needs a name.", code: "invalid_name" };
-    }
-
-    const rawSubject = payload.subject ?? {};
-    const hasCluster = Boolean(rawSubject.clusterId);
-    const hasIcp = Boolean(rawSubject.icpFilter);
-    if (!hasCluster && !hasIcp) {
+    const result = await createDraftSequence(db, {
+      ownerRep: userId,
+      name: payload.name,
+      description: payload.description,
+      subject: payload.subject,
+      targetCount: payload.targetCount,
+      refreshIntervalMinutes: payload.refreshIntervalMinutes,
+      enrollmentCap: payload.enrollmentCap,
+      enrollmentPeriod: payload.enrollmentPeriod,
+    });
+    if (!result.ok) {
       set.status = 400;
       return {
         error:
-          "A sequence requires a subject: either a cluster reference (clusterId) or an ICP filter (icpFilter).",
-        code: "invalid_subject",
+          result.code === "invalid_name"
+            ? "A sequence needs a name."
+            : "A sequence requires a subject: pick an own project (projectId) — optionally a specific cluster (clusterId) — or supply an ICP filter (icpFilter).",
+        code: result.code,
       };
     }
-    const subject: BatchSubject = {
-      kind: rawSubject.kind ?? (hasCluster ? "cluster" : "icp"),
-      ...(rawSubject.clusterId ? { clusterId: rawSubject.clusterId } : {}),
-      ...(rawSubject.briefId ? { briefId: rawSubject.briefId } : {}),
-      ...(rawSubject.icpFilter ? { icpFilter: rawSubject.icpFilter } : {}),
-    };
-
-    const n = Number(payload.targetCount);
-    const targetCount = Number.isInteger(n) && n > 0 && n <= 500 ? n : 10;
-
-    const [seq] = await db
-      .insert(prospectingSequences)
-      .values({
-        ownerRep: userId,
-        name,
-        description:
-          typeof payload.description === "string" ? payload.description.trim() : null,
-        subject,
-        targetCount,
-        mode: "draft",
-      })
-      .returning();
 
     set.status = 201;
-    return { sequence: seq };
+    return { sequence: result.sequence };
   })
 
-  // GET /api/prospecting/sequences — list the rep's sequences, newest first,
-  // each with a count of prospects awaiting review (pending, cold-eligible
-  // queue items across the sequence's runs) and its most recent run status.
+  // GET /api/prospecting/sequences — list the rep's sequences, newest first.
+  // Each carries its lifecycle `status`, enrolled-prospect count (rows in the
+  // per-Sequence enrollment ledger), pending-review count (cold-eligible
+  // `pending` queue items across the Sequence's runs), and `last_refreshed_at`
+  // (null → rendered empty by the UI).
   .get("/sequences", async ({ set, ...ctx }) => {
     const userId = (ctx as { userId?: string }).userId;
     if (!userId) {
@@ -1614,8 +1669,26 @@ export const prospectingRoutes = new Elysia({
       counts.map((c) => [c.sequenceId, Number(c.pending)])
     );
 
+    // Enrolled-prospect count per sequence (rows in the enrollment ledger).
+    const enrolledCounts = await db
+      .select({
+        sequenceId: prospectingSequenceEnrollments.sequenceId,
+        enrolled: sql<number>`count(*)::int`,
+      })
+      .from(prospectingSequenceEnrollments)
+      .innerJoin(
+        prospectingSequences,
+        eq(prospectingSequences.id, prospectingSequenceEnrollments.sequenceId)
+      )
+      .where(eq(prospectingSequences.ownerRep, userId))
+      .groupBy(prospectingSequenceEnrollments.sequenceId);
+    const enrolledBySeq = new Map(
+      enrolledCounts.map((c) => [c.sequenceId, Number(c.enrolled)])
+    );
+
     const sequences = rows.map((s) => ({
       ...s,
+      enrolledProspects: enrolledBySeq.get(s.id) ?? 0,
       pendingProspects: pendingBySeq.get(s.id) ?? 0,
     }));
     return { count: sequences.length, sequences };
@@ -1693,14 +1766,64 @@ export const prospectingRoutes = new Elysia({
       )
       .orderBy(desc(prospectingQueueItems.createdAt));
 
-    return { sequence: seq, count: items.length, queueItems: items };
+    // ── Enrolled prospects (the per-Sequence enrollment ledger) ───────────────
+    // Every prospect this Sequence has ever enrolled, joined to its Target for a
+    // privacy-safe projection (phoneHash only, never the raw phone — CC-Privacy).
+    const enrolledProspects = await db
+      .select({
+        id: prospectingSequenceEnrollments.id,
+        targetId: prospectingSequenceEnrollments.targetId,
+        batchRunId: prospectingSequenceEnrollments.batchRunId,
+        periodBucket: prospectingSequenceEnrollments.periodBucket,
+        createdAt: prospectingSequenceEnrollments.createdAt,
+        targetType: targets.targetType,
+        targetDisplayName: targets.displayName,
+        targetCompanyName: targets.companyName,
+        targetTitle: targets.title,
+        targetEmail: targets.email,
+        targetPhoneHash: targets.phoneHash,
+        targetCountry: targets.country,
+        targetStatus: targets.status,
+      })
+      .from(prospectingSequenceEnrollments)
+      .leftJoin(targets, eq(targets.id, prospectingSequenceEnrollments.targetId))
+      .where(eq(prospectingSequenceEnrollments.sequenceId, params.id))
+      .orderBy(desc(prospectingSequenceEnrollments.createdAt));
+
+    // ── Activity log (aggregated across the Sequence's Refresh_Runs) ──────────
+    // The Sequence's history is the union of its runs' Agent_Activity_Logs, read
+    // in run-then-seq order so the rep can re-read the full ordered history.
+    const runIds = await db
+      .select({ id: prospectingBatchRuns.id })
+      .from(prospectingBatchRuns)
+      .where(
+        and(
+          eq(prospectingBatchRuns.ownerRep, userId),
+          eq(prospectingBatchRuns.sequenceId, params.id)
+        )
+      )
+      .orderBy(prospectingBatchRuns.createdAt);
+    const activity = (
+      await Promise.all(runIds.map((r) => readActivity(db, r.id)))
+    ).flat();
+
+    return {
+      sequence: seq,
+      count: items.length,
+      queueItems: items,
+      enrolledProspects,
+      enrolledCount: enrolledProspects.length,
+      activity,
+    };
   })
 
-  // PATCH /api/prospecting/sequences/:id — update a sequence's name/description/
-  // target count and/or toggle its `mode`. Turning it `live` enqueues a durable
-  // `prospecting_batch` run linked to the sequence so the agent prospects in the
-  // background; turning it `draft` simply pauses (existing prospects remain for
-  // review). The run is keyed so a double-toggle never spawns a duplicate.
+  // PATCH /api/prospecting/sequences/:id — edit a sequence's configuration
+  // (name / description / subject / per-refresh size / cadence / enrollment cap).
+  // Lifecycle is NO LONGER toggled here — `mode` is kept in sync with the
+  // authoritative `status` by the service, and going live/pausing is done via the
+  // dedicated lifecycle routes below. The edit applies to the NEXT Refresh_Run;
+  // existing enrolled prospects and their pending queue items are retained
+  // unchanged. An edit that leaves no resolvable subject → `400 invalid_subject`.
   .patch("/sequences/:id", async ({ params, body, set, ...ctx }) => {
     const userId = (ctx as { userId?: string }).userId;
     if (!userId) {
@@ -1710,82 +1833,54 @@ export const prospectingRoutes = new Elysia({
     const payload = (body ?? {}) as {
       name?: unknown;
       description?: unknown;
+      subject?: Partial<BatchSubject>;
       targetCount?: unknown;
-      mode?: unknown;
+      refreshIntervalMinutes?: unknown;
+      enrollmentCap?: unknown;
+      enrollmentPeriod?: unknown;
     };
 
-    const [seq] = await db
-      .select()
-      .from(prospectingSequences)
-      .where(
-        and(
-          eq(prospectingSequences.id, params.id),
-          eq(prospectingSequences.ownerRep, userId)
-        )
-      )
-      .limit(1);
+    const seq = await loadOwnedSequence(db, params.id, userId);
     if (!seq) {
       set.status = 404;
       return { error: "Sequence not found" };
     }
 
-    const updates: Partial<typeof prospectingSequences.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (typeof payload.name === "string" && payload.name.trim()) {
-      updates.name = payload.name.trim();
-    }
-    if (typeof payload.description === "string") {
-      updates.description = payload.description.trim() || null;
-    }
-    if (payload.targetCount !== undefined) {
-      const n = Number(payload.targetCount);
-      if (Number.isInteger(n) && n > 0 && n <= 500) updates.targetCount = n;
-    }
-    const goingLive = payload.mode === "live" && seq.mode !== "live";
-    if (payload.mode === "live" || payload.mode === "draft") {
-      updates.mode = payload.mode;
-    }
-
-    const [updated] = await db
-      .update(prospectingSequences)
-      .set(updates)
-      .where(eq(prospectingSequences.id, seq.id))
-      .returning();
-
-    // Turning live → launch a background run for this sequence (reuses the
-    // durable batch machinery). Keyed by sequence id + run ordinal so repeated
-    // toggles never duplicate an in-flight run but each genuine "go live" can
-    // start a fresh sweep.
-    let launchedRunId: string | null = null;
-    if (goingLive) {
-      const subject = updated.subject as BatchSubject;
-      const existingRuns = await db
-        .select({ id: prospectingBatchRuns.id })
-        .from(prospectingBatchRuns)
-        .where(eq(prospectingBatchRuns.sequenceId, seq.id));
-      const rerunKey = `seq:${seq.id}:${existingRuns.length}`;
-      const inserted = await db
-        .insert(prospectingBatchRuns)
-        .values({
-          ownerRep: userId,
-          sequenceId: seq.id,
-          subject,
-          clusterId: subject.kind === "cluster" ? subject.clusterId ?? null : null,
-          targetCount: updated.targetCount,
-          rerunKey,
-        })
-        .onConflictDoNothing({ target: prospectingBatchRuns.rerunKey })
-        .returning({ id: prospectingBatchRuns.id });
-      const run = inserted[0];
-      if (run) {
-        await enqueueJob(db, "prospecting_batch", { batchRunId: run.id }, rerunKey);
-        launchedRunId = run.id;
-      }
+    const result = await updateSequenceConfig(db, seq, {
+      name: payload.name,
+      description: payload.description,
+      subject: payload.subject,
+      targetCount: payload.targetCount,
+      refreshIntervalMinutes: payload.refreshIntervalMinutes,
+      enrollmentCap: payload.enrollmentCap,
+      enrollmentPeriod: payload.enrollmentPeriod,
+    });
+    if (!result.ok) {
+      set.status = 400;
+      return {
+        error:
+          "A sequence requires a subject: pick an own project (projectId) — optionally a specific cluster (clusterId) — or supply an ICP filter (icpFilter).",
+        code: result.code,
+      };
     }
 
-    return { sequence: updated, launchedRunId };
+    return { sequence: result.sequence };
   })
+
+  // ── Sequence lifecycle transitions (Req 1.3–1.8, 4.5, 4.6, 7.2, 13.3) ───────
+  // Each route delegates the legality decision to the pure `applyTransition`
+  // (via `transitionSequence`): an illegal transition returns `409
+  // illegal_transition` leaving the row unchanged; publishing an unresolvable
+  // subject returns `400 invalid_subject` keeping `draft`. All owner-scoped
+  // (`404` for a non-owned id, `401` unauthenticated).
+  .post("/sequences/:id/publish", async (c) =>
+    runSequenceTransition(c, "publish")
+  )
+  .post("/sequences/:id/pause", async (c) => runSequenceTransition(c, "pause"))
+  .post("/sequences/:id/resume", async (c) => runSequenceTransition(c, "resume"))
+  .post("/sequences/:id/archive", async (c) =>
+    runSequenceTransition(c, "archive")
+  )
 
   // ── Agentic Batch_Run: batch + activity reads (task 8.2) ────────────────────
 

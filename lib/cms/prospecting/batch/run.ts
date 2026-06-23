@@ -62,8 +62,10 @@ import type { Database } from "../../db";
 import {
   prospectingBatchRuns,
   prospectingQueueItems,
+  prospectingSequences,
   targets,
   type ProspectingBatchRun,
+  type ProspectingSequence,
 } from "../../schema";
 import type { JobContext } from "../../jobs";
 import { dispatchTool, type DispatchResult } from "../../ai/tools/dispatch";
@@ -79,6 +81,14 @@ import { appendActivity, publishBatch } from "./activity";
 import { evaluateCandidate, type EligibilityRun } from "./eligibility";
 import { scoreCandidateFit, type BatchSubject } from "./fit-score";
 import { capExhausted } from "./send-cap";
+import {
+  enrollmentIdentity,
+  enrollmentRemaining,
+  insertEnrollment,
+  loadSequenceEnrollments,
+  periodBucket as toEnrollmentPeriodBucket,
+  seenKeyOf,
+} from "../sequences/enrollment";
 
 // ── Payload ──────────────────────────────────────────────────────────────────
 
@@ -136,6 +146,20 @@ export async function runProspectingBatch(
   try {
     const run = await loadBatchRun(db, batchRunId);
     const subject = run.subject as BatchSubject;
+
+    // ── Sequence-scoped run gating (additive; ad-hoc path untouched) ──────────
+    // When this Batch_Run is a Sequence Refresh_Run (`sequence_id` set), dedupe
+    // and enrollment counting span the WHOLE Sequence (not just this run) and
+    // each cold enrollment is recorded in the per-Sequence ledger. When
+    // `sequenceId` is null the run behaves exactly as the original one-shot /
+    // agentic-batch flow.
+    const sequenceId = run.sequenceId;
+    const sequence = sequenceId ? await loadSequence(db, sequenceId) : null;
+    // The cap period bucket for this refresh, derived from the (stable) run
+    // creation date so a retried refresh reads/writes the same bucket (Req 11.3).
+    const seqPeriodBucket = sequence
+      ? toEnrollmentPeriodBucket(sequence.enrollmentPeriod ?? "month", run.createdAt)
+      : "";
 
     await publishBatch(db, "prospecting.batch.started", run, {
       targetCount: run.targetCount,
@@ -220,15 +244,30 @@ export async function runProspectingBatch(
     // their provider identity, so the loop reuses them instead of recording a
     // duplicate Target / draft / queue item. `queued` resumes from the existing
     // cold-eligible count so N is never exceeded across re-runs.
-    const { seenKeys, coldQueued } = await loadExistingQueue(db, run.id);
-    let queued = coldQueued;
+    //
+    // For a Sequence Refresh_Run the dedupe set instead spans the WHOLE Sequence:
+    // `loadSequenceEnrollments` rebuilds `seenKeys` from the enrollment ledger so
+    // a prospect enrolled by ANY prior refresh is skipped (Req 3.4, 5.1, 5.2).
+    // The per-run cold count is still resumed from this run's own queue items so
+    // the per-refresh size N is not exceeded on a retry (Req 5.3).
+    const existing = await loadExistingQueue(db, run.id);
+    const seenKeys = sequenceId
+      ? await loadSequenceEnrollments(db, sequenceId)
+      : existing.seenKeys;
+    let queued = existing.coldQueued;
 
     // ── Per-candidate loop (Req 2.7) ──────────────────────────────────────────
     for (const candidate of orderedCandidates(search.candidates)) {
       if (queued >= run.targetCount) break; // produced N (Req 2.7)
 
-      // Already worked in a prior run → reuse, never duplicate (Req 9.2).
-      if (seenKeys.has(candidateKey(candidate))) continue;
+      // The dedupe identity. For a Sequence Refresh_Run this is the privacy-safe
+      // ledger identity (so it aligns byte-for-byte with the keys
+      // `loadSequenceEnrollments` rebuilt); for an ad-hoc run it is the original
+      // `candidateKey`. Either way a candidate already enrolled / queued is
+      // skipped without recording a duplicate (Req 3.4, 5.2, 9.2).
+      const identity = sequenceId ? enrollmentIdentity(candidate) : null;
+      const dedupeKey = identity ? seenKeyOf(identity) : candidateKey(candidate);
+      if (seenKeys.has(dedupeKey)) continue;
 
       // Stop drafting for a scope whose send cap is exhausted (Req 7.3).
       if (await runCapExhausted(db, eligibilityRun)) {
@@ -256,6 +295,27 @@ export async function runProspectingBatch(
           reason: decision.reason,
         });
         continue;
+      }
+
+      // ── Enrollment cap (Sequence Refresh_Run only, Req 3.5, 11.2) ───────────
+      // Before drafting a cold-eligible candidate, check the Sequence's remaining
+      // enrollment budget for the current period. When exhausted, record a
+      // `cap_reached` Activity_Log entry and stop enrolling for this run —
+      // mirroring the `runCapExhausted` send-cap stop above. Warm-path candidates
+      // do not consume the enrollment cap, so the check is gated on cold-eligible.
+      if (sequence && decision.kind === "cold_eligible") {
+        const remaining = await enrollmentRemaining(db, sequence, seqPeriodBucket);
+        if (remaining !== null && remaining <= 0) {
+          await appendActivity(db, {
+            batchRunId: run.id,
+            action: "skipped",
+            reason: "cap_reached",
+          });
+          await publishBatch(db, "prospecting.batch.candidate.skipped", run, {
+            reason: "cap_reached",
+          });
+          break;
+        }
       }
 
       // Both warm_path and cold_eligible queue an item, which needs a Target id.
@@ -313,7 +373,7 @@ export async function runProspectingBatch(
       const draftDispatch = await dispatchTool(
         db,
         "draft_outreach",
-        toDraft(targetId, candidate, subject),
+        toDraft(targetId, candidate, subject, filter),
         outreachCtx
       );
       if (!draftDispatch.ok) {
@@ -342,6 +402,23 @@ export async function runProspectingBatch(
         acquiredAt: decision.acquiredAt,
       });
 
+      // ── Enrollment ledger write (Sequence Refresh_Run only) ─────────────────
+      // Record the per-Sequence enrollment with `ON CONFLICT DO NOTHING`. The
+      // row's existence IS the enroll-at-most-once guarantee and the cap counter
+      // (Req 5.1, 5.3, 11.4). Only candidates carrying a privacy-safe identity
+      // (ref / email / phone hash) can be ledgered; one without falls back to the
+      // per-run dedupe already applied above.
+      if (sequenceId && identity) {
+        await insertEnrollment(db, {
+          sequenceId,
+          matchKind: identity.matchKind,
+          matchValue: identity.matchValue,
+          targetId,
+          batchRunId: run.id,
+          periodBucket: seqPeriodBucket,
+        });
+      }
+
       await appendActivity(db, {
         batchRunId: run.id,
         action: "drafted",
@@ -350,7 +427,7 @@ export async function runProspectingBatch(
       });
 
       queued += 1;
-      seenKeys.add(candidateKey(candidate));
+      seenKeys.add(dedupeKey);
       await publishBatch(db, "prospecting.queue.item.queued", run, { targetId });
       await publishBatch(db, "prospecting.batch.progress", run, { queued });
     }
@@ -383,9 +460,22 @@ async function resolveSubjectToFilter(
 ): Promise<ProspectFilter | null> {
   if (subject.icpFilter) return subject.icpFilter;
 
-  if (subject.kind === "cluster" && subject.clusterId) {
+  // A cluster is the most specific own subject — resolve its comparison spec.
+  if (subject.clusterId) {
     const resolved = await resolveComparisonSpec(db, {
       clusterId: subject.clusterId,
+    });
+    return briefSpecToFilter(resolved.spec);
+  }
+
+  // No cluster chosen but a whole own PROJECT is the subject — derive the filter
+  // from the project's own catalog (area / segment / unit types). This is what
+  // lets a rep create a sequence by picking just a Community + Project, with the
+  // cluster left optional.
+  if (subject.projectId) {
+    const resolved = await resolveComparisonSpec(db, {
+      projectId: subject.projectId,
+      ...(subject.communityId ? { communityId: subject.communityId } : {}),
     });
     return briefSpecToFilter(resolved.spec);
   }
@@ -490,29 +580,75 @@ function toRecord(
  * deterministic prose that states no figures, so the grounding manifest is empty
  * — the agent writes prose only and invents no figures (Req 2.6). The draft is
  * persisted UNSENT (Req 2.5).
+ *
+ * The copy is personalized from (a) what the provider actually returned about
+ * the candidate (name, role, company, country) and (b) the resolved own-catalog
+ * subject (`filter` — the area / segment derived from the rep's project or
+ * cluster), and is framed by the candidate's `targetType`. None of these are
+ * market figures, so the no-figures / empty-grounding invariant holds.
  */
 function toDraft(
   targetId: string,
   candidate: ProviderResult,
-  subject: BatchSubject
+  subject: BatchSubject,
+  filter: ProspectFilter
 ): Record<string, unknown> {
   const briefId = asUuid(subject.briefId);
+  const targetType = candidate.targetType;
   const name =
     candidate.displayName?.trim() || candidate.companyName?.trim() || "there";
+
+  // Personalization drawn ONLY from provider-returned identity fields.
+  const role = candidate.title?.trim();
+  const company = candidate.companyName?.trim();
+  const country = candidate.country?.trim();
+  const roleLine =
+    role && company
+      ? `As ${role} at ${company}, `
+      : company
+        ? `Given your work at ${company}, `
+        : role
+          ? `As ${role}, `
+          : "";
+
+  // What this sequence is about, from the resolved own-catalog subject. `area`
+  // and `segment` come from the rep's own project / cluster spec — naming them
+  // is specific without quoting any price or return figure.
+  const area = filter.geography?.[0]?.trim();
+  const segment = filter.keywords?.[0]?.trim().replace(/_/g, " ");
+  const offering =
+    `${segment ? `${segment} ` : ""}residences` + (area ? ` in ${area}` : " in Dubai");
+
+  // Frame the value by who we're talking to (the three prospecting types).
+  const hook =
+    targetType === "company"
+      ? `a ${offering} opportunity that may suit your portfolio or principals`
+      : targetType === "intermediary"
+        ? `a ${offering} opportunity your clients may find compelling`
+        : `a ${offering} opportunity I thought might be of personal interest`;
+
+  const subjectLine = area
+    ? `${segment ? `${segment[0].toUpperCase()}${segment.slice(1)} ` : "An "}opportunity in ${area}`
+    : "An opportunity worth a conversation";
+
+  const body =
+    `Hi ${name},\n\n` +
+    `${roleLine}I wanted to introduce myself — I lead prospecting for ORA, a ` +
+    `Dubai-based prime-residential developer behind the Bayn master community. ` +
+    `We're currently introducing ${hook}.\n\n` +
+    (country
+      ? `We already work with a number of ${country}-based buyers, and I'd be glad to share the details most relevant to you.\n\n`
+      : `I'd be glad to share the details most relevant to you.\n\n`) +
+    `Would you be open to a brief call this week?\n\nBest regards,\nORA`;
 
   return {
     targetId,
     ...(briefId ? { briefId } : {}),
     channel: "email",
     language: "en",
-    subject: "An opportunity worth a conversation",
-    body:
-      `Hi ${name},\n\n` +
-      "I lead prospecting for ORA and wanted to introduce myself. Based on " +
-      "your profile I believe there may be a strong fit with what we're " +
-      "working on, and I'd welcome a short conversation to explore it.\n\n" +
-      "Would you be open to a brief call this week?\n\nBest regards,\nORA",
-    // No factual claims → no grounded figures to pin (Req 2.6).
+    subject: subjectLine,
+    body,
+    // No factual claims / figures → no grounded records to pin (Req 2.6).
     grounding: [],
   };
 }
@@ -648,6 +784,32 @@ async function completeBatchRun(
     .update(prospectingBatchRuns)
     .set({ status: "completed", reason, updatedAt: new Date() })
     .where(eq(prospectingBatchRuns.id, run.id));
+
+  // ── Sequence completion hook (Req 4.4) ──────────────────────────────────────
+  // On any successful completion of a Sequence Refresh_Run (including a graceful
+  // zero-enrollment degradation), stamp the Sequence's last refresh time. A
+  // terminal FAILURE goes through `markRunFailed` instead and never touches this,
+  // so a failed refresh leaves the Sequence `live` with its next slot intact
+  // (Req 14.4). `next_refresh_at` was already advanced at schedule time.
+  if (run.sequenceId) {
+    await db
+      .update(prospectingSequences)
+      .set({ lastRefreshedAt: new Date(), updatedAt: new Date() })
+      .where(eq(prospectingSequences.id, run.sequenceId));
+  }
+}
+
+/** Load the parent Sequence row for a Refresh_Run; `null` when none exists. */
+async function loadSequence(
+  db: Database,
+  sequenceId: string
+): Promise<ProspectingSequence | null> {
+  const [sequence] = await db
+    .select()
+    .from(prospectingSequences)
+    .where(eq(prospectingSequences.id, sequenceId))
+    .limit(1);
+  return sequence ?? null;
 }
 
 /** Mark the run `failed` with a terminal reason (the catch path). */

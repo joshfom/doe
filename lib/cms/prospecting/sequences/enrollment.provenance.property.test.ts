@@ -13,31 +13,37 @@ import { PROVIDER_IDS, type ProviderResult } from "../providers";
 import type { ProvenancedField } from "../target";
 
 /**
- * Property 17 — Provenance on queued (and sent) items
- * (Requirements 10.1, 10.3).
+ * Property 13 — Enrolled items carry provenance (Requirements 9.6).
  *
- *   **Feature: agentic-prospecting-batch, Property 17: Provenance on queued and
- *   sent items.**
+ *   **Feature: prospecting-sequences, Property 13: Enrolled items carry
+ *   provenance.**
  *
- * **Validates: Requirements 10.1, 10.3**
+ * **Validates: Requirements 9.6**
  *
- * When a Queued_Item is created for a cold-eligible candidate, it MUST carry a
- * lawful-basis marker together with the data source and acquisition timestamp
- * for the prospect's contact data (Req 10.1). The decisive seam is the durable
- * batch handler `runProspectingBatch` (`lib/cms/prospecting/batch/run.ts`): for
- * every `cold_eligible` decision it upserts a `prospecting_queue_items` row
- * copying the eligibility decision's `lawfulBasis`, `dataSource`
- * (= `candidate.sourceProvider`), and `acquiredAt` (derived in `eligibility.ts`
- * from the candidate's attribute `asOf` / record lawful basis) onto the item as
- * provenance.
+ * *For any* cold-eligible Enrollment produced by a Sequence Refresh_Run, its
+ * Queued_Item records a lawful-basis marker together with the data source and
+ * acquisition timestamp for the prospect's contact data (Req 9.6, CC-Provenance).
  *
- * This property drives the WHOLE handler end to end against a real Drizzle
- * handle over an in-memory Postgres (pg-mem) carrying the real
- * `drizzle/0040_agentic_prospecting_batch.sql` schema, generates a batch of
- * candidates that are each cold-eligible (valid lawful basis + acquisition
- * provenance, not opted out, not claimed, not in Salesforce), runs the batch,
- * then reads back the persisted `cold_eligible` queue items and asserts every
- * one carries a non-null `lawful_basis`, `data_source`, and `acquired_at`.
+ * The decisive seam is the SAME durable batch handler the ad-hoc path uses —
+ * `runProspectingBatch` (`lib/cms/prospecting/batch/run.ts`) — but driven in its
+ * SEQUENCE-SCOPED mode: the Batch_Run row carries a `sequence_id`, so the loop
+ * dedupes across the whole Sequence's enrollment ledger, gates on the Sequence's
+ * enrollment cap, and writes an enrollment-ledger row per cold enrollment. The
+ * provenance contract is unchanged from the ad-hoc batch (CC-Reuse): for every
+ * `cold_eligible` decision `upsertQueueItem` copies the eligibility decision's
+ * `lawfulBasis`, `dataSource` (= `candidate.sourceProvider`), and `acquiredAt`
+ * (derived in `eligibility.ts` from the candidate's acquisition `asOf` / record
+ * lawful basis) onto the `prospecting_queue_items` row as provenance.
+ *
+ * This property drives the WHOLE handler end to end against a real Drizzle handle
+ * over an in-memory Postgres (pg-mem) carrying the real
+ * `drizzle/0040_agentic_prospecting_batch.sql` and
+ * `drizzle/0043_prospecting_sequences.sql` schemas, seeds a `live` Sequence plus
+ * a sequence-scoped Refresh_Run, generates a batch of candidates that are each
+ * cold-eligible (valid lawful basis + acquisition provenance, not opted out, not
+ * claimed, not in Salesforce), runs the refresh, then reads back the persisted
+ * `cold_eligible` queue items and asserts every one carries a non-null
+ * `lawful_basis`, `data_source`, and `acquired_at`.
  *
  * The two external seams are mocked so the candidates are deterministically
  * cold-eligible and the dispatcher boundary is observable without a live
@@ -47,14 +53,9 @@ import type { ProvenancedField } from "../target";
  *     `draft_outreach` inserts an `outreach_drafts` row and returns its id.
  *   - `../crm-check` — reports `configured: true, found: false` so every
  *     candidate is genuinely cold (the check RAN and did not find them).
- * Every OTHER gate (opt-out, lawful-basis, cross-rep claim, send-cap) runs for
- * real against the migrated schema.
- *
- * Req 10.3 (provenance persisted alongside the SEND record) is exercised at the
- * approve/send route layer (tasks 8.x), which is where a send actually happens;
- * the batch handler under test here produces UNSENT drafts only (CC-HITL), so
- * this property focuses on Req 10.1 (queue-item provenance) — the provenance
- * that the send record later carries forward.
+ * Every OTHER gate (opt-out, lawful-basis, cross-rep claim, send-cap,
+ * enrollment-cap, sequence-wide dedupe) runs for real against the migrated
+ * schema.
  */
 
 // ── Hoisted holder the mocks read at call time ─────────────────────────────────
@@ -112,16 +113,21 @@ vi.mock("../crm-check", () => ({
 
 // Imported AFTER the mock declarations so `runProspectingBatch` binds the mocked
 // `dispatchTool` + `checkCrmForContact` (vitest hoists `vi.mock` above imports).
-import { runProspectingBatch } from "./run";
+import { runProspectingBatch } from "../batch/run";
 
-// Spec requires >=100 iterations (task 6.5).
-const NUM_RUNS = Number(process.env.PBT_RUNS ?? 25);
-const MIGRATION_FILE = "0040_agentic_prospecting_batch.sql";
+// The design mandates a minimum of 100 iterations for every property test; clamp
+// the configurable run count so it can be raised but never fall below the floor.
+const NUM_RUNS = Math.max(100, Number(process.env.PBT_RUNS ?? 100));
+const BATCH_MIGRATION_FILE = "0040_agentic_prospecting_batch.sql";
+const SEQUENCE_MIGRATION_FILE = "0043_prospecting_sequences.sql";
 
-// Minimal stubs for the PRE-existing tables 0040 references. `targets` carries
-// the columns `run.ts`'s re-run bookkeeping join reads; `outreach_drafts` and
-// `events` are stood up for the draft FK and the SSE event mirror; the opt-out
-// store reads `prospect_optouts`. 0040 is purely additive and applies verbatim.
+// Minimal stubs for the PRE-existing tables 0040 / 0043 reference. `targets`
+// carries the columns `run.ts`'s re-run bookkeeping join reads; `outreach_drafts`
+// and `events` are stood up for the draft FK and the SSE event mirror; the
+// opt-out store reads `prospect_optouts`. `prospecting_sequences` is the base
+// (0041) sequence table — stood up here as the additive base that 0043's
+// ALTER TABLE statements extend (status / cap / refresh columns). 0040 and 0043
+// are purely additive and apply verbatim.
 const PREREQUISITE_SQL = `
   CREATE TABLE "users" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -178,9 +184,29 @@ const PREREQUISITE_SQL = `
     "payload" jsonb,
     "at" timestamp DEFAULT now() NOT NULL
   );
+  CREATE TABLE "prospecting_sequences" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "owner_rep" uuid NOT NULL,
+    "name" text NOT NULL,
+    "description" text,
+    "subject" jsonb NOT NULL,
+    "target_count" integer NOT NULL DEFAULT 10,
+    "mode" text NOT NULL DEFAULT 'draft',
+    "created_at" timestamp DEFAULT now() NOT NULL,
+    "updated_at" timestamp DEFAULT now() NOT NULL
+  );
 `;
 
-/** Stand up a fresh pg-mem with the prerequisites + 0040 applied + Drizzle. */
+/** Apply a `--> statement-breakpoint`-delimited migration file verbatim. */
+function applyMigration(mem: IMemoryDb, file: string): void {
+  const migration = readFileSync(join(process.cwd(), "drizzle", file), "utf-8");
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    const trimmed = statement.trim();
+    if (trimmed.length > 0) mem.public.none(trimmed);
+  }
+}
+
+/** Stand up a fresh pg-mem with the prerequisites + 0040 + 0043 + Drizzle. */
 function buildDb(): {
   mem: IMemoryDb;
   db: Database;
@@ -188,8 +214,9 @@ function buildDb(): {
 } {
   const mem = newDb();
 
-  // pg-mem ships neither `gen_random_uuid()` nor `pg_notify()` — register both
-  // (the latter as a no-op) so the real SQL resolves.
+  // pg-mem ships neither `gen_random_uuid()` nor `pg_notify()`, and its built-in
+  // `now()` does not satisfy the `timestamptz` defaults 0043 declares — register
+  // all three (pg_notify as a no-op) so the real SQL resolves.
   mem.public.registerFunction({
     name: "gen_random_uuid",
     returns: DataType.uuid,
@@ -203,23 +230,29 @@ function buildDb(): {
     implementation: () => null,
     impure: true,
   });
+  mem.public.registerFunction({
+    name: "now",
+    returns: DataType.timestamptz,
+    implementation: () => new Date(),
+    impure: true,
+  });
 
   mem.public.none(PREREQUISITE_SQL);
 
-  const migration = readFileSync(
-    join(process.cwd(), "drizzle", MIGRATION_FILE),
-    "utf-8"
-  );
-  for (const statement of migration.split("--> statement-breakpoint")) {
-    const trimmed = statement.trim();
-    if (trimmed.length > 0) mem.public.none(trimmed);
-  }
-  // The sequences feature (migration 0041) added `sequence_id` to
-  // prospecting_batch_runs; this harness applies only 0040, so add the column
-  // so `loadBatchRun`'s SELECT resolves.
+  // 0040 creates the batch tables (`prospecting_batch_runs`,
+  // `prospecting_queue_items`, `prospecting_batch_activity`, …). It predates the
+  // sequences feature, so add the `sequence_id` column 0041 introduced (which
+  // `loadBatchRun`'s SELECT and the sequence-scoped gating read) before 0043
+  // wires its enrollment ledger FK to it.
+  applyMigration(mem, BATCH_MIGRATION_FILE);
   mem.public.none(
     'ALTER TABLE "prospecting_batch_runs" ADD COLUMN "sequence_id" uuid'
   );
+
+  // 0043 extends `prospecting_sequences` (status / cap / refresh cadence) and
+  // creates the per-Sequence enrollment ledger referencing sequences + targets +
+  // batch runs (all present by now).
+  applyMigration(mem, SEQUENCE_MIGRATION_FILE);
 
   const adapter = mem.adapters.createPg();
   const pool = new adapter.Pool();
@@ -230,9 +263,10 @@ function buildDb(): {
   //
   // It ALSO deviates from real Postgres on `INSERT … ON CONFLICT DO NOTHING …
   // RETURNING`: on a conflicting (no-op) insert, real Postgres returns ZERO
-  // rows, but pg-mem returns the EXISTING row. `claimTarget` keys "freshly
-  // inserted" off a non-empty RETURNING, so restore faithful semantics: if no
-  // row was actually inserted (a conflict), strip the erroneously-returned row.
+  // rows, but pg-mem returns the EXISTING row. `claimTarget` and
+  // `insertEnrollment` key "freshly inserted" off a non-empty RETURNING, so
+  // restore faithful semantics: if no row was actually inserted (a conflict),
+  // strip the erroneously-returned row.
   const countRows = (table: string): number =>
     Number(
       (
@@ -299,8 +333,7 @@ function buildDb(): {
 // Build the in-memory Postgres + Drizzle handle ONCE for the whole file, then
 // revert to the empty-schema restore point before each fast-check iteration.
 // pg-mem's O(1) backup/restore gives every iteration the same isolation a fresh
-// DB would, without re-instantiating pg-mem (and leaking an adapter pool) ~100
-// times per property — the instantiation volume that made the suite flaky.
+// DB would, without re-instantiating pg-mem (and leaking an adapter pool) per run.
 let mem!: IMemoryDb;
 let db!: Database;
 let dbPool!: { end: () => Promise<void> };
@@ -316,17 +349,39 @@ afterAll(async () => {
 });
 
 /**
- * Seed an owning rep + its `running` Batch_Run row. The subject carries an
- * `icpFilter` so the handler resolves it directly (no cluster catalog read).
- * `targetCount` is large so no candidate is dropped by the N budget.
+ * Seed an owning rep, a `live` Sequence, and its sequence-scoped Refresh_Run.
+ *
+ * The Sequence carries `enrollmentCap: null` (unbounded) so no candidate is
+ * dropped by the enrollment cap — every cold-eligible candidate yields its own
+ * queue item, which is the population the provenance property reads back. The
+ * Batch_Run's `sequenceId` is what flips `runProspectingBatch` into its
+ * sequence-scoped mode (ledger dedupe + enrollment write). The subject carries
+ * an `icpFilter` so the handler resolves it directly (no cluster catalog read),
+ * and `targetCount` is large so no candidate is dropped by the per-refresh N.
  */
-async function seedRun(db: Database): Promise<string> {
+async function seedSequenceRun(db: Database): Promise<string> {
   const ownerRep = randomUUID();
   await db.execute(sql`INSERT INTO "users" ("id") VALUES (${ownerRep})`);
+
+  const [sequence] = await db
+    .insert(schema.prospectingSequences)
+    .values({
+      ownerRep,
+      name: `seq-${randomUUID()}`,
+      subject: { kind: "icp", icpFilter: { targetType: "person" } },
+      targetCount: 100,
+      mode: "live",
+      status: "live",
+      enrollmentCap: null,
+      enrollmentPeriod: "month",
+    })
+    .returning({ id: schema.prospectingSequences.id });
+
   const [run] = await db
     .insert(schema.prospectingBatchRuns)
     .values({
       ownerRep,
+      sequenceId: sequence.id,
       subject: { kind: "icp", icpFilter: { targetType: "person" } },
       targetCount: 100,
       rerunKey: `rk-${randomUUID()}`,
@@ -342,13 +397,11 @@ async function seedRun(db: Database): Promise<string> {
  * (displayName / companyName / title / country). These strings are inserted
  * verbatim into `targets` text columns via the `record_target` mock, and
  * pg-mem's node-postgres adapter double-unescapes parameters — so a generated
- * backslash (or control char) makes its parser throw
- * "Bad escaped character in JSON" intermittently. Constraining to an
- * alphanumeric + common-punctuation charset (no backslash, no control chars)
- * keeps the harness deterministic without weakening the property: a candidate's
- * display name being alphanumeric is fully representative for provenance, which
- * is derived from `lawfulBasis` / `sourceProvider` / acquisition `asOf`, not
- * from these free-text fields.
+ * backslash (or control char) makes its parser throw intermittently.
+ * Constraining to an alphanumeric + common-punctuation charset keeps the harness
+ * deterministic without weakening the property: a candidate's display name being
+ * alphanumeric is fully representative for provenance, which is derived from
+ * `lawfulBasis` / `sourceProvider` / acquisition `asOf`, not these fields.
  */
 function safeTextArb(maxLength: number): fc.Arbitrary<string> {
   return fc
@@ -418,8 +471,9 @@ const baseCandidateArb: fc.Arbitrary<ProviderResult> = fc.record(
 
 /**
  * A batch of cold-eligible candidates. Each is given a UNIQUE `sourceRef` by
- * index so the handler's stable identity key never collapses two candidates,
- * and every candidate yields its own cold-eligible queue item.
+ * index so the handler's stable identity key (and the sequence-wide ledger
+ * identity) never collapses two candidates, and every candidate yields its own
+ * cold-eligible queue item + enrollment.
  */
 const candidatesArb: fc.Arbitrary<ProviderResult[]> = fc
   .array(baseCandidateArb, { minLength: 1, maxLength: 6 })
@@ -429,12 +483,12 @@ const candidatesArb: fc.Arbitrary<ProviderResult[]> = fc
 
 // ── Property ────────────────────────────────────────────────────────────────────
 
-describe("**Feature: agentic-prospecting-batch, Property 17: Provenance on queued and sent items.**", () => {
-  it("Validates: Requirements 10.1, 10.3 — every cold-eligible queue item carries lawful_basis, data_source, and acquired_at provenance", async () => {
+describe("**Feature: prospecting-sequences, Property 13: Enrolled items carry provenance.**", () => {
+  it("Validates: Requirements 9.6 — every cold-eligible enrolled queue item carries lawful_basis, data_source, and acquired_at provenance", async () => {
     await fc.assert(
       fc.asyncProperty(candidatesArb, async (candidates) => {
         backup.restore();
-        const runId = await seedRun(db);
+        const runId = await seedSequenceRun(db);
 
         // Install the per-iteration mock behaviour: the search returns these
         // candidates; record_target / draft_outreach persist a row (for the FK)
@@ -450,14 +504,11 @@ describe("**Feature: agentic-prospecting-batch, Property 17: Provenance on queue
               title: (input.title as string) ?? null,
               email: (input.email as string) ?? null,
               country: (input.country as string) ?? null,
-              // pg-mem's node-postgres adapter double-unescapes parameters and
-              // then JSON-parses jsonb values, so a backslash in a jsonb payload
-              // (which the candidate `attributes` generator can emit) makes its
-              // parser throw ("Bad escaped character in JSON"). The persisted
-              // `attributes` column is never read back by this property — the
-              // asserted provenance (lawful_basis / data_source / acquired_at)
-              // is derived in eligibility.ts from the in-memory candidate, not
-              // from the stored Target — so an empty object is stored to keep the
+              // pg-mem's node-postgres adapter double-unescapes + JSON-parses
+              // jsonb params, so a backslash in `attributes` makes its parser
+              // throw. The persisted `attributes` column is never read back here
+              // — the asserted provenance is derived in eligibility.ts from the
+              // in-memory candidate — so store an empty object to keep the
               // FK-satisfying write robust across all generated strings.
               attributes: {},
               sourceProvider: input.sourceProvider as string,
@@ -482,7 +533,7 @@ describe("**Feature: agentic-prospecting-batch, Property 17: Provenance on queue
           return row.id;
         };
 
-        // Drive the whole batch handler end to end.
+        // Drive the whole sequence-scoped Refresh_Run end to end.
         await runProspectingBatch(db, { batchRunId: runId }, {} as never);
 
         // Read back the persisted cold-eligible queue items for this run.
@@ -501,10 +552,12 @@ describe("**Feature: agentic-prospecting-batch, Property 17: Provenance on queue
             )
           );
 
-        // One cold-eligible queue item per generated candidate (none dropped).
+        // One cold-eligible queue item per generated candidate (none dropped by
+        // the unbounded enrollment cap or sequence-wide dedupe — each carries a
+        // distinct ref identity).
         expect(items).toHaveLength(candidates.length);
 
-        // (Req 10.1) Every queued cold item carries the full provenance triple:
+        // (Req 9.6) Every enrolled cold item carries the full provenance triple:
         // a lawful-basis marker, the data source, and the acquisition timestamp.
         for (const item of items) {
           expect(item.lawfulBasis).not.toBeNull();
@@ -523,8 +576,16 @@ describe("**Feature: agentic-prospecting-batch, Property 17: Provenance on queue
             item.lawfulBasis
           );
         }
+
+        // The enrollment ledger recorded one row per cold enrollment, anchoring
+        // the provenance to a genuine sequence-scoped Enrollment (Req 5.1, 9.6).
+        const [enrollmentCount] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.prospectingSequenceEnrollments)
+          .where(eq(schema.prospectingSequenceEnrollments.batchRunId, runId));
+        expect(enrollmentCount.count).toBe(candidates.length);
       }),
       { numRuns: NUM_RUNS }
     );
-  }, 60000);
+  }, 120000);
 });

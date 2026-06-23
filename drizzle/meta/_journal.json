@@ -288,6 +288,20 @@
       "when": 1782188810233,
       "tag": "0041_worthless_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1782200000000,
+      "tag": "0042_audit_log_text_actor",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1782300000000,
+      "tag": "0043_prospecting_sequences",
+      "breakpoints": true
     }
   ]
 }

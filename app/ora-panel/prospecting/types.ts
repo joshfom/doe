@@ -273,6 +273,10 @@ export interface BatchSubject {
   kind: "cluster" | "icp";
   /** Set when `kind === "cluster"` — the Bayn cluster id. */
   clusterId?: string;
+  /** An own project subject (own-catalog led), optionally with a cluster. */
+  projectId?: string;
+  /** The community the project / cluster belongs to. */
+  communityId?: string;
   /** Optional originating Prospecting_Brief id. */
   briefId?: string;
   /** Set when `kind === "icp"` — the ICP filter the run searched against. */
@@ -420,16 +424,26 @@ export interface StartBatchResult {
   status: BatchRunStatus;
 }
 
-// ── Prospecting Sequences (named, toggleable background campaigns) ───────────
+// ── Prospecting Sequences (named background campaigns) ───────────────────────
 
-/** A sequence's toggle: `draft` = paused, `live` = agent prospects in the background. */
+/** Legacy toggle kept in sync with `status` (`draft` = paused, `live` = running). */
 export type SequenceMode = "draft" | "live";
+
+/** The authoritative lifecycle state of a Sequence (`prospecting_sequences.status`). */
+export type SequenceStatus = "draft" | "live" | "paused" | "archived";
+
+/** The Enrollment_Cap period a Sequence's cap is reckoned over. */
+export type SequencePeriod = "day" | "week" | "month";
+
+/** A lifecycle action a rep can take on a Sequence (maps to a POST route). */
+export type SequenceLifecycleAction = "publish" | "pause" | "resume" | "archive";
 
 /**
  * A named, owner-scoped prospecting campaign. The durable parent the rep manages
- * (name + description + subject + target count) with a `mode` toggle; each `live`
- * sequence runs batch runs in the background that land prospects in its inbox.
- * `pendingProspects` is present on the list projection (`GET /sequences`).
+ * (name + description + subject + per-refresh size + cadence + enrollment cap),
+ * with a lifecycle `status`; each `live` Sequence refreshes in the background and
+ * lands prospects in its inbox. `enrolledProspects` / `pendingProspects` are
+ * present on the list projection (`GET /sequences`).
  */
 export interface SequenceRow {
   id: string;
@@ -437,13 +451,67 @@ export interface SequenceRow {
   name: string;
   description: string | null;
   subject: BatchSubject;
+  /** Per-refresh batch size (repurposed `target_count`). */
   targetCount: number;
+  /** Legacy toggle, kept in sync with `status`. */
   mode: SequenceMode;
+  /** Authoritative lifecycle state. */
+  status: SequenceStatus;
+  /** Refresh_Frequency in minutes (>= 60). */
+  refreshIntervalMinutes: number | null;
+  /** When the Sequence last completed a Refresh_Run (null → never). */
+  lastRefreshedAt: string | null;
+  /** The next scheduled refresh instant (null when not scheduled). */
+  nextRefreshAt: string | null;
+  /** Enrollment cap per period (null → unbounded). */
+  enrollmentCap: number | null;
+  /** The period the enrollment cap is reckoned over. */
+  enrollmentPeriod: SequencePeriod | null;
+  /** When the Sequence was archived (null unless archived). */
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Enrolled-prospect count (only on the list projection). */
+  enrolledProspects?: number;
   /** Count of prospects awaiting review (only on the list projection). */
   pendingProspects?: number;
 }
+
+/**
+ * One enrolled prospect in a Sequence's enrollment ledger, joined to its Target
+ * for a privacy-safe projection (phoneHash ONLY, never a raw phone). Returned by
+ * `GET /sequences/:id` as `enrolledProspects`.
+ */
+export interface EnrolledProspectRow {
+  id: string;
+  targetId: string;
+  batchRunId: string;
+  periodBucket: string;
+  createdAt: string;
+  targetType: TargetType | null;
+  targetDisplayName: string | null;
+  targetCompanyName: string | null;
+  targetTitle: string | null;
+  targetEmail: string | null;
+  targetPhoneHash: string | null;
+  targetCountry: string | null;
+  targetStatus: TargetStatus | null;
+}
+
+/**
+ * The full Sequence detail returned by `GET /sequences/:id`: the config row, the
+ * pending Review_Inbox items, the enrolled prospects, and the Activity_Log
+ * aggregated across the Sequence's Refresh_Runs.
+ */
+export interface SequenceDetail {
+  sequence: SequenceRow;
+  count: number;
+  queueItems: QueueItemRow[];
+  enrolledProspects: EnrolledProspectRow[];
+  enrolledCount: number;
+  activity: BatchActivityEntry[];
+}
+
 
 /**
  * Result of `POST /api/prospecting/queue/bulk-approve` (Req 5.4): how many of

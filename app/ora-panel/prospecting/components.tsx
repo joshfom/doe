@@ -2374,7 +2374,9 @@ export function SequencesPanel({
 
   const n = Number(targetCount);
   const nValid = Number.isInteger(n) && n > 0;
-  const canCreate = name.trim().length > 0 && Boolean(selectedClusterId) && nValid;
+  // A sequence sells an own subject: a Project is the minimum (a Community alone
+  // is not specific enough); a Cluster is an optional finer-grained subject.
+  const canCreate = name.trim().length > 0 && Boolean(selectedProjectId) && nValid;
 
   const submit = () => {
     if (!canCreate) return;
@@ -2411,7 +2413,7 @@ export function SequencesPanel({
         </header>
         {showCreate && (
           <div className="space-y-3 border-t border-ora-gold/20 px-5 py-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-end">
               <label className="text-xs text-ora-charcoal-light">
                 Sequence name
                 <input
@@ -2424,7 +2426,7 @@ export function SequencesPanel({
               <label className="text-xs text-ora-charcoal-light">
                 Target count (N)
                 <input
-                  className={`${inputCls} max-w-[7rem]`}
+                  className={inputCls}
                   type="number"
                   min={1}
                   max={500}
@@ -2465,8 +2467,8 @@ export function SequencesPanel({
               <span className="text-[11px] text-ora-muted">
                 {!name.trim()
                   ? 'Give the sequence a name.'
-                  : !selectedClusterId
-                    ? 'Pick a cluster as the subject.'
+                  : !selectedProjectId
+                    ? 'Pick a project as the subject (cluster is optional).'
                     : 'Created as Draft — turn it Live to start prospecting.'}
               </span>
             </div>

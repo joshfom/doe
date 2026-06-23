@@ -43,6 +43,13 @@ export interface BatchSubject {
   kind: "cluster" | "icp";
   /** When `kind === "cluster"` — the originating Bayn cluster. */
   clusterId?: string;
+  /**
+   * When the subject is an own PROJECT (no specific cluster chosen) — the
+   * project the filter is derived from. Cluster, when present, takes precedence.
+   */
+  projectId?: string;
+  /** Community context for resolving a `projectId` / `clusterId` subject. */
+  communityId?: string;
   /** Optional originating Prospecting_Brief. */
   briefId?: string;
   /**

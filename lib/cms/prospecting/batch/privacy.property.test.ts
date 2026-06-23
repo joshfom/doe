@@ -88,6 +88,7 @@ const DDL = `
     "owner_rep" uuid NOT NULL REFERENCES "users"("id"),
     "subject" jsonb NOT NULL,
     "cluster_id" text,
+    "sequence_id" uuid,
     "target_count" integer NOT NULL,
     "status" text NOT NULL DEFAULT 'running',
     "rerun_key" text NOT NULL,

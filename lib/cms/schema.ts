@@ -366,9 +366,12 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id),
+    // The acting principal. Usually a `users.id` UUID, but agent/system actions
+    // are audited under string actor ids (e.g. "agent:prospecting",
+    // "agent:outreach", "rep:outreach") that are NOT users rows — so this is a
+    // free `text` column with no FK. Audit must never reject a non-uuid actor
+    // (that previously failed every agent dispatch insert; see lib/cms/audit.ts).
+    userId: text("user_id").notNull(),
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
@@ -2299,13 +2302,84 @@ export const prospectingSequences = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     subject: jsonb("subject").notNull(),
+    // Repurposed by prospecting-sequences as the per-refresh batch size (how
+    // many cold-eligible prospects one Refresh_Run may produce), not a campaign
+    // total. Kept for backward compatibility with the one-shot flow.
     targetCount: integer("target_count").notNull().default(10),
-    // 'draft' = paused (no background prospecting); 'live' = agent prospects.
+    // Legacy toggle kept in sync with `status` for backward-compatible reads;
+    // `status` is authoritative. 'draft' = paused; 'live' = agent prospects.
     mode: text("mode", { enum: ["draft", "live"] }).notNull().default("draft"),
+    // ── Prospecting Sequences lifecycle + refresh cadence (0043, additive) ────
+    // Lifecycle source of truth (Req 1.1); backfilled from `mode`. Enum stored
+    // as plain `text` to match the prospecting domain.
+    status: text("status", {
+      enum: ["draft", "live", "paused", "archived"],
+    }).default("draft"),
+    // Refresh_Frequency as minutes (hourly=60, daily=1440, weekly=10080);
+    // 60-minute minimum enforced in the route (Req 2.7, 4.1).
+    refreshIntervalMinutes: integer("refresh_interval_minutes").default(1440),
+    // Set on each completed Refresh_Run (Req 4.4); null ⇒ never refreshed.
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
+    // Next scheduled slot; set to now on publish/resume, advanced atomically by
+    // the sweep (Req 4.5). null while draft/archived.
+    nextRefreshAt: timestamp("next_refresh_at", { withTimezone: true }),
+    // Max enrollments per period; null ⇒ unbounded (Req 11.1).
+    enrollmentCap: integer("enrollment_cap").default(200),
+    // Cap reset period (Req 11.3).
+    enrollmentPeriod: text("enrollment_period", {
+      enum: ["day", "week", "month"],
+    }).default("month"),
+    // Stamped on archive.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => [index("prospecting_sequences_owner_idx").on(t.ownerRep)]
+);
+
+// Per-Sequence enrollment ledger. Each row is simultaneously the
+// enrollment-at-most-once guard AND the enrollment-cap counter (count rows in
+// the current period bucket). UNIQUE (sequence_id, match_kind, match_value) →
+// a prospect is enrolled in a given Sequence at most once across all of its
+// Refresh_Runs (Req 5.1, 5.2, 5.3, 11.4). Mirrors
+// drizzle/0043_prospecting_sequences.sql.
+export const prospectingSequenceEnrollments = pgTable(
+  "prospecting_sequence_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sequenceId: uuid("sequence_id")
+      .notNull()
+      .references(() => prospectingSequences.id, { onDelete: "cascade" }),
+    // Same privacy-safe identity space as `candidateKey` / claims (CC-Privacy):
+    // normalized email | salted phone hash | provider ref.
+    matchKind: text("match_kind", {
+      enum: ["email", "phone_hash", "ref"],
+    }).notNull(),
+    matchValue: text("match_value").notNull(),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => targets.id),
+    batchRunId: uuid("batch_run_id")
+      .notNull()
+      .references(() => prospectingBatchRuns.id, { onDelete: "cascade" }),
+    // Cap period key (e.g. `2026-01` for monthly) — what the cap counts within
+    // (Req 11.3).
+    periodBucket: text("period_bucket").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("prospecting_sequence_enrollments_identity_ux").on(
+      t.sequenceId,
+      t.matchKind,
+      t.matchValue
+    ),
+    index("prospecting_sequence_enrollments_period_idx").on(
+      t.sequenceId,
+      t.periodBucket
+    ),
+  ]
 );
 
 // One autonomous batch job. `rerunKey` UNIQUE makes a re-run idempotent
@@ -2473,6 +2547,12 @@ export type NewProspectingBatchRun = typeof prospectingBatchRuns.$inferInsert;
 
 export type ProspectingSequence = typeof prospectingSequences.$inferSelect;
 export type NewProspectingSequence = typeof prospectingSequences.$inferInsert;
+
+export type ProspectingSequenceEnrollment =
+  typeof prospectingSequenceEnrollments.$inferSelect;
+export type NewProspectingSequenceEnrollment =
+  typeof prospectingSequenceEnrollments.$inferInsert;
+
 export type ProspectingQueueItem = typeof prospectingQueueItems.$inferSelect;
 export type NewProspectingQueueItem = typeof prospectingQueueItems.$inferInsert;
 

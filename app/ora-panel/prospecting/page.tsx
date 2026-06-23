@@ -33,7 +33,6 @@ import {
   BatchActivityLog,
   WorkspaceModeToggle,
   StepGuide,
-  SequencesPanel,
 } from './components';
 import { useProspectingRealtime, type ProspectingEvent } from './useProspectingRealtime';
 import type {
@@ -701,8 +700,8 @@ export default function ProspectingPage() {
 
   const createSequence = useCallback(
     async (input: { name: string; description: string; targetCount: number }) => {
-      if (!pickClusterId) {
-        pushToast('error', 'Pick a cluster as the sequence subject first.');
+      if (!pickProjectId) {
+        pushToast('error', 'Pick a project as the sequence subject first.');
         return;
       }
       setSeqCreating(true);
@@ -713,7 +712,15 @@ export default function ProspectingPage() {
             name: input.name,
             description: input.description,
             targetCount: input.targetCount,
-            subject: { kind: 'cluster', clusterId: pickClusterId },
+            // The subject is the own PROJECT the rep picked; a cluster (when
+            // chosen) narrows it further. The agent derives who to prospect from
+            // this subject's own-catalog spec (area / segment / unit types).
+            subject: {
+              kind: 'cluster',
+              projectId: pickProjectId,
+              ...(pickClusterId ? { clusterId: pickClusterId } : {}),
+              ...(pickCommunityId ? { communityId: pickCommunityId } : {}),
+            },
           }),
         });
         pushToast('success', `Sequence “${input.name}” created — turn it Live to start prospecting`);
@@ -724,7 +731,7 @@ export default function ProspectingPage() {
         setSeqCreating(false);
       }
     },
-    [pickClusterId, pushToast, refreshSequences]
+    [pickProjectId, pickClusterId, pickCommunityId, pushToast, refreshSequences]
   );
 
   const toggleSequence = useCallback(
@@ -1038,7 +1045,29 @@ export default function ProspectingPage() {
           }),
         });
         await refreshTargets(brief.id);
-        if (out?.targetId) setPendingTargetId(out.targetId);
+        if (out?.targetId) {
+          setPendingTargetId(out.targetId);
+          // Auto-open the Outreach step for the just-recorded Target so the rep
+          // flows straight into drafting. Previously the section stayed locked
+          // (`muted`) until the rep clicked the target again, which read as
+          // "nothing happened". We re-fetch so we have the full row to select.
+          try {
+            const data = await api<{ targets: TargetRow[] }>(
+              `/targets?briefId=${brief.id}`
+            );
+            setTargets(data.targets);
+            const row = data.targets.find((t) => t.id === out.targetId) ?? null;
+            if (row) {
+              setSelectedTarget(row);
+              setApproval(null);
+              setCrmCheck(null);
+              await refreshDrafts(row.id);
+            }
+          } catch {
+            // best-effort — the target is recorded regardless; the rep can still
+            // click it in the Prospects list to open outreach.
+          }
+        }
         pushToast('success', `Added ${name} to Targets — ready to draft outreach`);
         logActivity(`Recorded ${name} as a Target.`);
       } catch (e) {
@@ -1049,7 +1078,7 @@ export default function ProspectingPage() {
         setRecordingId(null);
       }
     },
-    [brief, refreshTargets, pushToast, logActivity]
+    [brief, refreshTargets, refreshDrafts, pushToast, logActivity]
   );
 
   const enrichTarget = useCallback(
@@ -1484,36 +1513,33 @@ export default function ProspectingPage() {
       )}
 
       {/* ── SEQUENCES ────────────────────────────────────────────────────────
-          Named, toggleable background campaigns. Create one, turn it Live, and
-          the agent prospects in the background; open one to review its prospects. */}
+          Named background campaigns now live on a dedicated surface
+          (`/ora-panel/prospecting/sequences`) — the builder, enrolled prospects,
+          review inbox, activity log, and lifecycle controls. This compact card
+          links out so the workspace stays focused on the one-shot flows. */}
       {mode === 'sequences' && (
-        <SequencesPanel
-          sequences={sequences}
-          catalog={ownCatalog}
-          selectedCommunityId={pickCommunityId}
-          selectedProjectId={pickProjectId}
-          selectedClusterId={pickClusterId}
-          onSelectCommunity={onSelectCommunity}
-          onSelectProject={onSelectProject}
-          onSelectCluster={setPickClusterId}
-          creating={seqCreating}
-          onCreate={createSequence}
-          toggleBusyId={seqToggleBusyId}
-          onToggle={toggleSequence}
-          openSequenceId={openSequenceId}
-          onOpen={openSequence}
-          onCloseDetail={closeSequenceDetail}
-          inboxItems={seqInboxItems}
-          inboxSelected={seqSelected}
-          inboxBusyId={seqInboxBusyId}
-          inboxBulkBusy={seqBulkBusy}
-          onToggleSelect={seqToggleSelect}
-          onToggleAll={seqToggleAll}
-          onEdit={seqEditItem}
-          onApprove={seqApproveItem}
-          onReject={seqRejectItem}
-          onBulkApprove={seqBulkApprove}
-        />
+        <section className="rounded-xl border border-ora-sand/60 bg-ora-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Telescope className="h-5 w-5 text-ora-gold-dark" />
+              <div>
+                <h2 className="text-sm font-semibold text-ora-charcoal">Prospecting Sequences</h2>
+                <p className="text-xs text-ora-charcoal-light">
+                  {sequences.length > 0
+                    ? `${sequences.length} sequence${sequences.length === 1 ? '' : 's'} — manage them on the dedicated surface.`
+                    : 'Named background campaigns that keep finding new prospects on a cadence.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/ora-panel/prospecting/sequences')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ora-gold-dark px-3 py-2 text-sm font-semibold text-white transition hover:bg-ora-gold"
+            >
+              Open sequences
+            </button>
+          </div>
+        </section>
       )}
 
       {/* ── GUIDED FLOW ──────────────────────────────────────────────────────

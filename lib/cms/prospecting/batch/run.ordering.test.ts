@@ -160,6 +160,12 @@ function buildDb(): { mem: IMemoryDb; db: Database } {
       mem.public.none(trimmed);
     }
   }
+  // The sequences feature (migration 0041) added `sequence_id` to
+  // prospecting_batch_runs; this harness applies only 0040, so add the column
+  // so `loadBatchRun`'s SELECT resolves.
+  mem.public.none(
+    'ALTER TABLE "prospecting_batch_runs" ADD COLUMN "sequence_id" uuid'
+  );
 
   const adapter = mem.adapters.createPg();
   const pool = new adapter.Pool();
