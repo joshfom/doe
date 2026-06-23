@@ -398,8 +398,6 @@ export function HomeChat({ firstName, prompts = DEFAULT_PROMPTS }: HomeChatProps
       onSubmit={(text) => void submitMessage(text)}
       sending={sending}
       disabled={sending}
-      voice
-      voiceMode="staff"
       placeholder="Message your twin…  (type / for commands)"
     />
   );

@@ -40,6 +40,11 @@ import {
   ScrollText,
   RefreshCw,
   AlertCircle,
+  Lightbulb,
+  Info,
+  Users,
+  ListChecks,
+  type LucideIcon,
 } from 'lucide-react';
 import type {
   BriefSpec,
@@ -56,12 +61,13 @@ import type {
   CrmCheckResult,
   TargetType,
   OwnCatalog,
-  ClusterNode,
   AreaTrendRow,
   BatchSubject,
   QueueItemRow,
   BatchActivityEntry,
   BatchActivityAction,
+  SequenceRow,
+  SequenceMode,
 } from './types';
 import type { ProspectingStreamStatus } from './useProspectingRealtime';
 
@@ -191,15 +197,16 @@ export function WorkspaceModeToggle({
   mode,
   onChange,
 }: {
-  mode: 'guided' | 'autonomous';
-  onChange: (m: 'guided' | 'autonomous') => void;
+  mode: 'guided' | 'autonomous' | 'sequences';
+  onChange: (m: 'guided' | 'autonomous' | 'sequences') => void;
 }) {
   const opts = [
     { id: 'guided', icon: Layers, title: 'Guided', sub: 'One prospect at a time' },
     { id: 'autonomous', icon: Bot, title: 'Autonomous batch', sub: 'Agent runs a batch → you review' },
+    { id: 'sequences', icon: Rocket, title: 'Sequences', sub: 'Named campaigns running in the background' },
   ] as const;
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-xl border border-ora-sand/60 bg-ora-white p-1.5">
+    <div className="grid grid-cols-1 gap-2 rounded-xl border border-ora-sand/60 bg-ora-white p-1.5 sm:grid-cols-3">
       {opts.map((o) => {
         const active = mode === o.id;
         const Icon = o.icon;
@@ -223,6 +230,223 @@ export function WorkspaceModeToggle({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ── Contextual help sidebar ───────────────────────────────────────────────────
+//
+// New reps don't know what "comparables", "buyer hypothesis", or "cold-eligible"
+// mean. The StepGuide sits in a sticky right rail and explains — in plain
+// language — what the section the rep is currently on does, what to do next, and
+// what to expect. The content swaps as the active step changes, so the workspace
+// teaches itself. Pure presentational; no data fetching.
+
+interface GuideContent {
+  icon: LucideIcon;
+  eyebrow: string;
+  title: string;
+  intro: string;
+  /** Short, imperative "what to do here" bullets. */
+  todo: string[];
+  /** Optional "good to know" footnote. */
+  note?: string;
+}
+
+/** Per-step guidance for the GUIDED, one-prospect-at-a-time flow. */
+const GUIDED_GUIDES: Record<number, GuideContent> = {
+  1: {
+    icon: MapPin,
+    eyebrow: 'Step 1 of 5 · Brief',
+    title: 'Tell ORA what you’re selling',
+    intro:
+      'This is the starting point. Pick the ORA project you’re selling and ORA builds everything else around it — comparable sales, likely buyers, and a first message.',
+    todo: [
+      'Choose a Community, then a Project. That’s enough to continue.',
+      'Add the unit type + bedrooms (and price, if you have it).',
+      'Press “Run market research” to pull comparable sold units.',
+    ],
+    note: 'Not an ORA project? Switch to “Describe it manually” and type the area, price, and unit type instead.',
+  },
+  2: {
+    icon: TrendingUp,
+    eyebrow: 'Step 2 of 5 · Market',
+    title: 'Comparable sold units near your property',
+    intro:
+      'Market research: recent sales of similar properties at a similar price, with the area trend. This is the concrete evidence the agent uses to understand what you’re selling.',
+    todo: [
+      'Scan the match %, recent sale price, and price-per-sqft.',
+      'Tick the closest matches — the agent uses those to build the buyer profile and pitch.',
+      'Press “Build buyer profile from selected” to carry them forward.',
+    ],
+    note: 'Live = current market data. Representative = sample data, shown when the trial limit is hit (same set each time).',
+  },
+  3: {
+    icon: Users,
+    eyebrow: 'Step 3 of 5 · Buyer',
+    title: 'Who is most likely to buy',
+    intro:
+      'Based on who actually bought the comparable properties, ORA proposes a buyer profile: segments, feeder markets, job titles, and wealth signals. It’s a starting guess — you’re in control.',
+    todo: [
+      'Read the proposed profile and adjust anything that doesn’t fit.',
+      'Add or remove titles and markets — these drive the people search.',
+      'Press “Search targets” when it looks right.',
+    ],
+    note: 'Confidence reflects how much real sales evidence backs the guess.',
+  },
+  4: {
+    icon: Search,
+    eyebrow: 'Step 4 of 5 · Prospects',
+    title: 'Find prospects to reach out to',
+    intro:
+      'ORA searches buyer databases (Apollo and others) for real people matching the profile built from your selected comparables. Save the ones worth pursuing to your shortlist.',
+    todo: [
+      'Press “Record” on a prospect to add them to your shortlist.',
+      'Pick a shortlisted prospect to draft outreach for them.',
+      'ORA auto-checks Salesforce so you don’t cold-contact an existing client.',
+    ],
+    note: 'If the trial limit is hit, you’ll see representative prospects — clearly labelled and cached.',
+  },
+  5: {
+    icon: Send,
+    eyebrow: 'Step 5 of 5 · Outreach',
+    title: 'Draft, approve, and send',
+    intro:
+      'ORA writes a personalized first message grounded in the real market figures you just saw. You always review before anything leaves.',
+    todo: [
+      'Pick a channel (email, WhatsApp, call script) and language, then generate.',
+      'Edit the draft until it sounds like you.',
+      'Approve to unlock sending — nothing sends until you do.',
+    ],
+    note: 'If the prospect is already in Salesforce, ORA suggests a warm follow-up instead of cold outreach.',
+  },
+};
+
+/** Guidance for the AUTONOMOUS batch flow (single, mode-level explainer). */
+const AUTONOMOUS_GUIDE: GuideContent = {
+  icon: Bot,
+  eyebrow: 'Autonomous batch',
+  title: 'Let the agent work a whole list',
+  intro:
+    'Point ORA at a subject and a number. It finds that many buyers, checks each against Salesforce, scores how well they fit, and drafts outreach — all on its own. The results land in your review inbox.',
+  todo: [
+    'Pick a cluster as the subject (or describe an ideal customer).',
+    'Set how many prospects to work, then press “Run batch”.',
+    'Review each AI draft in the inbox — approve, edit, reject, or bulk-approve.',
+  ],
+  note: 'Nothing is ever sent without your approval. Watch progress live in “Agent activity”.',
+};
+
+/** Guidance for the SEQUENCES flow (named, toggleable background campaigns). */
+const SEQUENCES_GUIDE: GuideContent = {
+  icon: Rocket,
+  eyebrow: 'Sequences',
+  title: 'Save campaigns that run in the background',
+  intro:
+    'A sequence is a named prospecting campaign you can save and come back to. Turn it Live and the agent prospects in the background; turn it Draft to pause. Run several at once for different projects or buyer types.',
+  todo: [
+    'Create a sequence: give it a name, a short description, and pick what it sells.',
+    'Toggle it Live — the agent starts finding prospects in the background.',
+    'Open a sequence any time to review the prospects it found.',
+  ],
+  note: 'Live work continues even if you close the page. Nothing sends without your approval.',
+};
+
+/** A small live/representative data-source explainer used inside the guide. */
+function DataSourceNote({ dataSource }: { dataSource?: 'live' | 'demo' | null }) {
+  if (!dataSource) return null;
+  const live = dataSource === 'live';
+  return (
+    <div
+      className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-[11px] leading-snug ${
+        live
+          ? 'bg-green-50 text-green-800 ring-1 ring-green-200'
+          : 'bg-ora-cream-light/70 text-ora-charcoal-light ring-1 ring-ora-sand/60'
+      }`}
+    >
+      {live ? <RadioTower className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <ScrollText className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+      <span>
+        {live ? (
+          <>You’re seeing <strong>live market data</strong> for this area.</>
+        ) : (
+          <>You’re seeing <strong>representative data</strong>. It works the same way; live market data isn’t connected for this area yet.</>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The sticky right-rail guide. Shows plain-language help for whichever section
+ * the rep is currently on, so the workspace is self-explanatory for someone who
+ * has never prospected before.
+ */
+export function StepGuide({
+  mode,
+  step,
+  dataSource,
+}: {
+  mode: 'guided' | 'autonomous' | 'sequences';
+  /** Active step in the guided flow (1–5); ignored in the other modes. */
+  step: number;
+  /** Live vs representative market data, surfaced on the market/prospect steps. */
+  dataSource?: 'live' | 'demo' | null;
+}) {
+  const guide =
+    mode === 'autonomous'
+      ? AUTONOMOUS_GUIDE
+      : mode === 'sequences'
+        ? SEQUENCES_GUIDE
+        : GUIDED_GUIDES[step] ?? GUIDED_GUIDES[1];
+  const Icon = guide.icon;
+  const showDataNote = mode === 'autonomous' || (mode === 'guided' && (step === 2 || step === 4));
+
+  return (
+    <div className="rounded-xl border border-ora-sand/60 bg-ora-white">
+      <header className="flex items-center gap-2 border-b border-ora-sand/50 bg-ora-cream-light/40 px-4 py-2.5">
+        <Lightbulb className="h-4 w-4 text-ora-gold-dark" />
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ora-charcoal-light">
+          What this step does
+        </h2>
+      </header>
+      <div className="px-4 py-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ora-gold/15 text-ora-gold-dark">
+            <Icon className="h-4 w-4 stroke-[1.5]" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ora-muted">
+              {guide.eyebrow}
+            </p>
+            <h3 className="text-sm font-semibold leading-tight text-ora-charcoal">{guide.title}</h3>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs leading-relaxed text-ora-charcoal-light">{guide.intro}</p>
+
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ora-muted">
+            <ListChecks className="h-3.5 w-3.5 text-ora-gold-dark" /> What to do
+          </div>
+          <ul className="space-y-1.5">
+            {guide.todo.map((t, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs leading-snug text-ora-charcoal-light">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ora-gold-dark" />
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {showDataNote && <DataSourceNote dataSource={dataSource} />}
+
+        {guide.note && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg bg-ora-cream-light/60 px-3 py-2 text-[11px] leading-snug text-ora-charcoal-light">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ora-gold-dark" />
+            <span>{guide.note}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -266,6 +490,13 @@ const inputCls =
   'w-full rounded-lg border border-ora-sand/70 bg-ora-white px-3 py-2 text-sm text-ora-charcoal placeholder:text-ora-muted focus:border-ora-gold focus:outline-none';
 
 // ── 0. Own_Subject picker (community → project → cluster) ─────────────────────
+//
+// ORA is a single company; reps prospect for ORA's OWN projects, so the subject
+// is always picked from our catalog. The picker resolves the comparison spec
+// from real own records — cluster is OPTIONAL (it only sharpens the match), so a
+// rep can move forward with just a project. The primary action button is ALWAYS
+// visible (never hidden behind a cluster selection) so the way forward is
+// obvious; it enables as soon as a project is chosen.
 
 export function OwnSubjectPicker({
   catalog,
@@ -276,7 +507,8 @@ export function OwnSubjectPicker({
   onSelectCommunity,
   onSelectProject,
   onSelectCluster,
-  onUseCluster,
+  onSubmit,
+  submitLabel = 'Run market research',
 }: {
   catalog: OwnCatalog;
   selectedCommunityId: string | null;
@@ -286,17 +518,25 @@ export function OwnSubjectPicker({
   onSelectCommunity: (id: string | null) => void;
   onSelectProject: (id: string | null) => void;
   onSelectCluster: (id: string | null) => void;
-  onUseCluster: (cluster: ClusterNode) => void;
+  /**
+   * When provided, the picker shows its own primary CTA that submits the current
+   * selection (project + optional cluster). Omit it when an outer control drives
+   * the action (e.g. the autonomous "Run batch" button below the picker).
+   */
+  onSubmit?: () => void;
+  submitLabel?: string;
 }) {
   const cluster =
     catalog.clusters.find((c) => c.id === selectedClusterId) ?? null;
 
+  // A project is the minimum needed to resolve a comparison; cluster is optional.
+  const canSubmit = Boolean(selectedProjectId);
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-ora-muted">
-        Pick one of ORA&apos;s own communities, projects, and clusters as the
-        subject — the comparison parameters are resolved from our own catalog, no
-        free-form typing needed.
+        Pick the ORA project you&apos;re selling. We resolve the comparison from
+        our own catalog automatically — no free-form typing needed.
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="text-xs text-ora-charcoal-light">
@@ -339,6 +579,7 @@ export function OwnSubjectPicker({
         <label className="text-xs text-ora-charcoal-light">
           <span className="inline-flex items-center gap-1">
             <Layers className="h-3.5 w-3.5 text-ora-gold-dark" /> Cluster
+            <span className="font-normal text-ora-muted">(optional)</span>
           </span>
           <select
             className={inputCls}
@@ -347,7 +588,11 @@ export function OwnSubjectPicker({
             onChange={(e) => onSelectCluster(e.target.value || null)}
           >
             <option value="">
-              {selectedProjectId ? 'Select cluster…' : 'Pick a project first'}
+              {selectedProjectId
+                ? catalog.clusters.length === 0
+                  ? 'No clusters — optional'
+                  : 'All clusters (optional)'
+                : 'Pick a project first'}
             </option>
             {catalog.clusters.map((c) => (
               <option key={c.id} value={c.id}>
@@ -377,15 +622,30 @@ export function OwnSubjectPicker({
               <span className="rounded-full bg-ora-sand/40 px-2 py-0.5">{cluster.totalUnits} units</span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Always-visible primary action so the way forward is never ambiguous. */}
+      {onSubmit && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-ora-sand/40 pt-3">
           <button
             type="button"
-            className={`${btnPrimary} mt-3`}
-            disabled={busy}
-            onClick={() => onUseCluster(cluster)}
+            className={btnPrimary}
+            disabled={busy || !canSubmit}
+            onClick={onSubmit}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Use this cluster &amp; find comparables
+            {submitLabel}
           </button>
+          <span className="text-[11px] text-ora-muted">
+            {!selectedCommunityId
+              ? 'Start by picking a community.'
+              : !selectedProjectId
+                ? 'Select a project to continue.'
+                : selectedClusterId
+                  ? 'Ready — using the selected cluster for a sharper match.'
+                  : 'Ready. Tip: pick a cluster to sharpen the match (optional).'}
+          </span>
         </div>
       )}
     </div>
@@ -580,6 +840,115 @@ export function RunBatchControl({
   );
 }
 
+// ── 0a. Brief property details (always-collected matching keys) ──────────────
+//
+// The rep ALWAYS supplies unit type + bedrooms (+ optional price band), even
+// when picking an ORA project from the catalog. These are the primary keys for
+// matching comparable sold transactions — without them the comparison spec is
+// empty and the AI has no concrete grounding. Pairs with `OwnSubjectPicker`
+// (which supplies the ORA project identity) in the catalog brief.
+
+const BRIEF_UNIT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'apartment', label: 'Apartment' },
+  { value: 'villa', label: 'Villa' },
+  { value: 'townhouse', label: 'Townhouse' },
+  { value: 'penthouse', label: 'Penthouse' },
+  { value: 'plot', label: 'Plot' },
+  { value: 'office', label: 'Office' },
+];
+
+export function BriefDetails({
+  unitType,
+  bedrooms,
+  priceMin,
+  priceMax,
+  onUnitType,
+  onBedrooms,
+  onPriceMin,
+  onPriceMax,
+  busy,
+  onSubmit,
+}: {
+  unitType: string;
+  bedrooms: string;
+  priceMin: string;
+  priceMax: string;
+  onUnitType: (v: string) => void;
+  onBedrooms: (v: string) => void;
+  onPriceMin: (v: string) => void;
+  onPriceMax: (v: string) => void;
+  busy: boolean;
+  onSubmit: () => void;
+}) {
+  const canSubmit = Boolean(unitType) && Boolean(bedrooms);
+  return (
+    <div className="space-y-3 border-t border-ora-sand/40 pt-3">
+      <p className="text-xs text-ora-muted">
+        What exactly are you selling? These find the comparable sales the AI uses
+        to understand the property and write the pitch.
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <label className="text-xs text-ora-charcoal-light">
+          Unit type
+          <select className={inputCls} value={unitType} onChange={(e) => onUnitType(e.target.value)}>
+            <option value="">Select…</option>
+            {BRIEF_UNIT_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ora-charcoal-light">
+          Bedrooms
+          <input
+            className={inputCls}
+            type="number"
+            min={0}
+            max={20}
+            value={bedrooms}
+            onChange={(e) => onBedrooms(e.target.value)}
+            placeholder="4"
+          />
+        </label>
+        <label className="text-xs text-ora-charcoal-light">
+          Min price (AED)
+          <input
+            className={inputCls}
+            type="number"
+            min={0}
+            value={priceMin}
+            onChange={(e) => onPriceMin(e.target.value)}
+            placeholder="optional"
+          />
+        </label>
+        <label className="text-xs text-ora-charcoal-light">
+          Max price (AED)
+          <input
+            className={inputCls}
+            type="number"
+            min={0}
+            value={priceMax}
+            onChange={(e) => onPriceMax(e.target.value)}
+            placeholder="optional"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={btnPrimary} disabled={busy || !canSubmit} onClick={onSubmit}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          Run market research
+        </button>
+        <span className="text-[11px] text-ora-muted">
+          {!unitType
+            ? 'Pick the unit type to continue.'
+            : !bedrooms
+              ? 'Add the number of bedrooms.'
+              : 'Ready — we’ll pull comparable sold units.'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── 1. Brief intake ─────────────────────────────────────────────────────────
 
 export function BriefIntake({
@@ -638,6 +1007,7 @@ export function BriefIntake({
           <option value="villa">Villa</option>
           <option value="townhouse">Townhouse</option>
           <option value="penthouse">Penthouse</option>
+          <option value="plot">Plot</option>
           <option value="office">Office</option>
         </select>
       </label>
@@ -660,7 +1030,7 @@ export function BriefIntake({
       <div className="sm:col-span-2 lg:col-span-3">
         <button type="submit" className={btnPrimary} disabled={busy}>
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-          Find comparables &amp; propose buyers
+          Run market research
         </button>
       </div>
     </form>
@@ -730,16 +1100,41 @@ export function ComparablesPanel({
   unconfigured,
   areaTrend = [],
   dataSource = null,
+  dataNote = null,
+  selectedIds,
+  onToggleSelect,
+  onUseSelected,
+  useSelectedBusy = false,
 }: {
   comparables: Comparable[];
   unconfigured: boolean;
   areaTrend?: AreaTrendRow[];
   /** Whether the comparables came from LIVE provider rows or the demo fallback. */
   dataSource?: 'live' | 'demo' | null;
+  /** `trial_limit` when the trial market source is tapped out (representative data). */
+  dataNote?: 'trial_limit' | null;
+  /** When provided, each comp gets a checkbox and a "build profile from selected" CTA. */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onUseSelected?: () => void;
+  useSelectedBusy?: boolean;
 }) {
+  const selectable = Boolean(selectedIds && onToggleSelect);
+  const selectedCount = selectedIds
+    ? comparables.filter((c) => selectedIds.has(c.marketProjectId)).length
+    : 0;
   const asOf = comparables[0]?.asOf ?? areaTrend[0]?.asOf ?? null;
   const sourceBadge =
-    dataSource === 'live' ? (
+    dataNote === 'trial_limit' ? (
+      <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800 ring-1 ring-amber-200">
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          <strong>Market data trial limit reached.</strong> Showing representative
+          comparable sales so you can keep working — the same set each time. Live
+          comparables resume automatically when the trial quota resets.
+        </span>
+      </div>
+    ) : dataSource === 'live' ? (
       <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
         <RadioTower className="h-3 w-3" />
         Live · Property Finder{asOf ? ` · as of ${new Date(asOf).toLocaleDateString()}` : ''}
@@ -775,11 +1170,52 @@ export function ComparablesPanel({
     <>
       {sourceBadge}
       <AreaTrendHeadline rows={areaTrend} />
+      {selectable && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-ora-gold/30 bg-ora-gold/5 px-3 py-2.5">
+          <span className="text-xs text-ora-charcoal-light">
+            Tick the closest matches — the agent uses these to build the buyer profile and pitch.
+          </span>
+          <button
+            type="button"
+            className={`${btnPrimary} ml-auto`}
+            disabled={useSelectedBusy || selectedCount === 0}
+            onClick={onUseSelected}
+            title="Re-derive the buyer profile from the comparables you selected"
+          >
+            {useSelectedBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Build buyer profile from selected ({selectedCount})
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      {comparables.map((c) => (
-        <div key={c.marketProjectId} className="rounded-lg border border-ora-sand/60 bg-ora-cream-light/40 p-3">
+      {comparables.map((c) => {
+        const checked = selectedIds?.has(c.marketProjectId) ?? false;
+        return (
+        <div
+          key={c.marketProjectId}
+          className={`rounded-lg border p-3 transition ${
+            selectable && checked
+              ? 'border-ora-gold/60 bg-ora-cream ring-1 ring-ora-gold/30'
+              : 'border-ora-sand/60 bg-ora-cream-light/40'
+          }`}
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
+              {selectable && (
+                <button
+                  type="button"
+                  aria-label={checked ? 'Deselect comparable' : 'Select comparable'}
+                  aria-pressed={checked}
+                  className="mt-0.5 shrink-0 text-ora-charcoal-light transition hover:text-ora-charcoal"
+                  onClick={() => onToggleSelect?.(c.marketProjectId)}
+                >
+                  {checked ? (
+                    <CheckSquare className="h-4 w-4 text-ora-gold-dark" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               <Building2 className="h-4 w-4 stroke-[1.5] text-ora-gold-dark" />
               <div>
                 <div className="text-sm font-medium text-ora-charcoal">{c.name}</div>
@@ -822,7 +1258,8 @@ export function ComparablesPanel({
             <Provenance source={c.source} asOf={c.asOf} />
           </div>
         </div>
-      ))}
+        );
+      })}
       </div>
     </>
   );
@@ -914,7 +1351,7 @@ export function HypothesisEditor({
           }}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-          Search targets
+          Find prospects
         </button>
       </div>
     </div>
@@ -957,9 +1394,9 @@ export function CandidatesPanel({
       <div className="space-y-3">
         {banner}
         <p className="text-xs text-ora-muted">
-          No candidates yet. Run a search — results stream in from the configured
-          Account/Person providers (Apollo, PDL, Cognism, Crunchbase). Providers
-          without credentials are skipped without failing the search.
+          No prospects yet. Press “Find prospects” on the buyer profile above —
+          results come from the configured data providers (Apollo, PDL, Cognism,
+          Crunchbase), with a representative set when the trial limit is hit.
         </p>
       </div>
     );
@@ -995,53 +1432,35 @@ export function CandidatesPanel({
 }
 
 /**
- * Render a data-source banner for the candidate search: an amber "request limit
- * reached" notice when a provider returned 429 (results are representative
- * fallback data), or a neutral "no live provider configured" note when only the
- * demo provider answered. Returns `null` when live providers carried the search.
+ * Render the data-source banner for the candidate search. Because the buyer
+ * providers (Apollo et al.) run on a TRIAL tier, the ONE expected, normal
+ * condition is "trial limit reached" — when that happens (a provider returned
+ * 429, or none was usable so the representative demo set carried the search) we
+ * show a single, clear notice that the prospects below are representative and
+ * cached. Returns `null` when live providers carried the search.
  */
 function providerStatusBanner(
   status: ProviderSearchStatus | null | undefined,
   candidates: ProviderCandidate[]
 ) {
   if (!status) return null;
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const allDemo =
     candidates.length > 0 && candidates.every((c) => c.sourceProvider === 'demo');
+  const rateLimited = status.rateLimitedProviders.length > 0;
+  const noLive =
+    allDemo &&
+    (status.unconfiguredProviders.length > 0 || status.failedProviders.length > 0);
 
-  if (status.rateLimitedProviders.length > 0) {
-    const names = status.rateLimitedProviders.map(cap).join(', ');
+  if (rateLimited || noLive) {
     return (
       <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs text-amber-800 ring-1 ring-amber-200">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
-          <strong>{names} request limit reached.</strong> The live buyer provider
-          hit its quota, so the candidates below are <em>representative
-          fallback data</em> — recorded and drafted the same way. Live results
-          resume automatically when the quota resets.
+          <strong>Buyer data trial limit reached.</strong> The live buyer source is
+          on a trial tier and hit its quota, so the prospects below are{' '}
+          <em>representative</em> (and cached — you may see the same profiles again).
+          Live results resume automatically when the quota resets.
         </span>
-      </div>
-    );
-  }
-
-  if (allDemo && status.unconfiguredProviders.length > 0) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg bg-ora-cream-light/70 px-3 py-2.5 text-xs text-ora-charcoal-light ring-1 ring-ora-sand/60">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-ora-muted" />
-        <span>
-          No live buyer provider is connected, so these are{' '}
-          <em>representative prospects</em>. Connect Apollo to pull live
-          contacts.
-        </span>
-      </div>
-    );
-  }
-
-  if (status.failedProviders.length > 0) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg bg-ora-cream-light/70 px-3 py-2.5 text-[11px] text-ora-muted ring-1 ring-ora-sand/50">
-        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>Some providers were unavailable ({status.failedProviders.map(cap).join(', ')}). Showing what the rest returned.</span>
       </div>
     );
   }
@@ -1058,6 +1477,64 @@ const TARGET_STATUS_STYLE: Record<string, string> = {
   discarded: 'bg-gray-100 text-gray-500',
   opted_out: 'bg-red-50 text-red-700',
 };
+
+/** Human-readable label for an enriched attribute key (camelCase → Title Case). */
+function attrLabel(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * Provider intel surfaced after "Enrich" — the per-field provenanced attributes
+ * `enrich_target` merged onto the Target (seniority, wealth signal, industry,
+ * LinkedIn, …). Without this the enrich action only flipped a status badge and
+ * showed a toast; now the fetched intelligence is actually visible, each value
+ * stamped with the provider that supplied it.
+ */
+function TargetIntel({
+  attributes,
+}: {
+  attributes: TargetRow['attributes'];
+}) {
+  if (!attributes) return null;
+  const entries = Object.entries(attributes).filter(
+    ([, f]) => f && typeof f.value === 'string' && f.value.trim() !== ''
+  );
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="mt-2 rounded-lg border border-ora-sand/50 bg-ora-cream-light/40 p-2.5">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ora-charcoal-light">
+        <Sparkles className="h-3 w-3 text-ora-gold-dark" /> Provider intel
+      </div>
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+        {entries.slice(0, 8).map(([key, field]) => {
+          const isLink = /^https?:\/\//i.test(field.value);
+          return (
+            <div key={key} className="flex items-baseline justify-between gap-2 text-[11px]">
+              <dt className="shrink-0 text-ora-muted">{attrLabel(key)}</dt>
+              <dd className="min-w-0 truncate text-right font-medium text-ora-charcoal" title={field.value}>
+                {isLink ? (
+                  <a
+                    href={field.value}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ora-gold-dark underline-offset-2 hover:underline"
+                  >
+                    {field.source ? `${field.source} link` : 'link'}
+                  </a>
+                ) : (
+                  field.value
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
 
 export function TargetsPanel({
   targets,
@@ -1113,6 +1590,7 @@ export function TargetsPanel({
                 <Pencil className="h-3.5 w-3.5" /> Draft outreach
               </button>
             </div>
+            <TargetIntel attributes={t.attributes} />
           </li>
         );
       })}
@@ -1788,5 +2266,280 @@ export function BatchActivityLog({
         )}
       </div>
     </section>
+  );
+}
+
+// ── 8. Prospecting Sequences (named, toggleable background campaigns) ────────
+//
+// The top-level "save a prospecting campaign and run it in the background"
+// surface. A rep creates a NAMED sequence (name + short description + subject +
+// target count), then toggles it Live (the agent prospects in the background) or
+// Draft (paused). Multiple sequences run in parallel; opening one shows its
+// prospects (the review inbox scoped to that sequence). Presentational only —
+// every fetch + mutation lives in `page.tsx`.
+
+/** A Live/Draft pill + toggle for one sequence. */
+function SequenceModeToggle({
+  mode,
+  busy,
+  onToggle,
+}: {
+  mode: SequenceMode;
+  busy: boolean;
+  onToggle: (next: SequenceMode) => void;
+}) {
+  const live = mode === 'live';
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      aria-pressed={live}
+      onClick={() => onToggle(live ? 'draft' : 'live')}
+      title={live ? 'Pause this sequence' : 'Turn on — the agent prospects in the background'}
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+        live
+          ? 'bg-green-100 text-green-700 ring-1 ring-green-300 hover:bg-green-200'
+          : 'bg-ora-cream-dark text-ora-charcoal-light ring-1 ring-ora-sand/60 hover:bg-ora-sand/40'
+      }`}
+    >
+      {busy ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <span className={`h-2 w-2 rounded-full ${live ? 'bg-green-600' : 'bg-ora-muted'}`} />
+      )}
+      {live ? 'Live' : 'Draft'}
+    </button>
+  );
+}
+
+export function SequencesPanel({
+  sequences,
+  catalog,
+  selectedCommunityId,
+  selectedProjectId,
+  selectedClusterId,
+  onSelectCommunity,
+  onSelectProject,
+  onSelectCluster,
+  creating,
+  onCreate,
+  toggleBusyId,
+  onToggle,
+  openSequenceId,
+  onOpen,
+  onCloseDetail,
+  inboxItems,
+  inboxSelected,
+  inboxBusyId,
+  inboxBulkBusy,
+  onToggleSelect,
+  onToggleAll,
+  onEdit,
+  onApprove,
+  onReject,
+  onBulkApprove,
+}: {
+  sequences: SequenceRow[];
+  catalog: OwnCatalog;
+  selectedCommunityId: string | null;
+  selectedProjectId: string | null;
+  selectedClusterId: string | null;
+  onSelectCommunity: (id: string | null) => void;
+  onSelectProject: (id: string | null) => void;
+  onSelectCluster: (id: string | null) => void;
+  creating: boolean;
+  /** Create a sequence from the form fields + the currently-picked subject. */
+  onCreate: (input: { name: string; description: string; targetCount: number }) => void;
+  toggleBusyId: string | null;
+  onToggle: (seq: SequenceRow, next: SequenceMode) => void;
+  openSequenceId: string | null;
+  onOpen: (seq: SequenceRow) => void;
+  onCloseDetail: () => void;
+  // Review inbox for the OPENED sequence (reuses the queue projection).
+  inboxItems: QueueItemRow[];
+  inboxSelected: Set<string>;
+  inboxBusyId: string | null;
+  inboxBulkBusy: boolean;
+  onToggleSelect: (id: string) => void;
+  onToggleAll: () => void;
+  onEdit: (id: string, subject: string, body: string) => void;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onBulkApprove: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [targetCount, setTargetCount] = useState('10');
+  const [showCreate, setShowCreate] = useState(false);
+
+  const n = Number(targetCount);
+  const nValid = Number.isInteger(n) && n > 0;
+  const canCreate = name.trim().length > 0 && Boolean(selectedClusterId) && nValid;
+
+  const submit = () => {
+    if (!canCreate) return;
+    onCreate({ name: name.trim(), description: description.trim(), targetCount: n });
+    setName('');
+    setDescription('');
+    setTargetCount('10');
+    setShowCreate(false);
+  };
+
+  const openSeq = sequences.find((s) => s.id === openSequenceId) ?? null;
+
+  return (
+    <div className="space-y-4">
+      {/* Create a new sequence */}
+      <section className="rounded-xl border border-ora-gold-dark/30 bg-ora-gold/5">
+        <header className="flex items-center gap-2.5 px-5 py-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ora-gold-dark text-ora-white">
+            <Rocket className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-ora-charcoal">New prospecting sequence</h2>
+            <p className="text-xs text-ora-muted">
+              Name a campaign, pick what it sells, and turn it Live — the agent prospects in the background.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={btnGhost}
+            onClick={() => setShowCreate((s) => !s)}
+          >
+            {showCreate ? 'Close' : 'New sequence'}
+          </button>
+        </header>
+        {showCreate && (
+          <div className="space-y-3 border-t border-ora-gold/20 px-5 py-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs text-ora-charcoal-light">
+                Sequence name
+                <input
+                  className={inputCls}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Coastline penthouses — India HNW"
+                />
+              </label>
+              <label className="text-xs text-ora-charcoal-light">
+                Target count (N)
+                <input
+                  className={`${inputCls} max-w-[7rem]`}
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={targetCount}
+                  onChange={(e) => setTargetCount(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="block text-xs text-ora-charcoal-light">
+              Short description
+              <input
+                className={inputCls}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What this campaign is for"
+              />
+            </label>
+            <div>
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ora-muted">
+                Subject — what this sequence sells
+              </div>
+              <OwnSubjectPicker
+                catalog={catalog}
+                selectedCommunityId={selectedCommunityId}
+                selectedProjectId={selectedProjectId}
+                selectedClusterId={selectedClusterId}
+                busy={creating}
+                onSelectCommunity={onSelectCommunity}
+                onSelectProject={onSelectProject}
+                onSelectCluster={onSelectCluster}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" className={btnPrimary} disabled={creating || !canCreate} onClick={submit}>
+                {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+                Create sequence (Draft)
+              </button>
+              <span className="text-[11px] text-ora-muted">
+                {!name.trim()
+                  ? 'Give the sequence a name.'
+                  : !selectedClusterId
+                    ? 'Pick a cluster as the subject.'
+                    : 'Created as Draft — turn it Live to start prospecting.'}
+              </span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Sequence list */}
+      {sequences.length === 0 ? (
+        <p className="rounded-xl border border-ora-sand/60 bg-ora-white px-5 py-6 text-center text-xs text-ora-muted">
+          No sequences yet. Create one above to start prospecting in the background.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {sequences.map((s) => {
+            const isOpen = s.id === openSequenceId;
+            return (
+              <li key={s.id} className="rounded-xl border border-ora-sand/60 bg-ora-white">
+                <div className="flex flex-wrap items-center gap-3 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold text-ora-charcoal">{s.name}</h3>
+                      {(s.pendingProspects ?? 0) > 0 && (
+                        <span className="rounded-full bg-ora-gold/15 px-2 py-0.5 text-[10px] font-semibold text-ora-gold-dark">
+                          {s.pendingProspects} to review
+                        </span>
+                      )}
+                    </div>
+                    {s.description && (
+                      <p className="truncate text-xs text-ora-muted">{s.description}</p>
+                    )}
+                  </div>
+                  <SequenceModeToggle
+                    mode={s.mode}
+                    busy={toggleBusyId === s.id}
+                    onToggle={(next) => onToggle(s, next)}
+                  />
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => (isOpen ? onCloseDetail() : onOpen(s))}
+                  >
+                    <Inbox className="h-3.5 w-3.5" /> {isOpen ? 'Hide prospects' : 'View prospects'}
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="border-t border-ora-sand/50 px-5 py-4">
+                    {openSeq?.mode === 'live' && inboxItems.length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-ora-cream-light/60 px-3 py-2.5 text-xs text-ora-charcoal-light">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Live — the agent is looking for prospects. Drafts will appear here as they&apos;re found.
+                      </div>
+                    ) : (
+                      <ReviewInboxPanel
+                        items={inboxItems}
+                        selectedIds={inboxSelected}
+                        busyId={inboxBusyId}
+                        bulkBusy={inboxBulkBusy}
+                        onToggleSelect={onToggleSelect}
+                        onToggleAll={onToggleAll}
+                        onEdit={onEdit}
+                        onApprove={onApprove}
+                        onReject={onReject}
+                        onBulkApprove={onBulkApprove}
+                      />
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

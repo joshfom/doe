@@ -10,9 +10,7 @@
 // same audited, SQL-computed tools the reports use (never model-invented).
 //
 // On top of the chat it adds one capability: email the on-screen summary to the
-// signed-in executive (`POST /api/ai/analytics/email-summary`). A voice button
-// (staff mode) offers the same hands-free demo as the rest of the panel, behind
-// a short prototype notice.
+// signed-in executive (`POST /api/ai/analytics/email-summary`).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -27,17 +25,11 @@ import {
 } from 'lucide-react';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import { resolvePromptSet } from '@/components/chat/prompt-sets';
-import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import { ToolResultCards } from '@/app/ora-panel/_home/ToolCards';
 import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
 import type { SessionData } from '@/lib/types/session';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
-const VOICE_ANALYTICS_NOTICE =
-  'Quick heads-up — this voice analytics partner is an early prototype with a short training window, so it may have a few rough edges. ' +
-  'It\u2019s a demo of brainstorming with data hands-free: ask me to compare, explain a number, or show a trend, and I\u2019ll talk you through the options. ' +
-  'I\u2019ll lean toward what the data favours, but the call is always yours — and you can interrupt me anytime.';
 
 /** C-level / executive gate — mirrors the analytics permission Marketing uses. */
 function hasAnalyticsAccess(session: SessionData): boolean {
@@ -286,13 +278,6 @@ export default function AnalyticsPage() {
             )}
             Email me this
           </button>
-          <VoiceCallButton
-            mode="staff"
-            page="ora-panel-analytics"
-            label="Ask voice agent"
-            title="Voice analytics"
-            introNotice={VOICE_ANALYTICS_NOTICE}
-          />
         </div>
       </div>
 
@@ -332,8 +317,6 @@ export default function AnalyticsPage() {
           onSubmit={(text) => void send(text)}
           sending={busy}
           disabled={busy}
-          voice
-          voiceMode="staff"
           promptHelper
           commands={promptSet.commands}
           sampleQuestions={promptSet.sampleQuestions}

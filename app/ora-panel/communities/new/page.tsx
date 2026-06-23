@@ -10,6 +10,9 @@ export default function NewCommunityPage() {
   const router = useRouter();
   const createCommunity = useCreateCommunity();
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(
+    null
+  );
 
   const [form, setForm] = useState({
     slug: '',
@@ -26,6 +29,7 @@ export default function NewCommunityPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldErrors(null);
     try {
       const created = await createCommunity.mutateAsync({
         slug: form.slug.trim(),
@@ -39,6 +43,7 @@ export default function NewCommunityPage() {
     } catch (err) {
       const e = err as { error?: string; details?: Record<string, string> };
       setError(e.error ?? 'Failed to create community');
+      setFieldErrors(e.details ?? null);
     }
   }
 
@@ -55,7 +60,16 @@ export default function NewCommunityPage() {
       <form onSubmit={onSubmit} className="space-y-4 border border-ora-sand bg-ora-white p-6">
         {error && (
           <div className="border border-ora-error/40 bg-ora-error/10 p-3 text-sm text-ora-error">
-            {error}
+            <p className="font-medium">{error}</p>
+            {fieldErrors && Object.keys(fieldErrors).length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {Object.entries(fieldErrors).map(([field, message]) => (
+                  <li key={field}>
+                    <span className="font-medium">{field}</span>: {message}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

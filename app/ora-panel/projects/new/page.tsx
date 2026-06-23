@@ -16,6 +16,9 @@ function NewProjectContent() {
   const { data: communities } = useCommunities();
   const createProject = useCreateProject();
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(
+    null
+  );
 
   const [form, setForm] = useState({
     communityId: initialCommunityId,
@@ -33,6 +36,7 @@ function NewProjectContent() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldErrors(null);
     try {
       const created = await createProject.mutateAsync({
         communityId: form.communityId,
@@ -45,8 +49,9 @@ function NewProjectContent() {
       });
       router.push(`/ora-panel/projects/${created.id}`);
     } catch (err) {
-      const e = err as { error?: string };
+      const e = err as { error?: string; details?: Record<string, string> };
       setError(e.error ?? 'Failed to create project');
+      setFieldErrors(e.details ?? null);
     }
   }
 
@@ -63,7 +68,16 @@ function NewProjectContent() {
       <form onSubmit={onSubmit} className="space-y-4 border border-ora-sand bg-ora-white p-6">
         {error && (
           <div className="border border-ora-error/40 bg-ora-error/10 p-3 text-sm text-ora-error">
-            {error}
+            <p className="font-medium">{error}</p>
+            {fieldErrors && Object.keys(fieldErrors).length > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {Object.entries(fieldErrors).map(([field, message]) => (
+                  <li key={field}>
+                    <span className="font-medium">{field}</span>: {message}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

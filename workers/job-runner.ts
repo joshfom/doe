@@ -17,11 +17,23 @@ import { asc, inArray } from "drizzle-orm";
 import { db } from "@/lib/cms/db";
 import { jobs } from "@/lib/cms/schema";
 import { runJob } from "@/lib/cms/jobs";
-import { registerVoiceJobHandlers } from "@/lib/cms/jobs/register";
+import {
+  registerVoiceJobHandlers,
+  registerProspectingJobHandlers,
+} from "@/lib/cms/jobs/register";
 
 // Plug the real (non-placeholder) job handlers into the default registry before
 // the poll loop runs (Design §7.8; the spine ships placeholders that throw).
+// Voice-surface jobs (post-call, briefings, reports) AND the prospecting durable
+// jobs (`prospecting_batch`, `outreach_send`, `enrichment_fetch`, `market_sync`)
+// both run on this general durable-jobs worker. Without the prospecting
+// registration an enqueued `prospecting_batch` job is claimed here, finds no
+// handler, and fails — so the autonomous batch never produces prospects. The
+// `market_sync` default handler idles cleanly when no adapter is wired (the
+// dedicated market-sync worker owns the live cadence), so registering it here is
+// safe.
 registerVoiceJobHandlers();
+registerProspectingJobHandlers();
 
 /** Poll cadence and per-tick batch size. */
 const POLL_INTERVAL_MS = 2000;

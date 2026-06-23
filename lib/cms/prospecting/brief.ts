@@ -18,7 +18,7 @@ export const briefSpecSchema = z.object({
   area: z.string().max(120).optional(), // e.g. "Palm Jumeirah"
   segment: z.enum(["ultra_luxury", "luxury", "premium", "mid"]).optional(),
   unitType: z
-    .enum(["apartment", "villa", "townhouse", "penthouse", "office"])
+    .enum(["apartment", "villa", "townhouse", "penthouse", "plot", "office"])
     .optional(),
   bedrooms: z.number().int().min(0).max(20).optional(),
   priceMinAed: z.number().nonnegative().optional(),

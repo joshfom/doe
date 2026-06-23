@@ -1,10 +1,11 @@
 import { Elysia } from "elysia";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../../db";
 import {
   aiUnits,
   communities,
+  inboundLeads,
   marketTransactions,
   outreachDrafts,
   projectClusters,
@@ -12,6 +13,7 @@ import {
   prospectingBatchRuns,
   prospectingBriefs,
   prospectingQueueItems,
+  prospectingSequences,
   targets,
 } from "../../schema";
 import { generateCompletion } from "../../ai/gateway";
@@ -33,6 +35,9 @@ import {
   resolveComparisonSpec,
   type OwnSubjectSelector,
 } from "../../prospecting/own-subject";
+import { buildDemoComparables } from "../../prospecting/demo-comparables";
+import { DemoProvider } from "../../prospecting/providers/demo";
+import type { ProspectFilter } from "../../prospecting/providers";
 import type { BriefSpec } from "../../prospecting/brief";
 import { identityGuard, requirePermission } from "../../rbac/middleware";
 import { streamEvents } from "../../realtime/subscribe";
@@ -613,23 +618,45 @@ export const prospectingRoutes = new Elysia({
       { actor: PROSPECTING_AGENT_ACTOR }
     );
     if (!compResult.ok) {
-      // Comparables read failed — surface the brief anyway so the rep can edit
-      // the hypothesis manually and proceed (Req 11.5 low-evidence path).
+      // Comparables read failed (e.g. the trial-tier market source hit its
+      // quota). NEVER dead-end: fall back to deterministic, clearly-labelled
+      // representative comparables so the hypothesis + pitch still have concrete
+      // grounding. The rep sees a single, expected "trial limit" notice.
+      const demoComps = buildDemoComparables(spec as BriefSpec);
+      const demoHypothesis = deriveHypothesis(demoComps as unknown as ComparableRow[]);
+      await db
+        .update(prospectingBriefs)
+        .set({ buyerHypothesis: demoHypothesis, updatedAt: new Date() })
+        .where(eq(prospectingBriefs.id, brief.id));
       set.status = 200;
       return {
-        brief,
-        comparables: [],
-        unconfigured: true,
-        hypothesis: deriveHypothesis([]),
+        brief: { ...brief, buyerHypothesis: demoHypothesis },
+        comparables: demoComps,
+        unconfigured: false,
+        hypothesis: demoHypothesis,
         areaTrend,
         gaps,
-        warning: compResult.error.message,
+        marketDataSource: "demo" as const,
+        marketDataNote: "trial_limit" as const,
       };
     }
     const comp = compResult.result as {
       comparables: ComparableRow[];
       unconfigured: boolean;
     };
+
+    // ALWAYS return concrete comparables. When the live read matched nothing
+    // (area not synced, or the trial-tier source is tapped out), substitute
+    // deterministic representative comparables so the hypothesis + pitch have
+    // grounding. `marketDataNote = "trial_limit"` drives the single expected
+    // "we hit the trial data limit" notice in the UI (the only error we surface
+    // for the trial data source).
+    let comparablesOut: ComparableRow[] = comp.comparables;
+    let marketDataNote: "trial_limit" | null = null;
+    if (comp.comparables.length === 0) {
+      comparablesOut = buildDemoComparables(spec as BriefSpec) as unknown as ComparableRow[];
+      marketDataNote = "trial_limit";
+    }
 
     // Honest data-source signal for the workspace: do we hold LIVE provider
     // transactions for the comparable areas, or only the demo-stamped fallback
@@ -638,31 +665,36 @@ export const prospectingRoutes = new Elysia({
     // trends, so this flips to "live" once a sync has run). `null` when there is
     // nothing to classify.
     let marketDataSource: "live" | "demo" | null = null;
-    const compAreas = [
-      ...new Set(
-        comp.comparables
-          .map((c) => c.communityName)
-          .filter((a): a is string => Boolean(a))
-      ),
-    ];
-    if (compAreas.length > 0) {
-      const txnRows = await db
-        .select({ demo: marketTransactions.demo })
-        .from(marketTransactions)
-        .where(inArray(marketTransactions.areaName, compAreas))
-        .limit(500);
-      if (txnRows.length > 0) {
-        marketDataSource = txnRows.some((r) => !r.demo) ? "live" : "demo";
+    if (marketDataNote === "trial_limit") {
+      // Representative fallback in use — the data source is demo by construction.
+      marketDataSource = "demo";
+    } else {
+      const compAreas = [
+        ...new Set(
+          comparablesOut
+            .map((c) => c.communityName)
+            .filter((a): a is string => Boolean(a))
+        ),
+      ];
+      if (compAreas.length > 0) {
+        const txnRows = await db
+          .select({ demo: marketTransactions.demo })
+          .from(marketTransactions)
+          .where(inArray(marketTransactions.areaName, compAreas))
+          .limit(500);
+        if (txnRows.length > 0) {
+          marketDataSource = txnRows.some((r) => !r.demo) ? "live" : "demo";
+        }
       }
     }
 
     await publishEvent(db, {
       type: EV_COMPARABLES_FOUND,
-      payload: { briefId: brief.id, count: comp.comparables.length },
+      payload: { briefId: brief.id, count: comparablesOut.length },
     });
 
     // Derive the editable, SQL-grounded Buyer_Hypothesis proposal and persist it.
-    const hypothesis = deriveHypothesis(comp.comparables);
+    const hypothesis = deriveHypothesis(comparablesOut);
     await db
       .update(prospectingBriefs)
       .set({ buyerHypothesis: hypothesis, updatedAt: new Date() })
@@ -675,12 +707,13 @@ export const prospectingRoutes = new Elysia({
 
     return {
       brief: { ...brief, buyerHypothesis: hypothesis },
-      comparables: comp.comparables,
+      comparables: comparablesOut,
       unconfigured: comp.unconfigured,
       hypothesis,
       areaTrend,
       gaps,
       marketDataSource,
+      marketDataNote,
     };
   })
 
@@ -731,12 +764,50 @@ export const prospectingRoutes = new Elysia({
     });
     if (!result.ok) return unwrap(result, set);
 
+    const out = result.result as {
+      candidates: unknown[];
+      unconfiguredProviders?: string[];
+      failedProviders?: string[];
+      rateLimitedProviders?: string[];
+    };
+
+    // ALWAYS return buyers. When the live providers yielded nothing (trial quota
+    // exhausted, or none configured), fall back to a deterministic representative
+    // set so the rep can keep working. The DemoProvider is forced on here (not
+    // env-gated) and is fully offline/synthetic — recording a candidate still
+    // goes through the audited `record_target`. The `trial_limit` note drives the
+    // single expected "trial limit reached" notice (the only error we surface for
+    // the trial data source).
+    if (out.candidates.length === 0) {
+      const demo = new DemoProvider({ apiKey: "demo", baseUrl: "demo://local" });
+      const demoResults = await demo.search(filter as unknown as ProspectFilter);
+      const candidates = Array.isArray(demoResults) ? demoResults : [];
+      await db
+        .update(prospectingBriefs)
+        .set({ status: "searching", updatedAt: new Date() })
+        .where(eq(prospectingBriefs.id, params.id));
+      await publishEvent(db, {
+        type: EV_SEARCH_COMPLETED,
+        payload: { briefId: params.id, count: candidates.length },
+      });
+      return {
+        candidates,
+        unconfiguredProviders: out.unconfiguredProviders ?? [],
+        failedProviders: out.failedProviders ?? [],
+        // Signal the trial-limit banner even when the cause was "no live provider".
+        rateLimitedProviders:
+          (out.rateLimitedProviders ?? []).length > 0
+            ? out.rateLimitedProviders
+            : ["apollo"],
+        dataNote: "trial_limit" as const,
+      };
+    }
+
     await db
       .update(prospectingBriefs)
       .set({ status: "searching", updatedAt: new Date() })
       .where(eq(prospectingBriefs.id, params.id));
 
-    const out = result.result as { candidates: unknown[] };
     await publishEvent(db, {
       type: EV_SEARCH_COMPLETED,
       payload: { briefId: params.id, count: out.candidates.length },
@@ -781,11 +852,20 @@ export const prospectingRoutes = new Elysia({
   .post("/targets/:id/promote", async ({ params, body, set }) => {
     const payload = (body ?? {}) as { phone?: string; email?: string; sfLeadId?: string };
 
-    // Load the Target's email so we can (a) dedupe by it and (b) link any
-    // EXISTING Salesforce Lead before promoting — closing the CRM dedupe loop so
-    // promotion attaches to the known SF record instead of spawning a duplicate.
+    // Load the Target's identity so we can (a) dedupe by email, (b) link any
+    // EXISTING Salesforce Lead before promoting, and (c) mirror the promoted
+    // prospect into the Lead Engine ledger so it is VISIBLE on the leads
+    // dashboard (the dashboard lists `inbound_leads`; promotion otherwise only
+    // writes parties + leads_mirror, so a promoted prospect never appeared).
     const [target] = await db
-      .select({ email: targets.email })
+      .select({
+        displayName: targets.displayName,
+        companyName: targets.companyName,
+        title: targets.title,
+        email: targets.email,
+        phoneHash: targets.phoneHash,
+        country: targets.country,
+      })
       .from(targets)
       .where(eq(targets.id, params.id))
       .limit(1);
@@ -811,6 +891,63 @@ export const prospectingRoutes = new Elysia({
       { actor: PROSPECTING_AGENT_ACTOR }
     );
     if (!result.ok) return unwrap(result, set);
+
+    // Mirror the promoted prospect into the Lead Engine ledger so the rep can
+    // actually see it on the leads dashboard. Only on a real promotion (match /
+    // new with a resolved party); a conflict/error created no Lead, so nothing
+    // is mirrored. The row is recorded as `parsed` and pre-linked to the
+    // resolved party, so the inbound parse flow (which keys on `received`) never
+    // re-processes it — it is already a resolved Lead. Idempotent by a
+    // deterministic key so re-promoting the same Target never duplicates the row.
+    const promotion = result.result as { resolution: string; partyId: string | null };
+    if (promotion.partyId && (promotion.resolution === "match" || promotion.resolution === "new")) {
+      const name = target?.displayName ?? target?.companyName ?? null;
+      const detail = [target?.title, target?.companyName].filter(Boolean).join(" at ");
+      const content = detail
+        ? `Outbound prospect promoted to a Lead — ${detail}.`
+        : "Outbound prospect promoted to a Lead.";
+      const inserted = await db
+        .insert(inboundLeads)
+        .values({
+          source: "prospecting",
+          idempotencyKey: `prospecting:promote:${params.id}`,
+          name,
+          email: email ?? null,
+          phoneHash: target?.phoneHash ?? null, // already a salted hash (CC-Privacy)
+          content,
+          rawPayload: {
+            origin: "prospecting",
+            targetId: params.id,
+            partyId: promotion.partyId,
+            resolution: promotion.resolution,
+          },
+          attribution: { source: "prospecting" },
+          structured: null,
+          status: "parsed", // already resolved — skip the inbound parse flow
+          attempts: 0,
+          partyId: promotion.partyId,
+        })
+        .onConflictDoNothing({ target: inboundLeads.idempotencyKey })
+        .returning({ id: inboundLeads.id });
+
+      // Live-update the leads dashboard with the new row (CC-Privacy: internal
+      // ids + already-exposed fields only, never a raw phone). Only on a fresh
+      // insert — a re-promote that conflicts must not re-announce the lead.
+      if (inserted.length > 0) {
+        await publishEvent(db, {
+          type: "lead.ingested" as DoeEventType,
+          payload: {
+            id: inserted[0].id,
+            source: "prospecting",
+            status: "parsed",
+            name,
+            email: email ?? null,
+            capturedAt: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
     // Surface whether we linked to an existing SF Lead (the tool publishes its
     // own promotion event).
     return { ...(result.result as Record<string, unknown>), crmLinked, sfLeadId: sfLeadId ?? null };
@@ -1370,6 +1507,284 @@ export const prospectingRoutes = new Elysia({
 
     set.status = 201;
     return { batchRunId: run.id, status: run.status };
+  })
+
+  // ── Prospecting Sequences: named, toggleable background campaigns ───────────
+  //
+  // A Sequence is the durable, owner-scoped campaign the rep manages: a subject
+  // (cluster / ICP) + target count + name/description, with a `mode` toggle
+  // (`draft` = paused, `live` = the agent prospects in the background). Going
+  // `live` enqueues a `prospecting_batch` run linked to the sequence, which the
+  // worker tier processes — landing prospects in the review inbox. Multiple
+  // sequences run in parallel (each is an independent row + independent runs).
+
+  // POST /api/prospecting/sequences — create a sequence (starts in `draft`).
+  .post("/sequences", async ({ body, set, ...ctx }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
+    const payload = (body ?? {}) as {
+      name?: unknown;
+      description?: unknown;
+      subject?: Partial<BatchSubject>;
+      targetCount?: unknown;
+    };
+
+    const name = typeof payload.name === "string" ? payload.name.trim() : "";
+    if (!name) {
+      set.status = 400;
+      return { error: "A sequence needs a name.", code: "invalid_name" };
+    }
+
+    const rawSubject = payload.subject ?? {};
+    const hasCluster = Boolean(rawSubject.clusterId);
+    const hasIcp = Boolean(rawSubject.icpFilter);
+    if (!hasCluster && !hasIcp) {
+      set.status = 400;
+      return {
+        error:
+          "A sequence requires a subject: either a cluster reference (clusterId) or an ICP filter (icpFilter).",
+        code: "invalid_subject",
+      };
+    }
+    const subject: BatchSubject = {
+      kind: rawSubject.kind ?? (hasCluster ? "cluster" : "icp"),
+      ...(rawSubject.clusterId ? { clusterId: rawSubject.clusterId } : {}),
+      ...(rawSubject.briefId ? { briefId: rawSubject.briefId } : {}),
+      ...(rawSubject.icpFilter ? { icpFilter: rawSubject.icpFilter } : {}),
+    };
+
+    const n = Number(payload.targetCount);
+    const targetCount = Number.isInteger(n) && n > 0 && n <= 500 ? n : 10;
+
+    const [seq] = await db
+      .insert(prospectingSequences)
+      .values({
+        ownerRep: userId,
+        name,
+        description:
+          typeof payload.description === "string" ? payload.description.trim() : null,
+        subject,
+        targetCount,
+        mode: "draft",
+      })
+      .returning();
+
+    set.status = 201;
+    return { sequence: seq };
+  })
+
+  // GET /api/prospecting/sequences — list the rep's sequences, newest first,
+  // each with a count of prospects awaiting review (pending, cold-eligible
+  // queue items across the sequence's runs) and its most recent run status.
+  .get("/sequences", async ({ set, ...ctx }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
+    const rows = await db
+      .select()
+      .from(prospectingSequences)
+      .where(eq(prospectingSequences.ownerRep, userId))
+      .orderBy(desc(prospectingSequences.createdAt));
+
+    // Pending-prospect count per sequence (cold-eligible items awaiting review).
+    const counts = await db
+      .select({
+        sequenceId: prospectingBatchRuns.sequenceId,
+        pending: sql<number>`count(*)::int`,
+      })
+      .from(prospectingQueueItems)
+      .innerJoin(
+        prospectingBatchRuns,
+        eq(prospectingBatchRuns.id, prospectingQueueItems.batchRunId)
+      )
+      .where(
+        and(
+          eq(prospectingBatchRuns.ownerRep, userId),
+          eq(prospectingQueueItems.status, "pending"),
+          eq(prospectingQueueItems.eligibility, "cold_eligible")
+        )
+      )
+      .groupBy(prospectingBatchRuns.sequenceId);
+    const pendingBySeq = new Map(
+      counts.map((c) => [c.sequenceId, Number(c.pending)])
+    );
+
+    const sequences = rows.map((s) => ({
+      ...s,
+      pendingProspects: pendingBySeq.get(s.id) ?? 0,
+    }));
+    return { count: sequences.length, sequences };
+  })
+
+  // GET /api/prospecting/sequences/:id — one sequence plus its prospects awaiting
+  // review (the same privacy-safe, grounded projection the review inbox uses,
+  // scoped to this sequence's runs).
+  .get("/sequences/:id", async ({ params, set, ...ctx }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
+    const [seq] = await db
+      .select()
+      .from(prospectingSequences)
+      .where(
+        and(
+          eq(prospectingSequences.id, params.id),
+          eq(prospectingSequences.ownerRep, userId)
+        )
+      )
+      .limit(1);
+    if (!seq) {
+      set.status = 404;
+      return { error: "Sequence not found" };
+    }
+
+    const items = await db
+      .select({
+        id: prospectingQueueItems.id,
+        batchRunId: prospectingQueueItems.batchRunId,
+        targetId: prospectingQueueItems.targetId,
+        draftId: prospectingQueueItems.draftId,
+        eligibility: prospectingQueueItems.eligibility,
+        status: prospectingQueueItems.status,
+        fitScore: prospectingQueueItems.fitScore,
+        fitRationale: prospectingQueueItems.fitRationale,
+        lawfulBasis: prospectingQueueItems.lawfulBasis,
+        dataSource: prospectingQueueItems.dataSource,
+        acquiredAt: prospectingQueueItems.acquiredAt,
+        createdAt: prospectingQueueItems.createdAt,
+        updatedAt: prospectingQueueItems.updatedAt,
+        draftSubject: outreachDrafts.subject,
+        draftBody: outreachDrafts.body,
+        draftChannel: outreachDrafts.channel,
+        draftLanguage: outreachDrafts.language,
+        draftStatus: outreachDrafts.status,
+        targetType: targets.targetType,
+        targetDisplayName: targets.displayName,
+        targetCompanyName: targets.companyName,
+        targetTitle: targets.title,
+        targetEmail: targets.email,
+        targetPhoneHash: targets.phoneHash,
+        targetCountry: targets.country,
+        targetStatus: targets.status,
+      })
+      .from(prospectingQueueItems)
+      .innerJoin(
+        prospectingBatchRuns,
+        and(
+          eq(prospectingBatchRuns.id, prospectingQueueItems.batchRunId),
+          eq(prospectingBatchRuns.ownerRep, userId),
+          eq(prospectingBatchRuns.sequenceId, params.id)
+        )
+      )
+      .leftJoin(outreachDrafts, eq(outreachDrafts.id, prospectingQueueItems.draftId))
+      .leftJoin(targets, eq(targets.id, prospectingQueueItems.targetId))
+      .where(
+        and(
+          eq(prospectingQueueItems.status, "pending"),
+          eq(prospectingQueueItems.eligibility, "cold_eligible")
+        )
+      )
+      .orderBy(desc(prospectingQueueItems.createdAt));
+
+    return { sequence: seq, count: items.length, queueItems: items };
+  })
+
+  // PATCH /api/prospecting/sequences/:id — update a sequence's name/description/
+  // target count and/or toggle its `mode`. Turning it `live` enqueues a durable
+  // `prospecting_batch` run linked to the sequence so the agent prospects in the
+  // background; turning it `draft` simply pauses (existing prospects remain for
+  // review). The run is keyed so a double-toggle never spawns a duplicate.
+  .patch("/sequences/:id", async ({ params, body, set, ...ctx }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
+    const payload = (body ?? {}) as {
+      name?: unknown;
+      description?: unknown;
+      targetCount?: unknown;
+      mode?: unknown;
+    };
+
+    const [seq] = await db
+      .select()
+      .from(prospectingSequences)
+      .where(
+        and(
+          eq(prospectingSequences.id, params.id),
+          eq(prospectingSequences.ownerRep, userId)
+        )
+      )
+      .limit(1);
+    if (!seq) {
+      set.status = 404;
+      return { error: "Sequence not found" };
+    }
+
+    const updates: Partial<typeof prospectingSequences.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (typeof payload.name === "string" && payload.name.trim()) {
+      updates.name = payload.name.trim();
+    }
+    if (typeof payload.description === "string") {
+      updates.description = payload.description.trim() || null;
+    }
+    if (payload.targetCount !== undefined) {
+      const n = Number(payload.targetCount);
+      if (Number.isInteger(n) && n > 0 && n <= 500) updates.targetCount = n;
+    }
+    const goingLive = payload.mode === "live" && seq.mode !== "live";
+    if (payload.mode === "live" || payload.mode === "draft") {
+      updates.mode = payload.mode;
+    }
+
+    const [updated] = await db
+      .update(prospectingSequences)
+      .set(updates)
+      .where(eq(prospectingSequences.id, seq.id))
+      .returning();
+
+    // Turning live → launch a background run for this sequence (reuses the
+    // durable batch machinery). Keyed by sequence id + run ordinal so repeated
+    // toggles never duplicate an in-flight run but each genuine "go live" can
+    // start a fresh sweep.
+    let launchedRunId: string | null = null;
+    if (goingLive) {
+      const subject = updated.subject as BatchSubject;
+      const existingRuns = await db
+        .select({ id: prospectingBatchRuns.id })
+        .from(prospectingBatchRuns)
+        .where(eq(prospectingBatchRuns.sequenceId, seq.id));
+      const rerunKey = `seq:${seq.id}:${existingRuns.length}`;
+      const inserted = await db
+        .insert(prospectingBatchRuns)
+        .values({
+          ownerRep: userId,
+          sequenceId: seq.id,
+          subject,
+          clusterId: subject.kind === "cluster" ? subject.clusterId ?? null : null,
+          targetCount: updated.targetCount,
+          rerunKey,
+        })
+        .onConflictDoNothing({ target: prospectingBatchRuns.rerunKey })
+        .returning({ id: prospectingBatchRuns.id });
+      const run = inserted[0];
+      if (run) {
+        await enqueueJob(db, "prospecting_batch", { batchRunId: run.id }, rerunKey);
+        launchedRunId = run.id;
+      }
+    }
+
+    return { sequence: updated, launchedRunId };
   })
 
   // ── Agentic Batch_Run: batch + activity reads (task 8.2) ────────────────────

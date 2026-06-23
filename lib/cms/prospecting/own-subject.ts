@@ -250,6 +250,7 @@ const BRIEF_UNIT_TYPES = [
   "apartment",
   "office",
   "penthouse",
+  "plot",
   "townhouse",
   "villa",
 ] as const;
@@ -267,6 +268,9 @@ function mapUnitType(raw: string): BriefUnitType | null {
       return "townhouse";
     case "office":
       return "office";
+    case "plot":
+    case "land":
+      return "plot";
     // `ai_units.unitType` has no `penthouse`, but the cluster may name it
     // explicitly — honour it only when the source actually says so.
     case "penthouse":

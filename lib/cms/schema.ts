@@ -1780,7 +1780,7 @@ export const inboundLeads = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     source: text("source", {
-      enum: ["web_form", "email", "whatsapp", "meta_lead_ads", "portal"],
+      enum: ["web_form", "email", "whatsapp", "meta_lead_ads", "portal", "prospecting"],
     }).notNull(),
     idempotencyKey: text("idempotency_key").notNull(), // unique (Req 3.3)
     status: text("status", {
@@ -2281,6 +2281,33 @@ export const prospectOptouts = pgTable(
 // design §Data Models. Mirrors drizzle/0040_agentic_prospecting_batch.sql.
 // Requirements: 1.3, 4.5, 6.2, 7.5, 9.1, 9.2, 10.1.
 
+// ── Prospecting Sequences (named, toggleable background campaigns) ───────────
+// A Sequence is the durable, named, owner-scoped campaign a rep manages: a
+// subject (cluster / ICP) + target count + a name/description, with a `mode`
+// toggle (`draft` = paused, `live` = the agent prospects in the background).
+// Multiple sequences run in parallel — each `live` sequence enqueues batch runs
+// (see `prospecting_batch_runs.sequence_id`) that the worker tier processes,
+// landing prospects in the review inbox. This is the top-level entity; a batch
+// run is one execution of a sequence.
+export const prospectingSequences = pgTable(
+  "prospecting_sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerRep: uuid("owner_rep")
+      .notNull()
+      .references(() => users.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    subject: jsonb("subject").notNull(),
+    targetCount: integer("target_count").notNull().default(10),
+    // 'draft' = paused (no background prospecting); 'live' = agent prospects.
+    mode: text("mode", { enum: ["draft", "live"] }).notNull().default("draft"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("prospecting_sequences_owner_idx").on(t.ownerRep)]
+);
+
 // One autonomous batch job. `rerunKey` UNIQUE makes a re-run idempotent
 // (Req 1.3, 9.1).
 export const prospectingBatchRuns = pgTable(
@@ -2290,6 +2317,11 @@ export const prospectingBatchRuns = pgTable(
     ownerRep: uuid("owner_rep")
       .notNull()
       .references(() => users.id),
+    // The parent Sequence this run executes, when launched from one. Nullable so
+    // an ad-hoc batch (the original one-shot flow) still works standalone.
+    sequenceId: uuid("sequence_id").references(() => prospectingSequences.id, {
+      onDelete: "cascade",
+    }),
     subject: jsonb("subject").notNull(),
     clusterId: text("cluster_id"),
     targetCount: integer("target_count").notNull(),
@@ -2302,6 +2334,7 @@ export const prospectingBatchRuns = pgTable(
   (t) => [
     uniqueIndex("prospecting_batch_runs_rerun_key_ux").on(t.rerunKey),
     index("prospecting_batch_runs_owner_idx").on(t.ownerRep),
+    index("prospecting_batch_runs_sequence_idx").on(t.sequenceId),
   ]
 );
 
@@ -2438,6 +2471,8 @@ export const prospectingBatchActivity = pgTable(
 export type ProspectingBatchRun = typeof prospectingBatchRuns.$inferSelect;
 export type NewProspectingBatchRun = typeof prospectingBatchRuns.$inferInsert;
 
+export type ProspectingSequence = typeof prospectingSequences.$inferSelect;
+export type NewProspectingSequence = typeof prospectingSequences.$inferInsert;
 export type ProspectingQueueItem = typeof prospectingQueueItems.$inferSelect;
 export type NewProspectingQueueItem = typeof prospectingQueueItems.$inferInsert;
 

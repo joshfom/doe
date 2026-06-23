@@ -61,7 +61,7 @@ export interface CrmCheckResult {
 export interface BriefSpec {
   area?: string;
   segment?: "ultra_luxury" | "luxury" | "premium" | "mid";
-  unitType?: "apartment" | "villa" | "townhouse" | "penthouse" | "office";
+  unitType?: "apartment" | "villa" | "townhouse" | "penthouse" | "plot" | "office";
   bedrooms?: number;
   priceMinAed?: number;
   priceMaxAed?: number;
@@ -418,6 +418,31 @@ export interface BatchActivityEntry {
 export interface StartBatchResult {
   batchRunId: string;
   status: BatchRunStatus;
+}
+
+// ── Prospecting Sequences (named, toggleable background campaigns) ───────────
+
+/** A sequence's toggle: `draft` = paused, `live` = agent prospects in the background. */
+export type SequenceMode = "draft" | "live";
+
+/**
+ * A named, owner-scoped prospecting campaign. The durable parent the rep manages
+ * (name + description + subject + target count) with a `mode` toggle; each `live`
+ * sequence runs batch runs in the background that land prospects in its inbox.
+ * `pendingProspects` is present on the list projection (`GET /sequences`).
+ */
+export interface SequenceRow {
+  id: string;
+  ownerRep: string;
+  name: string;
+  description: string | null;
+  subject: BatchSubject;
+  targetCount: number;
+  mode: SequenceMode;
+  createdAt: string;
+  updatedAt: string;
+  /** Count of prospects awaiting review (only on the list projection). */
+  pendingProspects?: number;
 }
 
 /**

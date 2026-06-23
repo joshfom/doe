@@ -332,6 +332,14 @@ export interface SearchAllResult {
  * run. With no providers registered the result is empty (no candidates, nothing
  * unconfigured).
  *
+ * DEMO AS A TRUE FALLBACK: the synthetic `demo` provider is held back and only
+ * consulted when the LIVE providers produced ZERO candidates — i.e. every live
+ * provider was unconfigured, failed, or hit its quota (429), or simply matched
+ * nobody. When at least one live candidate comes back we have real data, so the
+ * demo provider is never called and never mixed into live results. This makes
+ * "call the APIs, fall back to demo on error / rate limit / quota" the actual
+ * runtime behaviour the rep sees (rather than demo always contributing).
+ *
  * This is the pure orchestration the `prospect_search` catalog tool calls behind
  * `dispatchTool`; it performs no DB writes and no caching itself (caching/billing
  * guardrails live in the tool/job layer, task 4.2).
@@ -342,6 +350,31 @@ export interface SearchAllResult {
 export async function searchAllProviders(
   filter: ProspectFilter,
   providers: EnrichmentProvider[] = getConfiguredProviders()
+): Promise<SearchAllResult> {
+  // Hold the demo provider back as a fallback; fan out the live providers first.
+  const liveProviders = providers.filter((p) => p.id !== "demo");
+  const demoProvider = providers.find((p) => p.id === "demo");
+
+  const result = await fanOut(filter, liveProviders);
+
+  // Only consult the demo provider when the live fan-out produced NO candidates
+  // (all unconfigured / failed / rate-limited / no match). It carries the search
+  // so the workspace still yields prospects, clearly stamped `source: "demo"`.
+  if (result.results.length === 0 && demoProvider) {
+    const demoOutcome = await fanOut(filter, [demoProvider]);
+    result.results.push(...demoOutcome.results);
+    result.unconfiguredProviders.push(...demoOutcome.unconfiguredProviders);
+    result.failedProviders.push(...demoOutcome.failedProviders);
+    result.rateLimitedProviders.push(...demoOutcome.rateLimitedProviders);
+  }
+
+  return result;
+}
+
+/** Fan a filter across the given providers and aggregate, isolating failures. */
+async function fanOut(
+  filter: ProspectFilter,
+  providers: EnrichmentProvider[]
 ): Promise<SearchAllResult> {
   const results: ProviderResult[] = [];
   const unconfiguredProviders: ProviderId[] = [];

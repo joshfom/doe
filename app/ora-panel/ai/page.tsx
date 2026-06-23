@@ -534,8 +534,6 @@ export default function AdminChatPage() {
             sending={busy}
             disabled={busy}
             inputRef={inputRef}
-            voice
-            voiceMode="staff"
             placeholder="Ask for a report, lookup, or bulk action…  (type / for commands)"
           />
         </div>

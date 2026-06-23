@@ -13,12 +13,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Telescope, CheckCircle2, AlertCircle, Info, X, Activity, Inbox, MapPin } from 'lucide-react';
+import { ShieldAlert, Telescope, CheckCircle2, AlertCircle, Info, X, Activity, Inbox, MapPin, Layers, Pencil } from 'lucide-react';
 import { PageHeaderSkeleton } from '@/components/ui/panel-skeletons';
-import { VoiceCallButton } from '@/components/voice/VoiceCallButton';
 import type { SessionData } from '@/lib/types/session';
 import {
   BriefIntake,
+  BriefDetails,
   OwnSubjectPicker,
   ComparablesPanel,
   HypothesisEditor,
@@ -32,6 +32,8 @@ import {
   ReviewInboxPanel,
   BatchActivityLog,
   WorkspaceModeToggle,
+  StepGuide,
+  SequencesPanel,
 } from './components';
 import { useProspectingRealtime, type ProspectingEvent } from './useProspectingRealtime';
 import type {
@@ -48,7 +50,6 @@ import type {
   GroundingClaim,
   CrmCheckResult,
   OwnCatalog,
-  ClusterNode,
   AreaTrendRow,
   BatchSubject,
   StartBatchResult,
@@ -57,21 +58,11 @@ import type {
   BulkApproveResult,
   BatchActivityEntry,
   ProviderSearchStatus,
+  SequenceRow,
+  SequenceMode,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
-/**
- * Spoken-style prototype notice shown FIRST when the rep opens the voice agent,
- * framed like a customer-service "this call may be recorded" disclaimer: it sets
- * expectations (early prototype, may have flaws), states the purpose (a demo of
- * hands-free agentic prospecting), reassures on the guardrail (nothing sends
- * without approval), and invites the rep to interrupt.
- */
-const VOICE_PROSPECTING_NOTICE =
-  'Quick heads-up — this voice prospecting agent is an early prototype with a short training window, so it may have a few rough edges. ' +
-  'It\u2019s a demo of hands-free, agentic prospecting: just tell me who you\u2019re looking for and which project, and I\u2019ll line everything up in your review inbox. ' +
-  'Nothing is sent without your approval, and you can interrupt me anytime.';
 
 /** Lightweight in-page toast (no new dependency) for action feedback. */
 interface ToastState {
@@ -145,6 +136,53 @@ function describeBatchEvent(type: string, payload: unknown): string | null {
   }
 }
 
+/**
+ * Re-derive the editable Buyer_Hypothesis from a CURATED subset of comparables
+ * (the closest matches the rep ticked). Mirrors the server's `deriveHypothesis`
+ * aggregation (buyer-segment mix → ranked segments) so selecting comps visibly
+ * reshapes the buyer profile that then drives prospect search. Rep-added feeder
+ * markets / title edits on the prior hypothesis are preserved.
+ */
+function deriveHypothesisFromComps(
+  comps: Comparable[],
+  prev: BuyerHypothesis | null
+): BuyerHypothesis {
+  const totals = new Map<string, number>();
+  const evidence: BuyerHypothesis['evidence'] = [];
+  for (const c of comps) {
+    const mix = c.stats?.buyerSegmentMix;
+    const asOf = mix?.asOf ?? new Date().toISOString();
+    for (const b of mix?.value ?? []) {
+      totals.set(b.segment, (totals.get(b.segment) ?? 0) + b.count);
+      evidence.push({
+        claim: `${b.pct}% of comparable buyers at ${c.name} were ${b.segment}`,
+        sourceTable: 'market_transactions',
+        asOf,
+      });
+    }
+  }
+  const segments = [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([s]) => s);
+  return {
+    segments,
+    feederMarkets: prev?.feederMarkets ?? [],
+    titles: segments.length
+      ? prev?.titles?.length
+        ? prev.titles
+        : ['Founder', 'Managing Director', 'Investor', 'Family Office Principal']
+      : [],
+    wealthSignals: segments.length
+      ? prev?.wealthSignals?.length
+        ? prev.wealthSignals
+        : ['liquidity event', 'high net worth']
+      : [],
+    evidence: evidence.slice(0, 24),
+    confidence: comps.length === 0 ? 'low' : comps.length >= 3 ? 'high' : 'medium',
+  };
+}
+
 export default function ProspectingPage() {
   const router = useRouter();
   const [authLoading, setAuthLoading] = useState(true);
@@ -154,17 +192,31 @@ export default function ProspectingPage() {
   // Which workflow the rep is in: a GUIDED, one-prospect-at-a-time flow, or the
   // AUTONOMOUS batch (agent runs N prospects → review inbox). Showing one at a
   // time keeps the workspace from stacking two competing mental models.
-  const [mode, setMode] = useState<'guided' | 'autonomous'>('guided');
+  const [mode, setMode] = useState<'guided' | 'autonomous' | 'sequences'>('guided');
 
-  // Brief intake defaults to the own-catalog picker; the free-form fields stay
-  // tucked behind a disclosure so the first screen isn't two input modes at once.
-  const [showManualBrief, setShowManualBrief] = useState(false);
+  // Brief intake offers two clear, equal paths: pick from ORA's own catalog, or
+  // describe the property by hand. We default to the catalog, but auto-switch to
+  // the manual form when the catalog is empty so a rep is never left blocked.
+  const [briefTab, setBriefTab] = useState<'catalog' | 'manual'>('catalog');
+
+  // Property details the rep ALWAYS supplies in catalog mode — unit type +
+  // bedrooms (+ optional price band). These guarantee the comparison spec is
+  // never empty, so comparable sales (the AI's grounding) can always be matched.
+  const [briefUnitType, setBriefUnitType] = useState<string>('');
+  const [briefBedrooms, setBriefBedrooms] = useState<string>('');
+  const [briefPriceMin, setBriefPriceMin] = useState<string>('');
+  const [briefPriceMax, setBriefPriceMax] = useState<string>('');
 
   // Flow state.
   const [brief, setBrief] = useState<ProspectingBrief | null>(null);
   const [comparables, setComparables] = useState<Comparable[]>([]);
+  // Which comparables the rep has ticked as closest matches — the curated set
+  // the agent uses to (re)build the buyer profile. Defaults to all on load.
+  const [selectedCompIds, setSelectedCompIds] = useState<Set<string>>(new Set());
+  const [busyRederive, setBusyRederive] = useState(false);
   const [areaTrend, setAreaTrend] = useState<AreaTrendRow[]>([]);
   const [marketDataSource, setMarketDataSource] = useState<'live' | 'demo' | null>(null);
+  const [marketDataNote, setMarketDataNote] = useState<'trial_limit' | null>(null);
   const [unconfigured, setUnconfigured] = useState(false);
   const [gaps, setGaps] = useState<string[]>([]);
   const [hypothesis, setHypothesis] = useState<BuyerHypothesis | null>(null);
@@ -198,6 +250,16 @@ export default function ProspectingPage() {
   const [queueSelected, setQueueSelected] = useState<Set<string>>(new Set());
   const [queueBusyId, setQueueBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  // ── Prospecting Sequences state (named background campaigns) ────────────────
+  const [sequences, setSequences] = useState<SequenceRow[]>([]);
+  const [seqCreating, setSeqCreating] = useState(false);
+  const [seqToggleBusyId, setSeqToggleBusyId] = useState<string | null>(null);
+  const [openSequenceId, setOpenSequenceId] = useState<string | null>(null);
+  const [seqInboxItems, setSeqInboxItems] = useState<QueueItemRow[]>([]);
+  const [seqSelected, setSeqSelected] = useState<Set<string>>(new Set());
+  const [seqInboxBusyId, setSeqInboxBusyId] = useState<string | null>(null);
+  const [seqBulkBusy, setSeqBulkBusy] = useState(false);
 
   // ── Persisted Agent_Activity_Log fallback state (task 10.4) ─────────────────
   // The live SSE stream may not stay open under `next dev` (the documented
@@ -393,14 +455,23 @@ export default function ProspectingPage() {
         areaTrend?: AreaTrendRow[];
         gaps?: string[];
         marketDataSource?: 'live' | 'demo' | null;
+        marketDataNote?: 'trial_limit' | null;
       }>('/briefs', { method: 'POST', body: JSON.stringify(payload) });
       setBrief(data.brief);
       setComparables(data.comparables);
+      // Default the curated set to every returned comparable; the rep narrows it.
+      setSelectedCompIds(new Set(data.comparables.map((c) => c.marketProjectId)));
       setAreaTrend(data.areaTrend ?? []);
       setMarketDataSource(data.marketDataSource ?? null);
+      setMarketDataNote(data.marketDataNote ?? null);
       setUnconfigured(data.unconfigured);
       setHypothesis(data.hypothesis);
       setGaps(data.gaps ?? []);
+      if (data.marketDataNote === 'trial_limit') {
+        logActivity(
+          'Agent: market data trial limit reached — showing representative comparable sales (same data each time).'
+        );
+      }
       logActivity(
         `Agent: found ${data.comparables.length} comparable project${data.comparables.length === 1 ? '' : 's'} and derived a ${data.hypothesis?.confidence ?? 'low'}-confidence buyer hypothesis.`
       );
@@ -418,18 +489,34 @@ export default function ProspectingPage() {
     [submitBrief]
   );
 
-  // Selecting a cluster drives the brief: the server resolves the Comparison_Spec
-  // from the own catalog (Req 13.5) and any unfillable parameters return as gaps.
-  const useCluster = useCallback(
-    (cluster: ClusterNode) => {
-      setPickClusterId(cluster.id);
+  // Selecting a subject drives the brief: the server resolves the Comparison_Spec
+  // from the own catalog (Req 13.5) and MERGES the rep's explicit property
+  // details (unit type / bedrooms / price) over it — so the comparison spec is
+  // never empty and comparable sales can always be matched. Cluster is OPTIONAL.
+  const useSubject = useCallback(
+    () => {
+      const spec: Record<string, unknown> = { features: [] };
+      if (briefUnitType) spec.unitType = briefUnitType;
+      if (briefBedrooms) spec.bedrooms = Number(briefBedrooms);
+      if (briefPriceMin) spec.priceMinAed = Number(briefPriceMin);
+      if (briefPriceMax) spec.priceMaxAed = Number(briefPriceMax);
       return submitBrief({
         communityId: pickCommunityId ?? undefined,
-        projectId: cluster.projectId,
-        clusterId: cluster.id,
+        projectId: pickProjectId ?? undefined,
+        clusterId: pickClusterId ?? undefined,
+        spec,
       });
     },
-    [submitBrief, pickCommunityId]
+    [
+      submitBrief,
+      pickCommunityId,
+      pickProjectId,
+      pickClusterId,
+      briefUnitType,
+      briefBedrooms,
+      briefPriceMin,
+      briefPriceMax,
+    ]
   );
 
   // ── Autonomous Batch_Run kick-off (task 10.2) ───────────────────────────────
@@ -587,6 +674,218 @@ export default function ProspectingPage() {
     }
   }, [queueSelected, pushToast, logActivity, refreshQueue]);
 
+  // ── Prospecting Sequences handlers ──────────────────────────────────────────
+  const refreshSequences = useCallback(async () => {
+    try {
+      const data = await api<{ sequences: SequenceRow[] }>('/sequences');
+      setSequences(data.sequences);
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  const refreshOpenSequence = useCallback(async (id: string) => {
+    try {
+      const data = await api<{ queueItems: QueueItemRow[] }>(`/sequences/${id}`);
+      setSeqInboxItems(data.queueItems);
+      setSeqSelected((prev) => {
+        const live = new Set(data.queueItems.map((i) => i.id));
+        const next = new Set<string>();
+        prev.forEach((qid) => { if (live.has(qid)) next.add(qid); });
+        return next;
+      });
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  const createSequence = useCallback(
+    async (input: { name: string; description: string; targetCount: number }) => {
+      if (!pickClusterId) {
+        pushToast('error', 'Pick a cluster as the sequence subject first.');
+        return;
+      }
+      setSeqCreating(true);
+      try {
+        await api('/sequences', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: input.name,
+            description: input.description,
+            targetCount: input.targetCount,
+            subject: { kind: 'cluster', clusterId: pickClusterId },
+          }),
+        });
+        pushToast('success', `Sequence “${input.name}” created — turn it Live to start prospecting`);
+        await refreshSequences();
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : 'Failed to create sequence');
+      } finally {
+        setSeqCreating(false);
+      }
+    },
+    [pickClusterId, pushToast, refreshSequences]
+  );
+
+  const toggleSequence = useCallback(
+    async (seq: SequenceRow, next: SequenceMode) => {
+      setSeqToggleBusyId(seq.id);
+      try {
+        const res = await api<{ launchedRunId: string | null }>(`/sequences/${seq.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ mode: next }),
+        });
+        if (next === 'live') {
+          pushToast('success', `“${seq.name}” is Live — the agent is looking for prospects in the background`);
+          logActivity(`Sequence “${seq.name}” turned Live — agent prospecting started.`);
+        } else {
+          pushToast('info', `“${seq.name}” paused (Draft) — nothing new will be prospected`);
+        }
+        void res;
+        await refreshSequences();
+        if (openSequenceId === seq.id) await refreshOpenSequence(seq.id);
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : 'Failed to update sequence');
+      } finally {
+        setSeqToggleBusyId(null);
+      }
+    },
+    [pushToast, logActivity, refreshSequences, refreshOpenSequence, openSequenceId]
+  );
+
+  const openSequence = useCallback(
+    async (seq: SequenceRow) => {
+      setOpenSequenceId(seq.id);
+      setSeqInboxItems([]);
+      await refreshOpenSequence(seq.id);
+    },
+    [refreshOpenSequence]
+  );
+
+  const closeSequenceDetail = useCallback(() => {
+    setOpenSequenceId(null);
+    setSeqInboxItems([]);
+    setSeqSelected(new Set());
+  }, []);
+
+  // Review-inbox actions scoped to the open sequence (reuse the /queue endpoints,
+  // then refresh the sequence detail + the list counts).
+  const seqToggleSelect = useCallback((id: string) => {
+    setSeqSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const seqToggleAll = useCallback(() => {
+    setSeqSelected((prev) => {
+      const all = seqInboxItems.length > 0 && seqInboxItems.every((i) => prev.has(i.id));
+      return all ? new Set<string>() : new Set(seqInboxItems.map((i) => i.id));
+    });
+  }, [seqInboxItems]);
+
+  const afterSeqMutation = useCallback(async () => {
+    if (openSequenceId) await refreshOpenSequence(openSequenceId);
+    await refreshSequences();
+  }, [openSequenceId, refreshOpenSequence, refreshSequences]);
+
+  const seqEditItem = useCallback(
+    async (id: string, subject: string, body: string) => {
+      setSeqInboxBusyId(id);
+      try {
+        await api(`/queue/${id}`, { method: 'PUT', body: JSON.stringify({ subject, body }) });
+        pushToast('success', 'Draft edits saved');
+        await afterSeqMutation();
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : 'Failed to save edits');
+      } finally {
+        setSeqInboxBusyId(null);
+      }
+    },
+    [pushToast, afterSeqMutation]
+  );
+
+  const seqApproveItem = useCallback(
+    async (id: string) => {
+      setSeqInboxBusyId(id);
+      try {
+        const res = await api<ApproveResult>(`/queue/${id}/approve`, { method: 'POST', body: '{}' });
+        if ('skipped' in res) pushToast('info', `Not sent — ${res.reason.replace(/_/g, ' ')}`);
+        else if (res.sent) pushToast('success', 'Approved and sent ✓');
+        else pushToast('info', `Not sent — ${res.status}`);
+        await afterSeqMutation();
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : 'Approval failed');
+      } finally {
+        setSeqInboxBusyId(null);
+      }
+    },
+    [pushToast, afterSeqMutation]
+  );
+
+  const seqRejectItem = useCallback(
+    async (id: string) => {
+      setSeqInboxBusyId(id);
+      try {
+        await api(`/queue/${id}/reject`, { method: 'POST', body: '{}' });
+        pushToast('info', 'Draft rejected — nothing was sent');
+        await afterSeqMutation();
+      } catch (e) {
+        pushToast('error', e instanceof Error ? e.message : 'Reject failed');
+      } finally {
+        setSeqInboxBusyId(null);
+      }
+    },
+    [pushToast, afterSeqMutation]
+  );
+
+  const seqBulkApprove = useCallback(async () => {
+    const ids = [...seqSelected];
+    if (ids.length === 0) return;
+    setSeqBulkBusy(true);
+    try {
+      const res = await api<BulkApproveResult>('/queue/bulk-approve', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      pushToast(
+        res.sent > 0 ? 'success' : 'info',
+        `Bulk approve: ${res.approved} approved · ${res.sent} sent · ${res.skipped.length} skipped`
+      );
+      setSeqSelected(new Set());
+      await afterSeqMutation();
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : 'Bulk approve failed');
+    } finally {
+      setSeqBulkBusy(false);
+    }
+  }, [seqSelected, pushToast, afterSeqMutation]);
+
+  // Switch workspace mode; lazily load sequences when entering that mode (avoids
+  // a setState-in-effect by loading on the user action instead).
+  const changeMode = useCallback(
+    (m: 'guided' | 'autonomous' | 'sequences') => {
+      setMode(m);
+      if (m === 'sequences') void refreshSequences();
+    },
+    [refreshSequences]
+  );
+
+  // While a LIVE sequence is open, poll its prospects so freshly-found drafts
+  // appear as the background agent adds them (the SSE stream may not stay open
+  // under `next dev`). The setState happens in the interval callback, not the
+  // effect body, so this stays off the synchronous-setState path.
+  useEffect(() => {
+    if (!openSequenceId) return;
+    const seq = sequences.find((s) => s.id === openSequenceId);
+    if (seq?.mode !== 'live') return;
+    const timer = setInterval(() => {
+      void refreshOpenSequence(openSequenceId);
+      void refreshSequences();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [openSequenceId, sequences, refreshOpenSequence, refreshSequences]);
+
   // ── Persisted Agent_Activity_Log fallback (task 10.4) ───────────────────────
   // Read `GET /api/prospecting/batches/:id/activity` on demand. The live SSE
   // stream may not stay open under `next dev`, so this gives the rep an explicit
@@ -638,6 +937,45 @@ export default function ProspectingPage() {
     [brief]
   );
 
+  // Toggle a comparable in the rep's curated "closest matches" set.
+  const toggleComp = useCallback((id: string) => {
+    setSelectedCompIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Rebuild the buyer profile from ONLY the comparables the rep selected, then
+  // persist it — so the curated sold comps drive the prospect search (Step 4).
+  const useSelectedComparables = useCallback(async () => {
+    const selected = comparables.filter((c) => selectedCompIds.has(c.marketProjectId));
+    if (selected.length === 0) return;
+    setBusyRederive(true);
+    const h = deriveHypothesisFromComps(selected, hypothesis);
+    setHypothesis(h);
+    try {
+      if (brief) {
+        await api(`/briefs/${brief.id}/hypothesis`, {
+          method: 'PUT',
+          body: JSON.stringify({ hypothesis: h }),
+        });
+      }
+      pushToast(
+        'success',
+        `Buyer profile rebuilt from ${selected.length} comparable${selected.length === 1 ? '' : 's'}`
+      );
+      logActivity(
+        `Rebuilt the buyer profile from ${selected.length} selected comparable${selected.length === 1 ? '' : 's'}.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update buyer profile');
+    } finally {
+      setBusyRederive(false);
+    }
+  }, [comparables, selectedCompIds, hypothesis, brief, pushToast, logActivity]);
+
   const runSearch = useCallback(async () => {
     if (!brief) return;
     setError(null);
@@ -660,11 +998,8 @@ export default function ProspectingPage() {
         rateLimitedProviders: data.rateLimitedProviders ?? [],
       });
       if ((data.rateLimitedProviders ?? []).length > 0) {
-        const names = (data.rateLimitedProviders ?? [])
-          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-          .join(', ');
-        logActivity(`Agent: ${names} request limit reached — falling back to representative buyer data.`);
-        pushToast('info', `${names} request limit reached — showing representative buyers`);
+        logActivity(`Agent: buyer data trial limit reached — showing representative buyers (cached).`);
+        pushToast('info', `Buyer data trial limit reached — showing representative buyers`);
       }
       logActivity(
         `Agent: returned ${data.candidates.length} candidate prospect${data.candidates.length === 1 ? '' : 's'} matching the buyer profile.`
@@ -721,9 +1056,22 @@ export default function ProspectingPage() {
     async (t: TargetRow) => {
       setPendingTargetId(t.id);
       try {
-        await api(`/targets/${t.id}/enrich`, { method: 'POST', body: '{}' });
+        const res = await api<{
+          attributes?: Record<string, unknown>;
+          unconfiguredProviders?: string[];
+          failedProviders?: string[];
+        }>(`/targets/${t.id}/enrich`, { method: 'POST', body: '{}' });
         if (brief) await refreshTargets(brief.id);
-        pushToast('success', `Enriched ${t.displayName || 'target'} with provider intel`);
+        const name = t.displayName || 'target';
+        const fieldCount = res.attributes ? Object.keys(res.attributes).length : 0;
+        if (fieldCount > 0) {
+          pushToast('success', `Enriched ${name} — ${fieldCount} detail${fieldCount === 1 ? '' : 's'} added below`);
+          logActivity(`Enriched ${name} with ${fieldCount} provider field${fieldCount === 1 ? '' : 's'}.`);
+        } else {
+          // Honest signal: nothing came back (no provider configured / connected).
+          pushToast('info', `No provider intel available for ${name} — connect a data provider to enrich`);
+          logActivity(`Enrich found no provider intel for ${name} (no provider connected).`);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Enrichment failed';
         setError(msg);
@@ -732,7 +1080,7 @@ export default function ProspectingPage() {
         setPendingTargetId(null);
       }
     },
-    [brief, refreshTargets, pushToast]
+    [brief, refreshTargets, pushToast, logActivity]
   );
 
   const promoteTarget = useCallback(
@@ -751,7 +1099,7 @@ export default function ProspectingPage() {
           const linked = res.crmLinked
             ? ' (linked to the existing Salesforce Lead)'
             : '';
-          pushToast('success', `Promoted ${t.displayName || 'target'} to a Lead → Salesforce${linked}`);
+          pushToast('success', `Promoted ${t.displayName || 'target'} to a Lead — now in the Lead Engine${linked}`);
           logActivity(
             res.crmLinked
               ? `Promoted ${t.displayName || 'target'} and linked to the existing Salesforce Lead — no duplicate created.`
@@ -941,6 +1289,13 @@ export default function ProspectingPage() {
 
   const hasBrief = useMemo(() => Boolean(brief), [brief]);
 
+  // Never leave the rep blocked: when the own catalog has no communities to pick
+  // from, force the manual "describe it" form so there is always a way forward
+  // (the empty-catalog dead-end was the #1 source of confusion). Derived rather
+  // than stored so it reacts to the catalog loading without a setState effect.
+  const catalogEmpty = ready && ownCatalog.communities.length === 0;
+  const effectiveBriefTab: 'catalog' | 'manual' = catalogEmpty ? 'manual' : briefTab;
+
   // The cluster currently selected in the Own_Subject picker — reused as the
   // subject of an autonomous Batch_Run (task 10.2).
   const pickedCluster = useMemo(
@@ -992,7 +1347,7 @@ export default function ProspectingPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-ora-charcoal">
@@ -1004,17 +1359,6 @@ export default function ProspectingPage() {
             Property-led outbound — comparables, buyer hypothesis, grounded outreach
           </p>
         </div>
-
-        {/* Hands-free entry: opens the voice agent in staff mode behind a short
-            prototype notice. Talk through who you're after; it preps the run
-            for your review (nothing sends without approval). */}
-        <VoiceCallButton
-          mode="staff"
-          page="ora-panel-prospecting"
-          label="Ask voice agent"
-          title="Voice prospecting"
-          introNotice={VOICE_PROSPECTING_NOTICE}
-        />
       </div>
 
       {error && (
@@ -1023,7 +1367,7 @@ export default function ProspectingPage() {
         </div>
       )}
 
-      <WorkspaceModeToggle mode={mode} onChange={setMode} />
+      <WorkspaceModeToggle mode={mode} onChange={changeMode} />
 
       {/* Agent activity — a live log of what the agent is doing. Shown in both
           modes (guided per-action logs + autonomous batch decisions). */}
@@ -1049,6 +1393,11 @@ export default function ProspectingPage() {
         </div>
       )}
 
+      {/* Two-column workspace: the active flow on the left, a sticky contextual
+          guide on the right that explains whatever step the rep is on. The guide
+          stacks under the flow on narrow screens. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
       {/* ── AUTONOMOUS BATCH ─────────────────────────────────────────────────
           Pick a subject → run a batch → the agent's cold-eligible drafts land in
           the Review inbox for approval. Self-contained: nothing here depends on
@@ -1073,7 +1422,6 @@ export default function ProspectingPage() {
                 onSelectCommunity={onSelectCommunity}
                 onSelectProject={onSelectProject}
                 onSelectCluster={setPickClusterId}
-                onUseCluster={(c) => setPickClusterId(c.id)}
               />
             </div>
           </div>
@@ -1135,6 +1483,39 @@ export default function ProspectingPage() {
         </>
       )}
 
+      {/* ── SEQUENCES ────────────────────────────────────────────────────────
+          Named, toggleable background campaigns. Create one, turn it Live, and
+          the agent prospects in the background; open one to review its prospects. */}
+      {mode === 'sequences' && (
+        <SequencesPanel
+          sequences={sequences}
+          catalog={ownCatalog}
+          selectedCommunityId={pickCommunityId}
+          selectedProjectId={pickProjectId}
+          selectedClusterId={pickClusterId}
+          onSelectCommunity={onSelectCommunity}
+          onSelectProject={onSelectProject}
+          onSelectCluster={setPickClusterId}
+          creating={seqCreating}
+          onCreate={createSequence}
+          toggleBusyId={seqToggleBusyId}
+          onToggle={toggleSequence}
+          openSequenceId={openSequenceId}
+          onOpen={openSequence}
+          onCloseDetail={closeSequenceDetail}
+          inboxItems={seqInboxItems}
+          inboxSelected={seqSelected}
+          inboxBusyId={seqInboxBusyId}
+          inboxBulkBusy={seqBulkBusy}
+          onToggleSelect={seqToggleSelect}
+          onToggleAll={seqToggleAll}
+          onEdit={seqEditItem}
+          onApprove={seqApproveItem}
+          onReject={seqRejectItem}
+          onBulkApprove={seqBulkApprove}
+        />
+      )}
+
       {/* ── GUIDED FLOW ──────────────────────────────────────────────────────
           One prospect at a time: brief → comparables → buyer → candidates →
           targets → outreach. The stepper drives focus; completed steps collapse. */}
@@ -1144,47 +1525,77 @@ export default function ProspectingPage() {
 
           <SectionCard step={1} title="Brief" subtitle="What are you selling?" active={activeStep === 1}>
             <div className="space-y-4">
-              <OwnSubjectPicker
-                catalog={ownCatalog}
-                selectedCommunityId={pickCommunityId}
-                selectedProjectId={pickProjectId}
-                selectedClusterId={pickClusterId}
-                busy={busyBrief}
-                onSelectCommunity={onSelectCommunity}
-                onSelectProject={onSelectProject}
-                onSelectCluster={setPickClusterId}
-                onUseCluster={useCluster}
-              />
-              {showManualBrief ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-px flex-1 bg-ora-sand/50" />
-                    <span className="text-[10px] uppercase tracking-wide text-ora-muted">or describe it manually</span>
-                    <div className="h-px flex-1 bg-ora-sand/50" />
-                  </div>
-                  <BriefIntake busy={busyBrief} onSubmit={createBrief} />
-                </div>
-              ) : (
+              {/* Two clear, equal ways to set the subject — no hidden disclosure.
+                  Pick from our own catalog, or describe the property by hand. */}
+              <div className="inline-flex rounded-full border border-ora-sand/70 bg-ora-cream-light/40 p-0.5 text-xs">
                 <button
                   type="button"
-                  onClick={() => setShowManualBrief(true)}
-                  className="text-xs font-medium text-ora-gold-dark underline-offset-2 hover:underline"
+                  aria-pressed={effectiveBriefTab === 'catalog'}
+                  disabled={catalogEmpty}
+                  title={catalogEmpty ? 'No catalog entries available — describe it manually' : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium transition disabled:opacity-40 ${
+                    effectiveBriefTab === 'catalog'
+                      ? 'bg-ora-charcoal text-ora-white'
+                      : 'text-ora-charcoal-light hover:text-ora-charcoal'
+                  }`}
+                  onClick={() => setBriefTab('catalog')}
                 >
-                  Can&apos;t find it in the catalog? Describe the subject manually instead
+                  <Layers className="h-3.5 w-3.5" /> Pick from our catalog
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={effectiveBriefTab === 'manual'}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium transition ${
+                    effectiveBriefTab === 'manual'
+                      ? 'bg-ora-charcoal text-ora-white'
+                      : 'text-ora-charcoal-light hover:text-ora-charcoal'
+                  }`}
+                  onClick={() => setBriefTab('manual')}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Describe it manually
+                </button>
+              </div>
+
+              {effectiveBriefTab === 'catalog' ? (
+                <>
+                  <OwnSubjectPicker
+                    catalog={ownCatalog}
+                    selectedCommunityId={pickCommunityId}
+                    selectedProjectId={pickProjectId}
+                    selectedClusterId={pickClusterId}
+                    busy={busyBrief}
+                    onSelectCommunity={onSelectCommunity}
+                    onSelectProject={onSelectProject}
+                    onSelectCluster={setPickClusterId}
+                  />
+                  <BriefDetails
+                    unitType={briefUnitType}
+                    bedrooms={briefBedrooms}
+                    priceMin={briefPriceMin}
+                    priceMax={briefPriceMax}
+                    onUnitType={setBriefUnitType}
+                    onBedrooms={setBriefBedrooms}
+                    onPriceMin={setBriefPriceMin}
+                    onPriceMax={setBriefPriceMax}
+                    busy={busyBrief}
+                    onSubmit={useSubject}
+                  />
+                </>
+              ) : (
+                <BriefIntake busy={busyBrief} onSubmit={createBrief} />
               )}
             </div>
           </SectionCard>
 
           <SectionCard step={2} title="Market comparables" subtitle="SQL-grounded competitor stats + area trend" muted={!hasBrief} badge={comparables.length || undefined} complete={comparables.length > 0} active={activeStep === 2}>
-            {gaps.length > 0 && (
+            {gaps.length > 0 && marketDataNote !== 'trial_limit' && (
               <div className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-200">
                 The selected subject couldn&apos;t resolve {gaps.join(', ')} from our own
                 catalog. Fill these in via the free-form brief above to sharpen the
                 comparison — nothing was invented.
               </div>
             )}
-            <ComparablesPanel comparables={comparables} unconfigured={unconfigured} areaTrend={areaTrend} dataSource={marketDataSource} />
+            <ComparablesPanel comparables={comparables} unconfigured={unconfigured} areaTrend={areaTrend} dataSource={marketDataSource} dataNote={marketDataNote} selectedIds={selectedCompIds} onToggleSelect={toggleComp} onUseSelected={useSelectedComparables} useSelectedBusy={busyRederive} />
           </SectionCard>
 
           <SectionCard step={3} title="Buyer hypothesis" subtitle="Editable proposal — adjust before search" muted={!hypothesis} complete={Boolean(hypothesis)} active={activeStep === 3}>
@@ -1195,7 +1606,7 @@ export default function ProspectingPage() {
             )}
           </SectionCard>
 
-          <SectionCard step={4} title="Prospects" subtitle="Find buyers, save your shortlist, draft outreach" muted={!hasBrief} badge={targets.length || candidates.length || undefined} complete={targets.length > 0} active={activeStep === 4}>
+          <SectionCard step={4} title="Prospects" subtitle="Find prospects, save your shortlist, draft outreach" muted={!hasBrief} badge={targets.length || candidates.length || undefined} complete={targets.length > 0} active={activeStep === 4}>
             <div className="space-y-5">
               {/* Saved shortlist (recorded Targets) — the rows you act on. */}
               <div>
@@ -1223,7 +1634,7 @@ export default function ProspectingPage() {
               {/* Candidates from the providers — "Record" lifts one into the shortlist. */}
               <div className="border-t border-ora-sand/40 pt-4">
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ora-charcoal-light">
-                  Candidates from providers
+                  Prospects from providers
                 </h3>
                 <CandidatesPanel candidates={candidates} status={searchStatus} recordingId={recordingId} onRecord={recordTarget} />
               </div>
@@ -1247,6 +1658,13 @@ export default function ProspectingPage() {
           </SectionCard>
         </>
       )}
+        </div>
+
+        {/* Contextual help — teaches the workspace as the rep moves through it. */}
+        <aside className="lg:sticky lg:top-4 lg:self-start">
+          <StepGuide mode={mode} step={activeStep} dataSource={marketDataSource} />
+        </aside>
+      </div>
 
       {/* Toasts — immediate feedback for every action */}
       <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex max-w-sm flex-col gap-2">
