@@ -59,10 +59,17 @@ function hasProspectingAccess(session: SessionData): boolean {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON body when one is actually sent: the API rejects a
+  // bodyless request that still carries `Content-Type: application/json` with a
+  // 400 "Bad Request" (its JSON parser fails on the empty body). This bit the
+  // bodyless lifecycle POSTs (publish/pause/resume/archive).
   const res = await fetch(`${API_BASE_URL}/api/prospecting${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: {
+      ...(init?.body != null ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -337,17 +344,50 @@ function ConfigSection({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Lazy-load the picker one level at a time (communities → projects →
+  // clusters). Seed with the sequence's existing community/project so the
+  // current subject's projects + clusters are populated on open; a one-shot
+  // `/own-catalog` with no params only returns communities, leaving the Project
+  // dropdown stuck on "Select project…".
+  const loadCatalog = useCallback(
+    async (community?: string | null, project?: string | null) => {
+      const qs = new URLSearchParams();
+      if (community) qs.set('communityId', community);
+      if (project) qs.set('projectId', project);
+      try {
+        const data = await api<OwnCatalog>(
+          `/own-catalog${qs.toString() ? `?${qs.toString()}` : ''}`
+        );
+        setCatalog(data);
+      } catch {
+        /* best-effort — the picker is optional context for the edit */
+      }
+    },
+    []
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    api<OwnCatalog>('/own-catalog')
-      .then((data) => {
-        if (!cancelled) setCatalog(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadCatalog(seq.subject.communityId ?? null, seq.subject.projectId ?? null);
+  }, [loadCatalog, seq.subject.communityId, seq.subject.projectId]);
+
+  const onSelectCommunity = useCallback(
+    (cid: string | null) => {
+      setCommunityId(cid);
+      setProjectId(null);
+      setClusterId(null);
+      void loadCatalog(cid, null);
+    },
+    [loadCatalog]
+  );
+
+  const onSelectProject = useCallback(
+    (pid: string | null) => {
+      setProjectId(pid);
+      setClusterId(null);
+      void loadCatalog(communityId, pid);
+    },
+    [loadCatalog, communityId]
+  );
 
   const subject = useMemo(() => {
     if (clusterId)
@@ -427,8 +467,8 @@ function ConfigSection({
             selectedProjectId={projectId}
             selectedClusterId={clusterId}
             busy={busy || !editable}
-            onSelectCommunity={setCommunityId}
-            onSelectProject={setProjectId}
+            onSelectCommunity={onSelectCommunity}
+            onSelectProject={onSelectProject}
             onSelectCluster={setClusterId}
           />
         </div>

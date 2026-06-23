@@ -262,7 +262,7 @@ const GUIDED_GUIDES: Record<number, GuideContent> = {
     intro:
       'This is the starting point. Pick the ORA project you’re selling and ORA builds everything else around it — comparable sales, likely buyers, and a first message.',
     todo: [
-      'Choose a Community, then a Project. That’s enough to continue.',
+      'Choose a Project, then a Cluster. That’s enough to continue.',
       'Add the unit type + bedrooms (and price, if you have it).',
       'Press “Run market research” to pull comparable sold units.',
     ],
@@ -526,10 +526,15 @@ export function OwnSubjectPicker({
   onSubmit?: () => void;
   submitLabel?: string;
 }) {
-  const cluster =
-    catalog.clusters.find((c) => c.id === selectedClusterId) ?? null;
+  // `selectedClusterId` / `onSelectCluster` are retained on the props (callers
+  // still pass them) but the third level is not surfaced for now — the picker is
+  // a two-step Project → Cluster selection. (Underlying catalog levels are
+  // unchanged: the "Project" dropdown lists catalog communities and the
+  // "Cluster" dropdown lists catalog projects — a display-only relabel.)
+  void selectedClusterId;
+  void onSelectCluster;
 
-  // A project is the minimum needed to resolve a comparison; cluster is optional.
+  // The selected real project is the minimum needed to resolve a comparison.
   const canSubmit = Boolean(selectedProjectId);
 
   return (
@@ -538,17 +543,17 @@ export function OwnSubjectPicker({
         Pick the ORA project you&apos;re selling. We resolve the comparison from
         our own catalog automatically — no free-form typing needed.
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-xs text-ora-charcoal-light">
           <span className="inline-flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5 text-ora-gold-dark" /> Community
+            <Building2 className="h-3.5 w-3.5 text-ora-gold-dark" /> Project
           </span>
           <select
             className={inputCls}
             value={selectedCommunityId ?? ''}
             onChange={(e) => onSelectCommunity(e.target.value || null)}
           >
-            <option value="">Select community…</option>
+            <option value="">Select project…</option>
             {catalog.communities.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nameEn}
@@ -558,7 +563,7 @@ export function OwnSubjectPicker({
         </label>
         <label className="text-xs text-ora-charcoal-light">
           <span className="inline-flex items-center gap-1">
-            <Building2 className="h-3.5 w-3.5 text-ora-gold-dark" /> Project
+            <Layers className="h-3.5 w-3.5 text-ora-gold-dark" /> Cluster
           </span>
           <select
             className={inputCls}
@@ -567,7 +572,7 @@ export function OwnSubjectPicker({
             onChange={(e) => onSelectProject(e.target.value || null)}
           >
             <option value="">
-              {selectedCommunityId ? 'Select project…' : 'Pick a community first'}
+              {selectedCommunityId ? 'Select cluster…' : 'Pick a project first'}
             </option>
             {catalog.projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -576,54 +581,7 @@ export function OwnSubjectPicker({
             ))}
           </select>
         </label>
-        <label className="text-xs text-ora-charcoal-light">
-          <span className="inline-flex items-center gap-1">
-            <Layers className="h-3.5 w-3.5 text-ora-gold-dark" /> Cluster
-            <span className="font-normal text-ora-muted">(optional)</span>
-          </span>
-          <select
-            className={inputCls}
-            value={selectedClusterId ?? ''}
-            disabled={!selectedProjectId || catalog.clusters.length === 0}
-            onChange={(e) => onSelectCluster(e.target.value || null)}
-          >
-            <option value="">
-              {selectedProjectId
-                ? catalog.clusters.length === 0
-                  ? 'No clusters — optional'
-                  : 'All clusters (optional)'
-                : 'Pick a project first'}
-            </option>
-            {catalog.clusters.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
-
-      {cluster && (
-        <div className="rounded-lg border border-ora-sand/60 bg-ora-cream-light/40 p-3">
-          <div className="text-xs font-medium text-ora-charcoal">{cluster.name}</div>
-          <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-ora-charcoal-light">
-            {cluster.segment && (
-              <span className="rounded-full bg-ora-sand/40 px-2 py-0.5">{cluster.segment}</span>
-            )}
-            {(cluster.bedroomsMin != null || cluster.bedroomsMax != null) && (
-              <span className="rounded-full bg-ora-sand/40 px-2 py-0.5">
-                {cluster.bedroomsMin ?? '?'}–{cluster.bedroomsMax ?? '?'} bed
-              </span>
-            )}
-            {cluster.priceMinAed != null && (
-              <span className="rounded-full bg-ora-sand/40 px-2 py-0.5">from {aed(cluster.priceMinAed)}</span>
-            )}
-            {cluster.totalUnits != null && (
-              <span className="rounded-full bg-ora-sand/40 px-2 py-0.5">{cluster.totalUnits} units</span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Always-visible primary action so the way forward is never ambiguous. */}
       {onSubmit && (
@@ -639,12 +597,10 @@ export function OwnSubjectPicker({
           </button>
           <span className="text-[11px] text-ora-muted">
             {!selectedCommunityId
-              ? 'Start by picking a community.'
+              ? 'Start by picking a project.'
               : !selectedProjectId
-                ? 'Select a project to continue.'
-                : selectedClusterId
-                  ? 'Ready — using the selected cluster for a sharper match.'
-                  : 'Ready. Tip: pick a cluster to sharpen the match (optional).'}
+                ? 'Select a cluster to continue.'
+                : 'Ready.'}
           </span>
         </div>
       )}

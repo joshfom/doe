@@ -47,10 +47,17 @@ function hasProspectingAccess(session: SessionData): boolean {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON body when one is actually sent: the API rejects a
+  // bodyless request that still carries `Content-Type: application/json` with a
+  // 400 "Bad Request" (its JSON parser fails on the empty body). This bit the
+  // bodyless lifecycle POSTs (publish/pause/resume/archive).
   const res = await fetch(`${API_BASE_URL}/api/prospecting${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: {
+      ...(init?.body != null ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -304,19 +311,49 @@ function CreateSequenceModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    api<OwnCatalog>('/own-catalog')
-      .then((data) => {
-        if (!cancelled) setCatalog(data);
-      })
-      .catch(() => {
+  // Lazy-load the picker one level at a time: communities seed on mount, then
+  // projects load when a community is chosen, clusters when a project is chosen.
+  // (A one-shot `/own-catalog` with no params only ever returns communities, so
+  // the Project dropdown stayed empty / "Select project…" — this refetches.)
+  const loadCatalog = useCallback(
+    async (community?: string | null, project?: string | null) => {
+      const qs = new URLSearchParams();
+      if (community) qs.set('communityId', community);
+      if (project) qs.set('projectId', project);
+      try {
+        const data = await api<OwnCatalog>(
+          `/own-catalog${qs.toString() ? `?${qs.toString()}` : ''}`
+        );
+        setCatalog(data);
+      } catch {
         /* best-effort — a rep can still create an ICP-less own-project subject */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
+  const onSelectCommunity = useCallback(
+    (cid: string | null) => {
+      setCommunityId(cid);
+      setProjectId(null);
+      setClusterId(null);
+      void loadCatalog(cid, null);
+    },
+    [loadCatalog]
+  );
+
+  const onSelectProject = useCallback(
+    (pid: string | null) => {
+      setProjectId(pid);
+      setClusterId(null);
+      void loadCatalog(communityId, pid);
+    },
+    [loadCatalog, communityId]
+  );
 
   const subject = useMemo(() => {
     if (clusterId) return { kind: 'cluster' as const, clusterId, projectId: projectId ?? undefined, communityId: communityId ?? undefined };
@@ -328,7 +365,7 @@ function CreateSequenceModal({
 
   const submit = useCallback(async () => {
     if (!subject) {
-      setError('Pick a project (and optionally a cluster) for this sequence.');
+      setError('Pick a project and cluster for this sequence.');
       return;
     }
     setBusy(true);
@@ -396,8 +433,8 @@ function CreateSequenceModal({
               selectedProjectId={projectId}
               selectedClusterId={clusterId}
               busy={busy}
-              onSelectCommunity={setCommunityId}
-              onSelectProject={setProjectId}
+              onSelectCommunity={onSelectCommunity}
+              onSelectProject={onSelectProject}
               onSelectCluster={setClusterId}
             />
           </div>

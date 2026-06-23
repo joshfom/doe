@@ -82,10 +82,17 @@ function hasProspectingAccess(session: SessionData): boolean {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON body when one is actually sent: the API rejects a
+  // bodyless request that still carries `Content-Type: application/json` with a
+  // 400 "Bad Request" (its JSON parser fails on the empty body). This bit the
+  // bodyless lifecycle POSTs (publish/pause/resume/archive).
   const res = await fetch(`${API_BASE_URL}/api/prospecting${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: {
+      ...(init?.body != null ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -1438,7 +1445,7 @@ export default function ProspectingPage() {
               <MapPin className="h-4 w-4 text-ora-gold-dark" />
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-semibold text-ora-charcoal">Subject</h2>
-                <p className="text-xs text-ora-muted">Pick the community / project / cluster the batch will prospect for.</p>
+                <p className="text-xs text-ora-muted">Pick the project / cluster the batch will prospect for.</p>
               </div>
             </header>
             <div className="border-t border-ora-sand/50 px-5 py-4">
