@@ -29,6 +29,7 @@ import {
   type MarketProjectRow,
 } from "../../market/comparables";
 import type { ProspectFilter, ProviderResult } from "../providers";
+import type { BuyerHypothesis } from "../hypothesis";
 
 // ── Subject ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,15 @@ export interface BatchSubject {
     brief: { spec?: BriefSpecInput; resolvedSpec?: BriefSpecInput };
     comparables: MarketProjectRow[];
   };
+  /**
+   * Optional rep-tuned Buyer_Hypothesis carried from the pre-run preview
+   * (§8, Req 14.6). The batch handler projects it onto {@link icpFilter} (when
+   * no explicit ICP filter is present) before scoring, so the scorer itself
+   * stays pure and reads only `icpFilter`; this field is retained on the subject
+   * for provenance / draft grounding. Mirrors the field on the `rerun-key`
+   * `BatchSubject` and is excluded from the deterministic `rerun_key`.
+   */
+  buyerHypothesis?: BuyerHypothesis;
 }
 
 // ── Rationale ─────────────────────────────────────────────────────────────────

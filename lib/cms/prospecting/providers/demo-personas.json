@@ -1,0 +1,5689 @@
+[
+  {
+    "targetType": "person",
+    "displayName": "Abdullah Al-Harbi",
+    "companyName": "Monarch Holdings",
+    "title": "Chief Investment Officer",
+    "email": "a.alharbi@monarchholdings.example",
+    "phone": "+966799978790",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "International investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1615,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "International investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Abdullah Al-Otaibi",
+    "companyName": "Tamarind Family Office",
+    "title": "Chief Investment Officer",
+    "email": "a.alotaibi@tamarindfamilyoffice.example",
+    "phone": "+966864480978",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "HNW individual",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3035,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Abdullah Al-Rashid",
+    "companyName": "Northgate Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "a.alrashid@northgatepropertyconcierge.example",
+    "phone": "+966919862784",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 151,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Abdullah Al-Shehri",
+    "companyName": "Quartz Investments LLC",
+    "title": "Founder",
+    "email": "a.alshehri@quartzinvestmentsllc.example",
+    "phone": "+966982881927",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3830,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Aditya Nair",
+    "companyName": "Cobalt Family Office",
+    "title": "Head of Investments",
+    "email": "a.nair@cobaltfamilyoffice.example",
+    "phone": "+91534310245",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 573,
+    "wealthSignals": [
+      "high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Aisha Al-Maktoum",
+    "companyName": "Monarch Industries",
+    "title": "Investment Director",
+    "email": "a.almaktoum@monarchindustries.example",
+    "phone": "+971502893318",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2229,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Aldar Private Equity",
+    "companyName": "Aldar Private Equity",
+    "title": "—",
+    "email": "contact@aldarprivateequity.example",
+    "phone": "+86748145520",
+    "country": "China",
+    "city": "Shanghai",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 3169,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Amara Balogun",
+    "companyName": "Granite Industries",
+    "title": "Founder",
+    "email": "a.balogun@graniteindustries.example",
+    "phone": "+234167993129",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "International investor",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 2426,
+    "wealthSignals": [
+      "second-home buyer",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "International investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Amara Ibrahim",
+    "companyName": "Lattice Industries",
+    "title": "Chief Investment Officer",
+    "email": "a.ibrahim@latticeindustries.example",
+    "phone": "+234242334528",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Family office",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 530,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Family office",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Amara Olawale",
+    "companyName": "Aldar Wealth Management",
+    "title": "Chairman",
+    "email": "a.olawale@aldarwealthmanagement.example",
+    "phone": "+234322757876",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Golden visa holder",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 1657,
+    "wealthSignals": [
+      "ultra high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Amelia Harrington",
+    "companyName": "Aldar Private Equity",
+    "title": "Board Member",
+    "email": "a.harrington@aldarprivateequity.example",
+    "phone": "+44611228386",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 1152,
+    "wealthSignals": [
+      "liquidity event",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ananya Anand",
+    "companyName": "Orion Investments LLC",
+    "title": "Founder & CEO",
+    "email": "a.anand@orioninvestmentsllc.example",
+    "phone": "+91861732963",
+    "country": "India",
+    "city": "Bengaluru",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1720,
+    "wealthSignals": [
+      "high net worth",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ananya Anand",
+    "companyName": "Meridian Capital Partners",
+    "title": "Founder & CEO",
+    "email": "a.anand@meridiancapitalpartners.example",
+    "phone": "+91474252495",
+    "country": "India",
+    "city": "Mumbai",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2394,
+    "wealthSignals": [
+      "multi-property owner",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ananya Shah",
+    "companyName": "Tamarind Family Office",
+    "title": "Chief Investment Officer",
+    "email": "a.shah@tamarindfamilyoffice.example",
+    "phone": "+91224196432",
+    "country": "India",
+    "city": "Delhi",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3101,
+    "wealthSignals": [
+      "ultra high net worth",
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Andrew Brooks",
+    "companyName": "Falcon Asset Management",
+    "title": "Founder & CEO",
+    "email": "a.brooks@falconassetmanagement.example",
+    "phone": "+1959903499",
+    "country": "United States",
+    "city": "San Francisco",
+    "segment": "International investor",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 207,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Antoine Moreau",
+    "companyName": "Keystone Ventures",
+    "title": "Founder",
+    "email": "a.moreau@keystoneventures.example",
+    "phone": "+33808167697",
+    "country": "France",
+    "city": "Paris",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 3510,
+    "wealthSignals": [
+      "second-home buyer",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Arjun Kapoor",
+    "companyName": "Rhein Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "a.kapoor@rheinpropertyconcierge.example",
+    "phone": "+91520525309",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 145,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ashley Sullivan",
+    "companyName": "Vermilion Wealth Management",
+    "title": "Principal",
+    "email": "a.sullivan@vermilionwealthmanagement.example",
+    "phone": "+1824042204",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Golden visa holder",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 3267,
+    "wealthSignals": [
+      "liquidity event",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Atlas Capital Partners",
+    "companyName": "Atlas Capital Partners",
+    "title": "—",
+    "email": "contact@atlascapitalpartners.example",
+    "phone": "+91066971485",
+    "country": "India",
+    "city": "Mumbai",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 3655,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Atlas Group",
+    "companyName": "Atlas Group",
+    "title": "—",
+    "email": "contact@atlasgroup.example",
+    "phone": "+20493056344",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 1706,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Atlas Holdings",
+    "companyName": "Atlas Holdings",
+    "title": "—",
+    "email": "contact@atlasholdings.example",
+    "phone": "+20470749780",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 4964,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C",
+      "acquisition"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Atlas Investments LLC",
+    "companyName": "Atlas Investments LLC",
+    "title": "—",
+    "email": "contact@atlasinvestmentsllc.example",
+    "phone": "+20479428547",
+    "country": "Egypt",
+    "city": "Cairo",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 3564,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Atlas Wealth Management",
+    "companyName": "Atlas Wealth Management",
+    "title": "—",
+    "email": "contact@atlaswealthmanagement.example",
+    "phone": "+49018929597",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 5784,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "wealth_manager"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Bandar Al-Saud",
+    "companyName": "Evergreen Private Equity",
+    "title": "Chief Financial Officer",
+    "email": "b.alsaud@evergreenprivateequity.example",
+    "phone": "+966896810642",
+    "country": "Saudi Arabia",
+    "city": "Dammam",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 1402,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Beacon Ventures",
+    "companyName": "Beacon Ventures",
+    "title": "—",
+    "email": "contact@beaconventures.example",
+    "phone": "+966614671219",
+    "country": "Saudi Arabia",
+    "city": "Dammam",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 1019,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Beacon Wealth Management",
+    "companyName": "Beacon Wealth Management",
+    "title": "—",
+    "email": "contact@beaconwealthmanagement.example",
+    "phone": "+1274921303",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 5771,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "wealth_manager"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Bisi Eze",
+    "companyName": "Vermilion Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "b.eze@vermilionpropertyconcierge.example",
+    "phone": "+234436052505",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 191,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Bo Li",
+    "companyName": "Summit Industries",
+    "title": "Partner",
+    "email": "b.li@summitindustries.example",
+    "phone": "+86445667107",
+    "country": "China",
+    "city": "Beijing",
+    "segment": "Golden visa holder",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 1988,
+    "wealthSignals": [
+      "second-home buyer",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Bo Liu",
+    "companyName": "Solstice Group",
+    "title": "Chairman",
+    "email": "b.liu@solsticegroup.example",
+    "phone": "+86243188133",
+    "country": "China",
+    "city": "Beijing",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 1219,
+    "wealthSignals": [
+      "second-home buyer",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Bo Wu",
+    "companyName": "Monarch Private Equity",
+    "title": "Managing Partner",
+    "email": "b.wu@monarchprivateequity.example",
+    "phone": "+86274406953",
+    "country": "China",
+    "city": "Shenzhen",
+    "segment": "HNW individual",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 3420,
+    "wealthSignals": [
+      "high net worth",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Cedar Holdings",
+    "companyName": "Cedar Holdings",
+    "title": "—",
+    "email": "contact@cedarholdings.example",
+    "phone": "+234788723697",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 4599,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C",
+      "management buyout"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Charlotte Cavendish",
+    "companyName": "Levant Industries",
+    "title": "Head of Investments",
+    "email": "c.cavendish@levantindustries.example",
+    "phone": "+44705020386",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2011,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Chinedu Okonkwo",
+    "companyName": "Albion Wealth Management",
+    "title": "Chief Executive Officer",
+    "email": "c.okonkwo@albionwealthmanagement.example",
+    "phone": "+234167872774",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 1404,
+    "wealthSignals": [
+      "multi-property owner",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Chloé Fontaine",
+    "companyName": "Orion Ventures",
+    "title": "Founder",
+    "email": "c.fontaine@orionventures.example",
+    "phone": "+33850596129",
+    "country": "France",
+    "city": "Lyon",
+    "segment": "HNW individual",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 2896,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Chloé Lefèvre",
+    "companyName": "Atlas Investments LLC",
+    "title": "Chief Executive Officer",
+    "email": "c.lefvre@atlasinvestmentsllc.example",
+    "phone": "+33075080029",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 501,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Chloé Moreau",
+    "companyName": "Monarch Group",
+    "title": "Partner",
+    "email": "c.moreau@monarchgroup.example",
+    "phone": "+33239986853",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Golden visa holder",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 4005,
+    "wealthSignals": [
+      "multi-property owner",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Crescent Capital Partners",
+    "companyName": "Crescent Capital Partners",
+    "title": "—",
+    "email": "contact@crescentcapitalpartners.example",
+    "phone": "+86146471791",
+    "country": "China",
+    "city": "Shenzhen",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 4754,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale",
+      "management buyout"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Crescent Holdings",
+    "companyName": "Crescent Holdings",
+    "title": "—",
+    "email": "contact@crescentholdings.example",
+    "phone": "+234711129271",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 1432,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Crescent Private Equity",
+    "companyName": "Crescent Private Equity",
+    "title": "—",
+    "email": "contact@crescentprivateequity.example",
+    "phone": "+7166399113",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 1869,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Crescent Ventures",
+    "companyName": "Crescent Ventures",
+    "title": "—",
+    "email": "contact@crescentventures.example",
+    "phone": "+65226035750",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 4170,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "secondary sale"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Daniel Bishop",
+    "companyName": "Evergreen Private Equity",
+    "title": "Founder",
+    "email": "d.bishop@evergreenprivateequity.example",
+    "phone": "+1932496020",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2591,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Daniel Brooks",
+    "companyName": "Falcon Capital Partners",
+    "title": "Principal",
+    "email": "d.brooks@falconcapitalpartners.example",
+    "phone": "+1927273059",
+    "country": "United States",
+    "city": "New York",
+    "segment": "Family office",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 1492,
+    "wealthSignals": [
+      "high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Daniel Klein",
+    "companyName": "Harbour Capital Partners",
+    "title": "Managing Director",
+    "email": "d.klein@harbourcapitalpartners.example",
+    "phone": "+49508101711",
+    "country": "Germany",
+    "city": "Munich",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 2383,
+    "wealthSignals": [
+      "ultra high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Daniel Weber",
+    "companyName": "Levant Group",
+    "title": "Portfolio Director",
+    "email": "d.weber@levantgroup.example",
+    "phone": "+49098422403",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2275,
+    "wealthSignals": [
+      "second-home buyer",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Dina Mansour",
+    "companyName": "Thames Group",
+    "title": "Board Member",
+    "email": "d.mansour@thamesgroup.example",
+    "phone": "+20479957416",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 1839,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Dina Saleh",
+    "companyName": "Beacon Wealth Management",
+    "title": "Chairman",
+    "email": "d.saleh@beaconwealthmanagement.example",
+    "phone": "+20758906023",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 1593,
+    "wealthSignals": [
+      "liquidity event",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Dmitri Kuznetsov",
+    "companyName": "Orion Holdings",
+    "title": "Portfolio Director",
+    "email": "d.kuznetsov@orionholdings.example",
+    "phone": "+7614589922",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "International investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 3727,
+    "wealthSignals": [
+      "second-home buyer",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Edward Harrington",
+    "companyName": "Keystone Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "e.harrington@keystonerelocationpartners.example",
+    "phone": "+44256648890",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 279,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Edward Pembroke",
+    "companyName": "Atlas Private Equity",
+    "title": "Managing Partner",
+    "email": "e.pembroke@atlasprivateequity.example",
+    "phone": "+44602748137",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 3883,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Edward Pembroke",
+    "companyName": "Beacon Capital Partners",
+    "title": "Head of Investments",
+    "email": "e.pembroke@beaconcapitalpartners.example",
+    "phone": "+44202376306",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 2190,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Edward Whitmore",
+    "companyName": "Monarch Capital Partners",
+    "title": "Principal",
+    "email": "e.whitmore@monarchcapitalpartners.example",
+    "phone": "+44893331895",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 3842,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Elena Ivanov",
+    "companyName": "Aldar Investments LLC",
+    "title": "Chairman",
+    "email": "e.ivanov@aldarinvestmentsllc.example",
+    "phone": "+7054516775",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1741,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Elena Ivanov",
+    "companyName": "Harbour Capital Partners",
+    "title": "Head of Investments",
+    "email": "e.ivanov@harbourcapitalpartners.example",
+    "phone": "+7513578535",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 930,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Elena Lebedev",
+    "companyName": "Evergreen Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "e.lebedev@evergreencitizenshipandresid.example",
+    "phone": "+7770244106",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 263,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Elena Sokolova",
+    "companyName": "Harbour Group",
+    "title": "Founder",
+    "email": "e.sokolova@harbourgroup.example",
+    "phone": "+7392211640",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 2850,
+    "wealthSignals": [
+      "multi-property owner",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Emeka Eze",
+    "companyName": "Keystone Ventures",
+    "title": "Partner",
+    "email": "e.eze@keystoneventures.example",
+    "phone": "+234472938703",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "HNW individual",
+    "industry": "Venture Capital",
+    "seniority": "executive",
+    "companySize": 2065,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Emily Pembroke",
+    "companyName": "Atlas Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "e.pembroke@atlasprivateclientadvisory.example",
+    "phone": "+44305004301",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 236,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Evergreen Group",
+    "companyName": "Evergreen Group",
+    "title": "—",
+    "email": "contact@evergreengroup.example",
+    "phone": "+1663224382",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 3012,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Evergreen Wealth Management",
+    "companyName": "Evergreen Wealth Management",
+    "title": "—",
+    "email": "contact@evergreenwealthmanagement.example",
+    "phone": "+234399690526",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 3075,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "wealth_manager"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Falcon Family Office",
+    "companyName": "Falcon Family Office",
+    "title": "—",
+    "email": "contact@falconfamilyoffice.example",
+    "phone": "+7063025639",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 506,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "management buyout"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "family_office"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Falcon Industries",
+    "companyName": "Falcon Industries",
+    "title": "—",
+    "email": "contact@falconindustries.example",
+    "phone": "+65783311262",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 2962,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C",
+      "IPO"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Fatima Al-Suwaidi",
+    "companyName": "Nevsky Investments LLC",
+    "title": "Founder",
+    "email": "f.alsuwaidi@nevskyinvestmentsllc.example",
+    "phone": "+971683904924",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 772,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Felix Brandt",
+    "companyName": "Ironwood Capital Partners",
+    "title": "Partner",
+    "email": "f.brandt@ironwoodcapitalpartners.example",
+    "phone": "+49941244284",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 3432,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Folake Balogun",
+    "companyName": "Atlas Holdings",
+    "title": "Founder",
+    "email": "f.balogun@atlasholdings.example",
+    "phone": "+234787624824",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3749,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Gabriel Bonnet",
+    "companyName": "Levant Holdings",
+    "title": "Head of Investments",
+    "email": "g.bonnet@levantholdings.example",
+    "phone": "+33965222635",
+    "country": "France",
+    "city": "Nice",
+    "segment": "International investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 2477,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "International investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Grace Fairfax",
+    "companyName": "Levant Industries",
+    "title": "Chief Financial Officer",
+    "email": "g.fairfax@levantindustries.example",
+    "phone": "+44938471740",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 567,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Granite Private Equity",
+    "companyName": "Granite Private Equity",
+    "title": "—",
+    "email": "contact@graniteprivateequity.example",
+    "phone": "+7572328804",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 2766,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Granite Ventures",
+    "companyName": "Granite Ventures",
+    "title": "—",
+    "email": "contact@graniteventures.example",
+    "phone": "+86334085374",
+    "country": "China",
+    "city": "Shenzhen",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 3842,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout",
+      "Series D"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hamdan Darwish",
+    "companyName": "Nevsky Ventures",
+    "title": "Head of Investments",
+    "email": "h.darwish@nevskyventures.example",
+    "phone": "+971388433055",
+    "country": "United Arab Emirates",
+    "city": "Dubai",
+    "segment": "HNW individual",
+    "industry": "Venture Capital",
+    "seniority": "senior",
+    "companySize": 217,
+    "wealthSignals": [
+      "multi-property owner",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hannah Hofmann",
+    "companyName": "Obsidian Group",
+    "title": "Chief Executive Officer",
+    "email": "h.hofmann@obsidiangroup.example",
+    "phone": "+49667833933",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 329,
+    "wealthSignals": [
+      "ultra high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Hannah Weber",
+    "companyName": "Sapphire Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "h.weber@sapphirecitizenshipandreside.example",
+    "phone": "+49960293444",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 145,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hao Li",
+    "companyName": "Pacific Crest Private Equity",
+    "title": "Founder & CEO",
+    "email": "h.li@pacificcrestprivateequity.example",
+    "phone": "+86665354344",
+    "country": "China",
+    "city": "Beijing",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2850,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hao Wu",
+    "companyName": "Nevsky Holdings",
+    "title": "Chief Investment Officer",
+    "email": "h.wu@nevskyholdings.example",
+    "phone": "+86194670903",
+    "country": "China",
+    "city": "Hong Kong",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1074,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Harbour Capital Partners",
+    "companyName": "Harbour Capital Partners",
+    "title": "—",
+    "email": "contact@harbourcapitalpartners.example",
+    "phone": "+44975801593",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 2772,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Harbour Industries",
+    "companyName": "Harbour Industries",
+    "title": "—",
+    "email": "contact@harbourindustries.example",
+    "phone": "+44690931123",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 4194,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition",
+      "Series C"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Harbour Investments LLC",
+    "companyName": "Harbour Investments LLC",
+    "title": "—",
+    "email": "contact@harbourinvestmentsllc.example",
+    "phone": "+234183630285",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 2486,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Harbour Ventures",
+    "companyName": "Harbour Ventures",
+    "title": "—",
+    "email": "contact@harbourventures.example",
+    "phone": "+1753295192",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 2638,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Heba El-Sayed",
+    "companyName": "Orion Investments LLC",
+    "title": "Portfolio Director",
+    "email": "h.elsayed@orioninvestmentsllc.example",
+    "phone": "+20525835660",
+    "country": "Egypt",
+    "city": "Cairo",
+    "segment": "International investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 59,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "International investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Heba Saleh",
+    "companyName": "Evergreen Industries",
+    "title": "Chief Financial Officer",
+    "email": "h.saleh@evergreenindustries.example",
+    "phone": "+20817514993",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 2940,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Henry Fairfax",
+    "companyName": "Cedar Investments LLC",
+    "title": "Chairman",
+    "email": "h.fairfax@cedarinvestmentsllc.example",
+    "phone": "+44545041509",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "HNW individual",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 311,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hugo Girard",
+    "companyName": "Vantage Holdings",
+    "title": "Head of Investments",
+    "email": "h.girard@vantageholdings.example",
+    "phone": "+33325064029",
+    "country": "France",
+    "city": "Paris",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 3784,
+    "wealthSignals": [
+      "ultra high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Hui Teo",
+    "companyName": "Lattice Family Office",
+    "title": "Founder & CEO",
+    "email": "h.teo@latticefamilyoffice.example",
+    "phone": "+65992723605",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1690,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Irina Lebedev",
+    "companyName": "Northgate Wealth Management",
+    "title": "Partner",
+    "email": "i.lebedev@northgatewealthmanagement.example",
+    "phone": "+7967557866",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Family office",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 2770,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Family office",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "James Fairfax",
+    "companyName": "Aldar Asset Management",
+    "title": "Managing Director",
+    "email": "j.fairfax@aldarassetmanagement.example",
+    "phone": "+44124950396",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Family office",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 3029,
+    "wealthSignals": [
+      "liquidity event",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "James Harrington",
+    "companyName": "Tamarind Holdings",
+    "title": "Managing Director",
+    "email": "j.harrington@tamarindholdings.example",
+    "phone": "+44689845207",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 812,
+    "wealthSignals": [
+      "liquidity event",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "James Pembroke",
+    "companyName": "Levant Capital Partners",
+    "title": "Chief Financial Officer",
+    "email": "j.pembroke@levantcapitalpartners.example",
+    "phone": "+44676224321",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Post-liquidity founder",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 2714,
+    "wealthSignals": [
+      "multi-property owner",
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jennifer Brooks",
+    "companyName": "Northgate Private Equity",
+    "title": "Chief Executive Officer",
+    "email": "j.brooks@northgateprivateequity.example",
+    "phone": "+1631688731",
+    "country": "United States",
+    "city": "San Francisco",
+    "segment": "HNW individual",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2349,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jennifer Goldberg",
+    "companyName": "Monarch Asset Management",
+    "title": "Founder & CEO",
+    "email": "j.goldberg@monarchassetmanagement.example",
+    "phone": "+1860038996",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Family office",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 3267,
+    "wealthSignals": [
+      "second-home buyer",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jennifer Sterling",
+    "companyName": "Cedar Investments LLC",
+    "title": "Investment Director",
+    "email": "j.sterling@cedarinvestmentsllc.example",
+    "phone": "+1978956892",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 1253,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jessica Bishop",
+    "companyName": "Nevsky Group",
+    "title": "Founder & CEO",
+    "email": "j.bishop@nevskygroup.example",
+    "phone": "+1513729161",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 568,
+    "wealthSignals": [
+      "high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Jessica Goldberg",
+    "companyName": "Monarch Real Estate Brokers",
+    "title": "Brokerage Principal",
+    "email": "j.goldberg@monarchrealestatebrokers.example",
+    "phone": "+1972716274",
+    "country": "United States",
+    "city": "San Francisco",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 204,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Brokerage Principal",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jing Sun",
+    "companyName": "Cedar Investments LLC",
+    "title": "Chief Executive Officer",
+    "email": "j.sun@cedarinvestmentsllc.example",
+    "phone": "+86190946104",
+    "country": "China",
+    "city": "Beijing",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1994,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jonas Schmidt",
+    "companyName": "Cobalt Wealth Management",
+    "title": "Managing Director",
+    "email": "j.schmidt@cobaltwealthmanagement.example",
+    "phone": "+49655487430",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 1198,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Jonas Wagner",
+    "companyName": "Albion Capital Partners",
+    "title": "Head of Investments",
+    "email": "j.wagner@albioncapitalpartners.example",
+    "phone": "+49127274356",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 772,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Karan Raghunathan",
+    "companyName": "Aldar Family Office",
+    "title": "Chief Investment Officer",
+    "email": "k.raghunathan@aldarfamilyoffice.example",
+    "phone": "+91119355492",
+    "country": "India",
+    "city": "Delhi",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 870,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Karim Hassanein",
+    "companyName": "Lighthouse Ventures",
+    "title": "Founder & CEO",
+    "email": "k.hassanein@lighthouseventures.example",
+    "phone": "+20806434239",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "International investor",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 2089,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "International investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Kavya Bansal",
+    "companyName": "Keystone Industries",
+    "title": "Managing Partner",
+    "email": "k.bansal@keystoneindustries.example",
+    "phone": "+91815355607",
+    "country": "India",
+    "city": "Bengaluru",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 1749,
+    "wealthSignals": [
+      "ultra high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Kavya Raghunathan",
+    "companyName": "Falcon Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "k.raghunathan@falconrelocationpartners.example",
+    "phone": "+91262671788",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 286,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Khalid Al-Mutairi",
+    "companyName": "Quartz Asset Management",
+    "title": "Founder & CEO",
+    "email": "k.almutairi@quartzassetmanagement.example",
+    "phone": "+966201921932",
+    "country": "Saudi Arabia",
+    "city": "Dammam",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 3514,
+    "wealthSignals": [
+      "high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Khalid Al-Saud",
+    "companyName": "Orion Private Equity",
+    "title": "Founder",
+    "email": "k.alsaud@orionprivateequity.example",
+    "phone": "+966844891698",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Post-liquidity founder",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 3584,
+    "wealthSignals": [
+      "high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Lan Huang",
+    "companyName": "Vantage Ventures",
+    "title": "Principal",
+    "email": "l.huang@vantageventures.example",
+    "phone": "+86799568351",
+    "country": "China",
+    "city": "Shenzhen",
+    "segment": "International investor",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 2877,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "International investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Latifa Al-Marri",
+    "companyName": "Pacific Crest Wealth Management",
+    "title": "Chief Financial Officer",
+    "email": "l.almarri@pacificcrestwealthmanagement.example",
+    "phone": "+971986481927",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 952,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Latifa Khoury",
+    "companyName": "Lighthouse Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "l.khoury@lighthouserelocationpartners.example",
+    "phone": "+971475544447",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 206,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Latifa Mansoori",
+    "companyName": "Ironwood Investments LLC",
+    "title": "Managing Director",
+    "email": "l.mansoori@ironwoodinvestmentsllc.example",
+    "phone": "+971580155349",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 3257,
+    "wealthSignals": [
+      "multi-property owner",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Lattice Capital Partners",
+    "companyName": "Lattice Capital Partners",
+    "title": "—",
+    "email": "contact@latticecapitalpartners.example",
+    "phone": "+33055158323",
+    "country": "France",
+    "city": "Paris",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 4162,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Lattice Investments LLC",
+    "companyName": "Lattice Investments LLC",
+    "title": "—",
+    "email": "contact@latticeinvestmentsllc.example",
+    "phone": "+966926048158",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 881,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Laura Klein",
+    "companyName": "Rhein Capital Partners",
+    "title": "Chief Executive Officer",
+    "email": "l.klein@rheincapitalpartners.example",
+    "phone": "+49099562883",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "HNW individual",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 1638,
+    "wealthSignals": [
+      "multi-property owner",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Lauren Carter",
+    "companyName": "Evergreen Investments LLC",
+    "title": "Board Member",
+    "email": "l.carter@evergreeninvestmentsllc.example",
+    "phone": "+1176691083",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 2368,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Lauren Hartman",
+    "companyName": "Rhein Ventures",
+    "title": "Founder & CEO",
+    "email": "l.hartman@rheinventures.example",
+    "phone": "+1971113812",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Family office",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 1696,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Levant Asset Management",
+    "companyName": "Levant Asset Management",
+    "title": "—",
+    "email": "contact@levantassetmanagement.example",
+    "phone": "+20003334892",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 1537,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "asset_manager"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Levant Asset Management",
+    "companyName": "Levant Asset Management",
+    "title": "—",
+    "email": "contact2@levantassetmanagement.example",
+    "phone": "+49904848845",
+    "country": "Germany",
+    "city": "Frankfurt",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 1431,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "asset_manager"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Levant Capital Partners",
+    "companyName": "Levant Capital Partners",
+    "title": "—",
+    "email": "contact@levantcapitalpartners.example",
+    "phone": "+20489895367",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 5947,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ling Koh",
+    "companyName": "Thames Industries",
+    "title": "Investment Director",
+    "email": "l.koh@thamesindustries.example",
+    "phone": "+65173441349",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Family office",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2382,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Louis Chevalier",
+    "companyName": "Nevsky Private Equity",
+    "title": "Principal",
+    "email": "l.chevalier@nevskyprivateequity.example",
+    "phone": "+33302059725",
+    "country": "France",
+    "city": "Lyon",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 1835,
+    "wealthSignals": [
+      "liquidity event",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Louis Fontaine",
+    "companyName": "Monarch Capital Partners",
+    "title": "Chief Executive Officer",
+    "email": "l.fontaine@monarchcapitalpartners.example",
+    "phone": "+33059066182",
+    "country": "France",
+    "city": "Lyon",
+    "segment": "Family office",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 1959,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Louis Fontaine",
+    "companyName": "Pacific Crest Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "l.fontaine@pacificcrestpropertyconcierg.example",
+    "phone": "+33072134841",
+    "country": "France",
+    "city": "Paris",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 139,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Lucas Lefèvre",
+    "companyName": "Harbour Holdings",
+    "title": "Board Member",
+    "email": "l.lefvre@harbourholdings.example",
+    "phone": "+33867569348",
+    "country": "France",
+    "city": "Paris",
+    "segment": "HNW individual",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 2075,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Lukas Klein",
+    "companyName": "Vermilion Holdings",
+    "title": "Managing Director",
+    "email": "l.klein@vermilionholdings.example",
+    "phone": "+49805640126",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 3037,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Lukas Richter",
+    "companyName": "Summit Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "l.richter@summitpropertyconcierge.example",
+    "phone": "+49878676493",
+    "country": "Germany",
+    "city": "Munich",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 164,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Léa Dubois",
+    "companyName": "Meridian Asset Management",
+    "title": "Chief Financial Officer",
+    "email": "l.dubois@meridianassetmanagement.example",
+    "phone": "+33158015372",
+    "country": "France",
+    "city": "Nice",
+    "segment": "HNW individual",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 1297,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Léa Laurent",
+    "companyName": "Vantage Sotheby's International Realty",
+    "title": "Luxury Broker",
+    "email": "l.laurent@vantagesothebysinternational.example",
+    "phone": "+33371464614",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 40,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Luxury Broker",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Léa Lefèvre",
+    "companyName": "Vermilion Group",
+    "title": "Head of Investments",
+    "email": "l.lefvre@vermiliongroup.example",
+    "phone": "+33356264646",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Golden visa holder",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 3888,
+    "wealthSignals": [
+      "multi-property owner",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Léa Moreau",
+    "companyName": "Summit Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "l.moreau@summitcitizenshipandresidenc.example",
+    "phone": "+33672642857",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 191,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Maha Al-Ghamdi",
+    "companyName": "Pacific Crest Holdings",
+    "title": "Head of Investments",
+    "email": "m.alghamdi@pacificcrestholdings.example",
+    "phone": "+966534491060",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "International investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 1126,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Maha Al-Mutairi",
+    "companyName": "Falcon Asset Management",
+    "title": "Managing Partner",
+    "email": "m.almutairi@falconassetmanagement.example",
+    "phone": "+966625199981",
+    "country": "Saudi Arabia",
+    "city": "Dammam",
+    "segment": "Golden visa holder",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 3230,
+    "wealthSignals": [
+      "second-home buyer",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Maha Al-Shehri",
+    "companyName": "Vermilion Wealth Management",
+    "title": "Head of Investments",
+    "email": "m.alshehri@vermilionwealthmanagement.example",
+    "phone": "+966342550580",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 2103,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Manon Lefèvre",
+    "companyName": "Orion Capital Partners",
+    "title": "Founder & CEO",
+    "email": "m.lefvre@orioncapitalpartners.example",
+    "phone": "+33427575384",
+    "country": "France",
+    "city": "Nice",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2445,
+    "wealthSignals": [
+      "ultra high net worth",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Mariam Al-Marri",
+    "companyName": "Vermilion Capital Partners",
+    "title": "Chief Financial Officer",
+    "email": "m.almarri@vermilioncapitalpartners.example",
+    "phone": "+971925441590",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 3955,
+    "wealthSignals": [
+      "high net worth",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Mariam Al-Marri",
+    "companyName": "Granite Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "m.almarri@graniteprivateclientadvisory.example",
+    "phone": "+971368148236",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 278,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Mariam Darwish",
+    "companyName": "Lighthouse Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "m.darwish@lighthousecitizenshipandresi.example",
+    "phone": "+971849603119",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 279,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Maxim Kuznetsov",
+    "companyName": "Sterling Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "m.kuznetsov@sterlingprivateclientadvisor.example",
+    "phone": "+7512076378",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 91,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Maxim Kuznetsov",
+    "companyName": "Summit Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "m.kuznetsov@summitprivateclientadvisory.example",
+    "phone": "+7081318780",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 200,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Maxim Lebedev",
+    "companyName": "Granite Sotheby's International Realty",
+    "title": "Luxury Broker",
+    "email": "m.lebedev@granitesothebysinternational.example",
+    "phone": "+7354038393",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 168,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Luxury Broker",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Mei Lin Wang",
+    "companyName": "Sapphire Capital Partners",
+    "title": "Investment Director",
+    "email": "m.wang@sapphirecapitalpartners.example",
+    "phone": "+86799400316",
+    "country": "China",
+    "city": "Hong Kong",
+    "segment": "Post-liquidity founder",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 1950,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Mei Yeo",
+    "companyName": "Tamarind Family Office",
+    "title": "Head of Investments",
+    "email": "m.yeo@tamarindfamilyoffice.example",
+    "phone": "+65697042169",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 2494,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Meridian Asset Management",
+    "companyName": "Meridian Asset Management",
+    "title": "—",
+    "email": "contact@meridianassetmanagement.example",
+    "phone": "+86290488261",
+    "country": "China",
+    "city": "Hong Kong",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 3301,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D",
+      "secondary sale"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "asset_manager"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Michael Brooks",
+    "companyName": "Granite Ventures",
+    "title": "Principal",
+    "email": "m.brooks@graniteventures.example",
+    "phone": "+1797668915",
+    "country": "United States",
+    "city": "San Francisco",
+    "segment": "International investor",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 3551,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Michael Goldberg",
+    "companyName": "Atlas Ventures",
+    "title": "Principal",
+    "email": "m.goldberg@atlasventures.example",
+    "phone": "+1077662989",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "HNW individual",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 2601,
+    "wealthSignals": [
+      "liquidity event",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Michael Hartman",
+    "companyName": "Beacon Family Office",
+    "title": "Principal",
+    "email": "m.hartman@beaconfamilyoffice.example",
+    "phone": "+1199018727",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1502,
+    "wealthSignals": [
+      "liquidity event",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Michael Hayes",
+    "companyName": "Pacific Crest Group",
+    "title": "Founder & CEO",
+    "email": "m.hayes@pacificcrestgroup.example",
+    "phone": "+1579124563",
+    "country": "United States",
+    "city": "New York",
+    "segment": "International investor",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 3624,
+    "wealthSignals": [
+      "high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "International investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Michael Sullivan",
+    "companyName": "Keystone Asset Management",
+    "title": "Head of Investments",
+    "email": "m.sullivan@keystoneassetmanagement.example",
+    "phone": "+1633603089",
+    "country": "United States",
+    "city": "New York",
+    "segment": "HNW individual",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 1139,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Monarch Asset Management",
+    "companyName": "Monarch Asset Management",
+    "title": "—",
+    "email": "contact@monarchassetmanagement.example",
+    "phone": "+33030712255",
+    "country": "France",
+    "city": "Lyon",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 2660,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "Series D"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "asset_manager"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Monarch Investments LLC",
+    "companyName": "Monarch Investments LLC",
+    "title": "—",
+    "email": "contact@monarchinvestmentsllc.example",
+    "phone": "+49894383389",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 1867,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Monarch Private Equity",
+    "companyName": "Monarch Private Equity",
+    "title": "—",
+    "email": "contact@monarchprivateequity.example",
+    "phone": "+86107715888",
+    "country": "China",
+    "city": "Beijing",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 1905,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Nadia Habib",
+    "companyName": "Quartz Investments LLC",
+    "title": "Chief Executive Officer",
+    "email": "n.habib@quartzinvestmentsllc.example",
+    "phone": "+20196208609",
+    "country": "Egypt",
+    "city": "Cairo",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1260,
+    "wealthSignals": [
+      "high net worth",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Nadia Mansour",
+    "companyName": "Granite Ventures",
+    "title": "Chief Investment Officer",
+    "email": "n.mansour@graniteventures.example",
+    "phone": "+20614381798",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Golden visa holder",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 598,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Nadia Mansour",
+    "companyName": "Pacific Crest Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "n.mansour@pacificcrestcitizenshipandre.example",
+    "phone": "+20348681191",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 243,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Natalia Morozova",
+    "companyName": "Pacific Crest Holdings",
+    "title": "Partner",
+    "email": "n.morozova@pacificcrestholdings.example",
+    "phone": "+7969237155",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 3515,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Neha Raghunathan",
+    "companyName": "Atlas Investments LLC",
+    "title": "Investment Director",
+    "email": "n.raghunathan@atlasinvestmentsllc.example",
+    "phone": "+91013814641",
+    "country": "India",
+    "city": "Delhi",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 709,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Nevsky Capital Partners",
+    "companyName": "Nevsky Capital Partners",
+    "title": "—",
+    "email": "contact@nevskycapitalpartners.example",
+    "phone": "+966846776127",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 3104,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap",
+      "management buyout"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Nevsky Private Equity",
+    "companyName": "Nevsky Private Equity",
+    "title": "—",
+    "email": "contact@nevskyprivateequity.example",
+    "phone": "+65319217534",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 638,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap",
+      "IPO"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Ngozi Balogun",
+    "companyName": "Pinnacle Ventures",
+    "title": "Managing Partner",
+    "email": "n.balogun@pinnacleventures.example",
+    "phone": "+234147826522",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Post-liquidity founder",
+    "industry": "Venture Capital",
+    "seniority": "executive",
+    "companySize": 256,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Northgate Capital Partners",
+    "companyName": "Northgate Capital Partners",
+    "title": "—",
+    "email": "contact@northgatecapitalpartners.example",
+    "phone": "+44883726882",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 3518,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Noura Al-Ghamdi",
+    "companyName": "Crescent Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "n.alghamdi@crescentrelocationpartners.example",
+    "phone": "+966205867612",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 218,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Obsidian Wealth Management",
+    "companyName": "Obsidian Wealth Management",
+    "title": "—",
+    "email": "contact@obsidianwealthmanagement.example",
+    "phone": "+20545511437",
+    "country": "Egypt",
+    "city": "Cairo",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 2911,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "wealth_manager"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Olga Morozova",
+    "companyName": "Aldar Industries",
+    "title": "Managing Director",
+    "email": "o.morozova@aldarindustries.example",
+    "phone": "+7727380454",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 3628,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Olga Morozova",
+    "companyName": "Rhein Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "o.morozova@rheinrelocationpartners.example",
+    "phone": "+7010400470",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 57,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Oliver Ashworth",
+    "companyName": "Ironwood Asset Management",
+    "title": "Board Member",
+    "email": "o.ashworth@ironwoodassetmanagement.example",
+    "phone": "+44534973509",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 1388,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Oliver Whitmore",
+    "companyName": "Orion Wealth Management",
+    "title": "Principal",
+    "email": "o.whitmore@orionwealthmanagement.example",
+    "phone": "+44741952729",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "Family office",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 603,
+    "wealthSignals": [
+      "second-home buyer",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Orion Industries",
+    "companyName": "Orion Industries",
+    "title": "—",
+    "email": "contact@orionindustries.example",
+    "phone": "+20403418105",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 610,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "Series D"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Orion Investments LLC",
+    "companyName": "Orion Investments LLC",
+    "title": "—",
+    "email": "contact@orioninvestmentsllc.example",
+    "phone": "+44845702175",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 2526,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Orion Investments LLC",
+    "companyName": "Orion Investments LLC",
+    "title": "—",
+    "email": "contact2@orioninvestmentsllc.example",
+    "phone": "+86760227391",
+    "country": "China",
+    "city": "Shenzhen",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 562,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Orion Private Equity",
+    "companyName": "Orion Private Equity",
+    "title": "—",
+    "email": "contact@orionprivateequity.example",
+    "phone": "+65179837711",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 3411,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Orion Ventures",
+    "companyName": "Orion Ventures",
+    "title": "—",
+    "email": "contact@orionventures.example",
+    "phone": "+49997605027",
+    "country": "Germany",
+    "city": "Munich",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 5718,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pacific Crest Capital Partners",
+    "companyName": "Pacific Crest Capital Partners",
+    "title": "—",
+    "email": "contact@pacificcrestcapitalpartners.example",
+    "phone": "+971389573732",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 98,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pacific Crest Industries",
+    "companyName": "Pacific Crest Industries",
+    "title": "—",
+    "email": "contact@pacificcrestindustries.example",
+    "phone": "+49700665858",
+    "country": "Germany",
+    "city": "Munich",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 3751,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition",
+      "management buyout"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Pavel Nevsky",
+    "companyName": "Silk Road Private Equity",
+    "title": "Principal",
+    "email": "p.nevsky@silkroadprivateequity.example",
+    "phone": "+7366564148",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2432,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Pavel Petrova",
+    "companyName": "Atlas Capital Partners",
+    "title": "Founder & CEO",
+    "email": "p.petrova@atlascapitalpartners.example",
+    "phone": "+7746701249",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "HNW individual",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 2916,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pinnacle Capital Partners",
+    "companyName": "Pinnacle Capital Partners",
+    "title": "—",
+    "email": "contact@pinnaclecapitalpartners.example",
+    "phone": "+91738124892",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 4897,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pinnacle Family Office",
+    "companyName": "Pinnacle Family Office",
+    "title": "—",
+    "email": "contact@pinnaclefamilyoffice.example",
+    "phone": "+49465885138",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 2943,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout",
+      "IPO"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "family_office"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pinnacle Investments LLC",
+    "companyName": "Pinnacle Investments LLC",
+    "title": "—",
+    "email": "contact@pinnacleinvestmentsllc.example",
+    "phone": "+1949665289",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 3889,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Pinnacle Ventures",
+    "companyName": "Pinnacle Ventures",
+    "title": "—",
+    "email": "contact@pinnacleventures.example",
+    "phone": "+234520988166",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 1777,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Priya Anand",
+    "companyName": "Granite Holdings",
+    "title": "Investment Director",
+    "email": "p.anand@graniteholdings.example",
+    "phone": "+91611193606",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 2086,
+    "wealthSignals": [
+      "second-home buyer",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Priya Anand",
+    "companyName": "Tamarind Wealth Management",
+    "title": "Chief Investment Officer",
+    "email": "p.anand@tamarindwealthmanagement.example",
+    "phone": "+91567838380",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "International investor",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 712,
+    "wealthSignals": [
+      "second-home buyer",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "International investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Priya Reddy",
+    "companyName": "Atlas Industries",
+    "title": "Investment Director",
+    "email": "p.reddy@atlasindustries.example",
+    "phone": "+91166940801",
+    "country": "India",
+    "city": "Mumbai",
+    "segment": "HNW individual",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2043,
+    "wealthSignals": [
+      "ultra high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Quartz Group",
+    "companyName": "Quartz Group",
+    "title": "—",
+    "email": "contact@quartzgroup.example",
+    "phone": "+33974132192",
+    "country": "France",
+    "city": "Nice",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 3035,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Redwood Private Equity",
+    "companyName": "Redwood Private Equity",
+    "title": "—",
+    "email": "contact@redwoodprivateequity.example",
+    "phone": "+65012253925",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 4024,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Reem Al-Harbi",
+    "companyName": "Sapphire Wealth Management",
+    "title": "Investment Director",
+    "email": "r.alharbi@sapphirewealthmanagement.example",
+    "phone": "+966990434322",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "HNW individual",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 1409,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Reem Al-Saud",
+    "companyName": "Solstice Asset Management",
+    "title": "Head of Investments",
+    "email": "r.alsaud@solsticeassetmanagement.example",
+    "phone": "+966848674540",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 1698,
+    "wealthSignals": [
+      "multi-property owner",
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Reem Al-Zahrani",
+    "companyName": "Atlas Ventures",
+    "title": "Board Member",
+    "email": "r.alzahrani@atlasventures.example",
+    "phone": "+966324054486",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Post-liquidity founder",
+    "industry": "Venture Capital",
+    "seniority": "executive",
+    "companySize": 2547,
+    "wealthSignals": [
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Robert Goldberg",
+    "companyName": "Orion Family Office",
+    "title": "Founder",
+    "email": "r.goldberg@orionfamilyoffice.example",
+    "phone": "+1600838391",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3192,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Rohan Mehta",
+    "companyName": "Meridian Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "r.mehta@meridianrelocationpartners.example",
+    "phone": "+91962446101",
+    "country": "India",
+    "city": "Bengaluru",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 205,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Rohan Nair",
+    "companyName": "Aldar Asset Management",
+    "title": "Chief Executive Officer",
+    "email": "r.nair@aldarassetmanagement.example",
+    "phone": "+91337686829",
+    "country": "India",
+    "city": "Mumbai",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 3042,
+    "wealthSignals": [
+      "multi-property owner",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Rui Goh",
+    "companyName": "Cobalt Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "r.goh@cobaltprivateclientadvisory.example",
+    "phone": "+65741744010",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 40,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Rui Ng",
+    "companyName": "Thames Ventures",
+    "title": "Founder",
+    "email": "r.ng@thamesventures.example",
+    "phone": "+65547437091",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "HNW individual",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 1278,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Rui Yeo",
+    "companyName": "Evergreen Industries",
+    "title": "Chief Investment Officer",
+    "email": "r.yeo@evergreenindustries.example",
+    "phone": "+65494794644",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Golden visa holder",
+    "industry": "Manufacturing",
+    "seniority": "c_suite",
+    "companySize": 1621,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Saeed Al-Nahyan",
+    "companyName": "Vermilion Investments LLC",
+    "title": "Managing Partner",
+    "email": "s.alnahyan@vermilioninvestmentsllc.example",
+    "phone": "+971856786399",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 1496,
+    "wealthSignals": [
+      "ultra high net worth",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Saeed Al-Nahyan",
+    "companyName": "Monarch Private Client Advisory",
+    "title": "Wealth Advisor",
+    "email": "s.alnahyan@monarchprivateclientadvisory.example",
+    "phone": "+971269108292",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 172,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Wealth Advisor",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Saeed Mansoori",
+    "companyName": "Sterling Industries",
+    "title": "Investment Director",
+    "email": "s.mansoori@sterlingindustries.example",
+    "phone": "+971036128877",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Family office",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 2614,
+    "wealthSignals": [
+      "multi-property owner",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Sapphire Group",
+    "companyName": "Sapphire Group",
+    "title": "—",
+    "email": "contact@sapphiregroup.example",
+    "phone": "+1689176368",
+    "country": "United States",
+    "city": "Los Angeles",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 1573,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Sapphire Investments LLC",
+    "companyName": "Sapphire Investments LLC",
+    "title": "—",
+    "email": "contact@sapphireinvestmentsllc.example",
+    "phone": "+7482754997",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 5939,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Al-Harbi",
+    "companyName": "Silk Road Family Office",
+    "title": "Head of Investments",
+    "email": "s.alharbi@silkroadfamilyoffice.example",
+    "phone": "+966810330112",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 2220,
+    "wealthSignals": [
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Al-Harbi",
+    "companyName": "Northgate Group",
+    "title": "Board Member",
+    "email": "s.alharbi@northgategroup.example",
+    "phone": "+966017464550",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 278,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Al-Mutairi",
+    "companyName": "Harbour Ventures",
+    "title": "Founder & CEO",
+    "email": "s.almutairi@harbourventures.example",
+    "phone": "+966019306314",
+    "country": "Saudi Arabia",
+    "city": "Jeddah",
+    "segment": "Family office",
+    "industry": "Venture Capital",
+    "seniority": "c_suite",
+    "companySize": 3097,
+    "wealthSignals": [
+      "liquidity event",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Family office",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Sara Al-Nahyan",
+    "companyName": "Keystone Real Estate Brokers",
+    "title": "Brokerage Principal",
+    "email": "s.alnahyan@keystonerealestatebrokers.example",
+    "phone": "+971487967440",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 76,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Brokerage Principal",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Al-Saud",
+    "companyName": "Ironwood Industries",
+    "title": "Portfolio Director",
+    "email": "s.alsaud@ironwoodindustries.example",
+    "phone": "+966443929594",
+    "country": "Saudi Arabia",
+    "city": "Riyadh",
+    "segment": "Golden visa holder",
+    "industry": "Manufacturing",
+    "seniority": "senior",
+    "companySize": 4002,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Sara Darwish",
+    "companyName": "Quartz Property Concierge",
+    "title": "Buyer's Agent",
+    "email": "s.darwish@quartzpropertyconcierge.example",
+    "phone": "+971653578953",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Intermediary",
+    "industry": "Real Estate",
+    "seniority": "advisor",
+    "companySize": 21,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Buyer's Agent",
+      "intermediary",
+      "Real Estate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Mansoori",
+    "companyName": "Tamarind Holdings",
+    "title": "Founder",
+    "email": "s.mansoori@tamarindholdings.example",
+    "phone": "+971730833829",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "HNW individual",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3553,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sara Nassar",
+    "companyName": "Solstice Family Office",
+    "title": "Founder",
+    "email": "s.nassar@solsticefamilyoffice.example",
+    "phone": "+971178490367",
+    "country": "United Arab Emirates",
+    "city": "Sharjah",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3469,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sarah Hartman",
+    "companyName": "Pacific Crest Private Equity",
+    "title": "Partner",
+    "email": "s.hartman@pacificcrestprivateequity.example",
+    "phone": "+1815057792",
+    "country": "United States",
+    "city": "Miami",
+    "segment": "Golden visa holder",
+    "industry": "Private Equity",
+    "seniority": "executive",
+    "companySize": 832,
+    "wealthSignals": [
+      "second-home buyer",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sergei Kuznetsov",
+    "companyName": "Cobalt Holdings",
+    "title": "Chairman",
+    "email": "s.kuznetsov@cobaltholdings.example",
+    "phone": "+7515911240",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 2461,
+    "wealthSignals": [
+      "liquidity event",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sergei Morozova",
+    "companyName": "Meridian Ventures",
+    "title": "Head of Investments",
+    "email": "s.morozova@meridianventures.example",
+    "phone": "+7486778154",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "International investor",
+    "industry": "Venture Capital",
+    "seniority": "senior",
+    "companySize": 3039,
+    "wealthSignals": [
+      "liquidity event",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sergei Orlova",
+    "companyName": "Monarch Private Equity",
+    "title": "Portfolio Director",
+    "email": "s.orlova@monarchprivateequity.example",
+    "phone": "+7894930123",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "Post-liquidity founder",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 2187,
+    "wealthSignals": [
+      "high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Post-liquidity founder",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sergei Smirnova",
+    "companyName": "Harbour Asset Management",
+    "title": "Managing Director",
+    "email": "s.smirnova@harbourassetmanagement.example",
+    "phone": "+7229529766",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Post-liquidity founder",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 2714,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sherif El-Sayed",
+    "companyName": "Atlas Holdings",
+    "title": "Partner",
+    "email": "s.elsayed@atlasholdings.example",
+    "phone": "+20120797368",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Family office",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 2178,
+    "wealthSignals": [
+      "high net worth",
+      "second-home buyer"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Family office",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Si Ying Koh",
+    "companyName": "Cedar Ventures",
+    "title": "Investment Director",
+    "email": "s.koh@cedarventures.example",
+    "phone": "+65951595878",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "senior",
+    "companySize": 1633,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Si Ying Lim",
+    "companyName": "Lighthouse Investments LLC",
+    "title": "Founder",
+    "email": "s.lim@lighthouseinvestmentsllc.example",
+    "phone": "+65554076192",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3150,
+    "wealthSignals": [
+      "second-home buyer",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Silk Road Wealth Management",
+    "companyName": "Silk Road Wealth Management",
+    "title": "—",
+    "email": "contact@silkroadwealthmanagement.example",
+    "phone": "+91061831496",
+    "country": "India",
+    "city": "Bengaluru",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 4651,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "wealth_manager"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Sultan Al-Rashid",
+    "companyName": "Tamarind Wealth Management",
+    "title": "Principal",
+    "email": "s.alrashid@tamarindwealthmanagement.example",
+    "phone": "+966363091113",
+    "country": "Saudi Arabia",
+    "city": "Dammam",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 346,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Summit Investments LLC",
+    "companyName": "Summit Investments LLC",
+    "title": "—",
+    "email": "contact@summitinvestmentsllc.example",
+    "phone": "+91776270228",
+    "country": "India",
+    "city": "Mumbai",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 4169,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Tamarind Group",
+    "companyName": "Tamarind Group",
+    "title": "—",
+    "email": "contact@tamarindgroup.example",
+    "phone": "+44001370362",
+    "country": "United Kingdom",
+    "city": "Manchester",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 5186,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Tamer Saleh",
+    "companyName": "Orion Family Office",
+    "title": "Chief Executive Officer",
+    "email": "t.saleh@orionfamilyoffice.example",
+    "phone": "+20788611807",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 3174,
+    "wealthSignals": [
+      "multi-property owner",
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Tariq Al-Maktoum",
+    "companyName": "Sterling Citizenship & Residency",
+    "title": "Golden Visa Consultant",
+    "email": "t.almaktoum@sterlingcitizenshipandreside.example",
+    "phone": "+971598874915",
+    "country": "United Arab Emirates",
+    "city": "Dubai",
+    "segment": "Intermediary",
+    "industry": "Financial Services",
+    "seniority": "advisor",
+    "companySize": 270,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden Visa Consultant",
+      "intermediary",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Tariq Nassar",
+    "companyName": "Vermilion Family Office",
+    "title": "Chairman",
+    "email": "t.nassar@vermilionfamilyoffice.example",
+    "phone": "+971839333770",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1111,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Tatiana Morozova",
+    "companyName": "Summit Private Equity",
+    "title": "Portfolio Director",
+    "email": "t.morozova@summitprivateequity.example",
+    "phone": "+7150478738",
+    "country": "Russia",
+    "city": "Moscow",
+    "segment": "HNW individual",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 3463,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "HNW individual",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Tunde Balogun",
+    "companyName": "Vermilion Wealth Management",
+    "title": "Portfolio Director",
+    "email": "t.balogun@vermilionwealthmanagement.example",
+    "phone": "+234019737601",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Golden visa holder",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 965,
+    "wealthSignals": [
+      "multi-property owner",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vantage Capital Partners",
+    "companyName": "Vantage Capital Partners",
+    "title": "—",
+    "email": "contact@vantagecapitalpartners.example",
+    "phone": "+7969124090",
+    "country": "Russia",
+    "city": "Saint Petersburg",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 325,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vantage Industries",
+    "companyName": "Vantage Industries",
+    "title": "—",
+    "email": "contact@vantageindustries.example",
+    "phone": "+971238281833",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 5734,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vantage Industries",
+    "companyName": "Vantage Industries",
+    "title": "—",
+    "email": "contact2@vantageindustries.example",
+    "phone": "+49550182119",
+    "country": "Germany",
+    "city": "Berlin",
+    "segment": "Institutional investor",
+    "industry": "Manufacturing",
+    "seniority": "organization",
+    "companySize": 861,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Manufacturing",
+      "institutional",
+      "conglomerate"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vantage Private Equity",
+    "companyName": "Vantage Private Equity",
+    "title": "—",
+    "email": "contact@vantageprivateequity.example",
+    "phone": "+44388154611",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 4282,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vermilion Asset Management",
+    "companyName": "Vermilion Asset Management",
+    "title": "—",
+    "email": "contact@vermilionassetmanagement.example",
+    "phone": "+91992514131",
+    "country": "India",
+    "city": "Hyderabad",
+    "segment": "Institutional investor",
+    "industry": "Financial Services",
+    "seniority": "organization",
+    "companySize": 5206,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "dividend recap"
+    ],
+    "keywords": [
+      "Financial Services",
+      "institutional",
+      "asset_manager"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vermilion Capital Partners",
+    "companyName": "Vermilion Capital Partners",
+    "title": "—",
+    "email": "contact@vermilioncapitalpartners.example",
+    "phone": "+971945343746",
+    "country": "United Arab Emirates",
+    "city": "Dubai",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "organization",
+    "companySize": 5351,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO",
+      "dividend recap"
+    ],
+    "keywords": [
+      "Private Equity",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vermilion Holdings",
+    "companyName": "Vermilion Holdings",
+    "title": "—",
+    "email": "contact@vermilionholdings.example",
+    "phone": "+33227148332",
+    "country": "France",
+    "city": "Paris",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "organization",
+    "companySize": 524,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Investment Management",
+      "institutional",
+      "holding"
+    ]
+  },
+  {
+    "targetType": "company",
+    "displayName": "Vermilion Ventures",
+    "companyName": "Vermilion Ventures",
+    "title": "—",
+    "email": "contact@vermilionventures.example",
+    "phone": "+65461882500",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "organization",
+    "companySize": 2855,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Venture Capital",
+      "institutional",
+      "fund"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Wei Ming Sim",
+    "companyName": "Sapphire Asset Management",
+    "title": "Board Member",
+    "email": "w.sim@sapphireassetmanagement.example",
+    "phone": "+65101688419",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Golden visa holder",
+    "industry": "Financial Services",
+    "seniority": "executive",
+    "companySize": 771,
+    "wealthSignals": [
+      "post-liquidity founder",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "Series D"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "William Bennett",
+    "companyName": "Quartz Asset Management",
+    "title": "Portfolio Director",
+    "email": "w.bennett@quartzassetmanagement.example",
+    "phone": "+44350826554",
+    "country": "United Kingdom",
+    "city": "London",
+    "segment": "Family office",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 2504,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "William Harrington",
+    "companyName": "Ironwood Wealth Management",
+    "title": "Head of Investments",
+    "email": "w.harrington@ironwoodwealthmanagement.example",
+    "phone": "+44957115907",
+    "country": "United Kingdom",
+    "city": "Edinburgh",
+    "segment": "International investor",
+    "industry": "Financial Services",
+    "seniority": "senior",
+    "companySize": 3506,
+    "wealthSignals": [
+      "second-home buyer",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "Series C"
+    ],
+    "keywords": [
+      "International investor",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Xin Yi Ng",
+    "companyName": "Silk Road Ventures",
+    "title": "Investment Director",
+    "email": "x.ng@silkroadventures.example",
+    "phone": "+65474144834",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Institutional investor",
+    "industry": "Venture Capital",
+    "seniority": "senior",
+    "companySize": 1009,
+    "wealthSignals": [
+      "second-home buyer",
+      "multi-property owner"
+    ],
+    "fundingSignals": [
+      "IPO"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Venture Capital"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Xiu Chen",
+    "companyName": "Vermilion Asset Management",
+    "title": "Founder & CEO",
+    "email": "x.chen@vermilionassetmanagement.example",
+    "phone": "+86028003958",
+    "country": "China",
+    "city": "Hong Kong",
+    "segment": "HNW individual",
+    "industry": "Financial Services",
+    "seniority": "c_suite",
+    "companySize": 2538,
+    "wealthSignals": [
+      "liquidity event",
+      "second-home buyer"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "HNW individual",
+      "Financial Services"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yasmin Fahmy",
+    "companyName": "Summit Family Office",
+    "title": "Investment Director",
+    "email": "y.fahmy@summitfamilyoffice.example",
+    "phone": "+20699844565",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 718,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yasmin Mansour",
+    "companyName": "Nevsky Capital Partners",
+    "title": "Principal",
+    "email": "y.mansour@nevskycapitalpartners.example",
+    "phone": "+20588552318",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Family office",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 1410,
+    "wealthSignals": [
+      "high net worth",
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Family office",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yasmin Rashwan",
+    "companyName": "Atlas Group",
+    "title": "Partner",
+    "email": "y.rashwan@atlasgroup.example",
+    "phone": "+20850053898",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "International investor",
+    "industry": "Manufacturing",
+    "seniority": "executive",
+    "companySize": 1902,
+    "wealthSignals": [
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Manufacturing"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yasmin Zaki",
+    "companyName": "Harbour Investments LLC",
+    "title": "Chief Executive Officer",
+    "email": "y.zaki@harbourinvestmentsllc.example",
+    "phone": "+20909494670",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "c_suite",
+    "companySize": 1024,
+    "wealthSignals": [
+      "multi-property owner",
+      "liquidity event"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yusuf Abubakar",
+    "companyName": "Atlas Family Office",
+    "title": "Board Member",
+    "email": "y.abubakar@atlasfamilyoffice.example",
+    "phone": "+234489252705",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 52,
+    "wealthSignals": [
+      "second-home buyer",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "secondary sale"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yusuf Adeyemi",
+    "companyName": "Silk Road Investments LLC",
+    "title": "Partner",
+    "email": "y.adeyemi@silkroadinvestmentsllc.example",
+    "phone": "+234631163528",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Post-liquidity founder",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 2240,
+    "wealthSignals": [
+      "post-liquidity founder"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Post-liquidity founder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Yusuf Eze",
+    "companyName": "Falcon Private Equity",
+    "title": "Head of Investments",
+    "email": "y.eze@falconprivateequity.example",
+    "phone": "+234852928997",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Institutional investor",
+    "industry": "Private Equity",
+    "seniority": "senior",
+    "companySize": 1873,
+    "wealthSignals": [
+      "high net worth",
+      "liquidity event"
+    ],
+    "fundingSignals": [
+      "management buyout"
+    ],
+    "keywords": [
+      "Institutional investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Zainab Adeyemi",
+    "companyName": "Albion Family Office",
+    "title": "Portfolio Director",
+    "email": "z.adeyemi@albionfamilyoffice.example",
+    "phone": "+234533482159",
+    "country": "Nigeria",
+    "city": "Abuja",
+    "segment": "Golden visa holder",
+    "industry": "Investment Management",
+    "seniority": "senior",
+    "companySize": 1463,
+    "wealthSignals": [
+      "high net worth",
+      "ultra high net worth"
+    ],
+    "fundingSignals": [
+      "acquisition"
+    ],
+    "keywords": [
+      "Golden visa holder",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Zainab Adeyemi",
+    "companyName": "Sapphire Investments LLC",
+    "title": "Chief Financial Officer",
+    "email": "z.adeyemi@sapphireinvestmentsllc.example",
+    "phone": "+234527097240",
+    "country": "Nigeria",
+    "city": "Lagos",
+    "segment": "Institutional investor",
+    "industry": "Investment Management",
+    "seniority": "executive",
+    "companySize": 2045,
+    "wealthSignals": [
+      "multi-property owner"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "Institutional investor",
+      "Investment Management"
+    ]
+  },
+  {
+    "targetType": "person",
+    "displayName": "Zhen Ong",
+    "companyName": "Meridian Private Equity",
+    "title": "Chief Executive Officer",
+    "email": "z.ong@meridianprivateequity.example",
+    "phone": "+65174014610",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "International investor",
+    "industry": "Private Equity",
+    "seniority": "c_suite",
+    "companySize": 625,
+    "wealthSignals": [
+      "high net worth"
+    ],
+    "fundingSignals": [],
+    "keywords": [
+      "International investor",
+      "Private Equity"
+    ]
+  },
+  {
+    "targetType": "intermediary",
+    "displayName": "Zhen Teo",
+    "companyName": "Thames Relocation Partners",
+    "title": "Relocation Advisor",
+    "email": "z.teo@thamesrelocationpartners.example",
+    "phone": "+65060733113",
+    "country": "Singapore",
+    "city": "Singapore",
+    "segment": "Intermediary",
+    "industry": "Hospitality",
+    "seniority": "advisor",
+    "companySize": 20,
+    "wealthSignals": [],
+    "fundingSignals": [],
+    "keywords": [
+      "Relocation Advisor",
+      "intermediary",
+      "Hospitality"
+    ]
+  }
+]

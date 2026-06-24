@@ -68,6 +68,8 @@ import type {
   BatchActivityAction,
   SequenceRow,
   SequenceMode,
+  SampleProspect,
+  SampleMessage,
 } from './types';
 import type { ProspectingStreamStatus } from './useProspectingRealtime';
 
@@ -636,6 +638,10 @@ export function RunBatchControl({
   clusterName,
   busy,
   onRun,
+  onPreview,
+  previewBusy = false,
+  previewLoaded = false,
+  hypothesisConfirmed = false,
 }: {
   /** The cluster currently selected in the Own_Subject picker (page state). */
   clusterId: string | null;
@@ -644,6 +650,19 @@ export function RunBatchControl({
   busy: boolean;
   /** Kicks off the run; the caller surfaces 400/409 via the toast pattern. */
   onRun: (subject: BatchSubject, targetCount: number) => void;
+  /**
+   * Runs the shared pre-run preview for the CURRENT subject (Req 14.1). The
+   * caller renders the comparables / hypothesis / sample prospects / sample
+   * messages it returns. Passing the same subject the run uses keeps the
+   * previewed and launched profiles identical (Req 14.6, 14.7).
+   */
+  onPreview: (subject: BatchSubject) => void;
+  /** True while a preview request is in flight. */
+  previewBusy?: boolean;
+  /** True once a preview has loaded — promotes "Run batch" to the primary CTA. */
+  previewLoaded?: boolean;
+  /** True once the rep has a confirmed/edited buyer hypothesis to launch with. */
+  hypothesisConfirmed?: boolean;
 }) {
   // Subject mode: reuse the picked cluster, or describe an ICP filter inline.
   const [mode, setMode] = useState<'cluster' | 'icp'>('cluster');
@@ -657,14 +676,18 @@ export function RunBatchControl({
 
   const n = Number(targetCount);
   const nValid = Number.isInteger(n) && n > 0;
-  const canRun = nValid && (mode === 'icp' || Boolean(clusterId));
+  // A subject is ready to analyze/run when a cluster is picked or an ICP is
+  // described; the run additionally needs a valid target count N.
+  const subjectReady = mode === 'icp' || Boolean(clusterId);
+  const canRun = nValid && subjectReady;
+  const canPreview = subjectReady;
 
-  const submit = () => {
+  // Build the subject ONCE so the preview and the run always agree (Req 14.6).
+  const buildSubject = (): BatchSubject => {
     if (mode === 'cluster') {
       // Reuse the picked cluster as the subject (clusterId may be null — the
       // route then rejects with a 400 invalid_subject the caller will toast).
-      onRun({ kind: 'cluster', ...(clusterId ? { clusterId } : {}) }, n);
-      return;
+      return { kind: 'cluster', ...(clusterId ? { clusterId } : {}) };
     }
     const icpFilter: Record<string, unknown> = { targetType: icpTargetType };
     const geo = splitList(geography);
@@ -673,8 +696,11 @@ export function RunBatchControl({
     if (geo.length) icpFilter.geography = geo;
     if (tit.length) icpFilter.titles = tit;
     if (ind.length) icpFilter.industries = ind;
-    onRun({ kind: 'icp', icpFilter }, n);
+    return { kind: 'icp', icpFilter };
   };
+
+  const submit = () => onRun(buildSubject(), n);
+  const preview = () => onPreview(buildSubject());
 
   return (
     <section className="rounded-xl border border-ora-gold-dark/30 bg-ora-gold/5">
@@ -783,12 +809,41 @@ export function RunBatchControl({
               placeholder="10"
             />
           </label>
+          {/* Step 1 of the cross-mode flow: analyze & preview BEFORE running, the
+              same comparables → buyer hypothesis → prospects → outreach steps the
+              guided flow shows (Req 14.1, 14.7). */}
+          <button
+            type="button"
+            className={previewLoaded ? btnGhost : btnPrimary}
+            disabled={previewBusy || busy || !canPreview}
+            onClick={preview}
+            title="Preview comparables, the buyer profile, sample prospects, and sample messages before running"
+          >
+            {previewBusy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {previewLoaded ? 'Re-analyze' : 'Analyze & preview'}
+          </button>
+          {/* Terminal action — differs per mode (Req 14.7); launches with the
+              rep-confirmed buyer hypothesis from the preview (Req 14.6). */}
           <button type="button" className={btnPrimary} disabled={busy || !canRun} onClick={submit}>
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
             {busy ? 'Starting…' : 'Run batch'}
           </button>
           {!nValid && (
             <span className="text-[11px] text-ora-error">Enter a positive whole number.</span>
+          )}
+          {nValid && !previewLoaded && canPreview && (
+            <span className="text-[11px] text-ora-muted">
+              Tip: analyze &amp; preview first to fine-tune the run.
+            </span>
+          )}
+          {previewLoaded && hypothesisConfirmed && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-green-700">
+              <Check className="h-3 w-3" /> Run uses your previewed buyer profile.
+            </span>
           )}
         </div>
       </div>
@@ -1246,11 +1301,20 @@ export function HypothesisEditor({
   busy,
   onSave,
   onSearch,
+  searchLabel = 'Find prospects',
 }: {
   hypothesis: BuyerHypothesis;
   busy: boolean;
   onSave: (h: BuyerHypothesis) => void;
-  onSearch: () => void;
+  /**
+   * Triggers the next step. Receives the rep's edited hypothesis so callers that
+   * don't persist it server-side (the autonomous pre-run preview) can recompute
+   * from the edited profile (Req 14.5). The guided flow ignores the argument and
+   * reads the persisted hypothesis instead — fully backward compatible.
+   */
+  onSearch: (h?: BuyerHypothesis) => void;
+  /** Label for the primary action — kept consistent across modes by default. */
+  searchLabel?: string;
 }) {
   const [draft, setDraft] = useState<BuyerHypothesis>(hypothesis);
   const editList = (key: keyof BuyerHypothesis) => (value: string) =>
@@ -1303,11 +1367,11 @@ export function HypothesisEditor({
           disabled={busy}
           onClick={() => {
             onSave(draft);
-            onSearch();
+            onSearch(draft);
           }}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-          Find prospects
+          {searchLabel}
         </button>
       </div>
     </div>
@@ -1421,6 +1485,154 @@ function providerStatusBanner(
     );
   }
   return null;
+}
+
+// ── 4b. Pre-run preview — sample prospects + sample messages (Req 14) ─────────
+//
+// The autonomous batch (and the sequence builder) shows the SAME analyze &
+// preview steps the guided flow shows before it runs: market comparables (reuses
+// `ComparablesPanel`), an editable buyer hypothesis (reuses `HypothesisEditor`),
+// a read-only sample of matching prospects, and a few grounded sample messages.
+// These two panels render the read-only halves. Both are ILLUSTRATIVE ONLY —
+// nothing is recorded as a Target, queued, or sent (Req 14.3, 14.4, CC-HITL).
+// Presentational only; the preview fetch lives in `page.tsx`.
+
+/** A clear "representative sample" banner shown when the trial limit was hit (Req 14.8). */
+function RepresentativeNote() {
+  return (
+    <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800 ring-1 ring-amber-200">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>
+        <strong>Representative sample.</strong> The live buyer source is on a trial
+        tier and hit its quota, so these are illustrative profiles (cached — you may
+        see the same ones again). The real run uses live data when the quota resets.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A read-only sample of the prospects the batch WOULD reach, drawn from the same
+ * provider search the run uses but capped to a small sample size (Req 14.2).
+ * There is deliberately NO per-row "Record" action — the sample is illustrative
+ * and creates no Targets / Queued_Items and consumes no Send_Cap (Req 14.3).
+ * Privacy-safe: phone is shown only as a salted hash, never raw (CC-Privacy).
+ */
+export function SampleProspectsPanel({
+  prospects,
+  representative = false,
+}: {
+  prospects: SampleProspect[];
+  /** True when the sample is representative (provider trial limit reached). */
+  representative?: boolean;
+}) {
+  if (prospects.length === 0) {
+    return (
+      <p className="text-xs text-ora-muted">
+        No sample prospects yet. Press “Analyze &amp; preview” above to see a sample
+        of who this batch would reach — illustrative only, nothing is recorded.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {representative && <RepresentativeNote />}
+      <p className="flex items-start gap-1.5 text-[11px] text-ora-muted">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ora-gold-dark" />
+        A read-only sample — these are <strong className="mx-1">not</strong> recorded as
+        targets and nothing is sent. The batch finds and drafts for real prospects
+        once you press “Run batch”.
+      </p>
+      <ul className="divide-y divide-ora-sand/40">
+        {prospects.map((p, i) => {
+          const key = p.email || `${p.displayName ?? 'prospect'}-${i}`;
+          return (
+            <li key={key} className="flex items-start justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-ora-charcoal">
+                  {p.displayName || p.companyName || 'Unnamed prospect'}
+                </div>
+                <div className="truncate text-[11px] text-ora-muted">
+                  {[p.title, p.companyName, p.country].filter(Boolean).join(' · ') || p.targetType}
+                  {' · '}
+                  <span className="uppercase tracking-wide">{p.sourceProvider}</span>
+                </div>
+              </div>
+              <span
+                className="shrink-0 rounded-full bg-ora-cream-dark px-2 py-0.5 text-[10px] font-medium text-ora-charcoal-light"
+                title="Lawful basis for cold contact (CC-Provenance)"
+              >
+                {p.lawfulBasis}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A read-only preview of a few example AI-drafted outreach messages, grounded in
+ * the SQL Market_Comparables (Req 14.4). Previews ONLY — never persisted, queued,
+ * or sent (CC-HITL). Lets the rep judge tone and grounding before running.
+ */
+export function SampleMessagesPanel({ messages }: { messages: SampleMessage[] }) {
+  if (messages.length === 0) {
+    return (
+      <p className="text-xs text-ora-muted">
+        No sample messages yet. Press “Analyze &amp; preview” above to see example
+        outreach grounded in the comparables — previews only, nothing is sent.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="flex items-start gap-1.5 text-[11px] text-ora-muted">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ora-gold-dark" />
+        Example drafts to judge tone and grounding — previews only, never queued or
+        sent. The batch drafts fresh, personalized outreach for each prospect.
+      </p>
+      {messages.map((m, i) => (
+        <article key={i} className="rounded-lg border border-ora-sand/60 bg-ora-cream-light/40 p-3">
+          <header className="flex flex-wrap items-center gap-2 text-[11px] text-ora-muted">
+            <span className="inline-flex items-center gap-1 font-medium text-ora-charcoal-light">
+              <Send className="h-3 w-3 text-ora-gold-dark" /> {m.recipient}
+            </span>
+            <span className="rounded-full bg-ora-sand/40 px-2 py-0.5 uppercase tracking-wide">
+              {m.channel}
+            </span>
+            <span className="rounded-full bg-ora-sand/40 px-2 py-0.5 uppercase tracking-wide">
+              {m.language}
+            </span>
+          </header>
+          {m.subject && (
+            <div className="mt-2 text-sm font-medium text-ora-charcoal">{m.subject}</div>
+          )}
+          <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-ora-charcoal-light">
+            {m.body}
+          </p>
+          {m.grounding.length > 0 && (
+            <details className="mt-2 rounded-lg border border-ora-sand/50 bg-ora-white p-2">
+              <summary className="cursor-pointer text-[11px] font-medium text-ora-charcoal">
+                Grounding ({m.grounding.length}) — SQL-sourced
+              </summary>
+              <ul className="mt-1.5 space-y-1 text-[11px] text-ora-charcoal-light">
+                {m.grounding.map((g, gi) => (
+                  <li key={gi}>
+                    · {g.claim}{' '}
+                    <span className="text-ora-muted">
+                      [{g.sourceTable} · {new Date(g.asOf).toLocaleDateString()}]
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </article>
+      ))}
+    </div>
+  );
 }
 
 // ── 5. Recorded targets ─────────────────────────────────────────────────────

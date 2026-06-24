@@ -29,6 +29,7 @@
 import { createHash } from "node:crypto";
 
 import type { ProspectFilter } from "../providers";
+import type { BuyerHypothesis } from "../hypothesis";
 
 /**
  * The subject of a Batch_Run: either a Bayn cluster reference or an ICP filter
@@ -52,6 +53,18 @@ export interface BatchSubject {
   briefId?: string;
   /** Set when `kind === "icp"` — reuses the providers' `ProspectFilter`. */
   icpFilter?: ProspectFilter;
+  /**
+   * Optional rep-tuned Buyer_Hypothesis carried from the pre-run preview (§8,
+   * Req 14.6). When present the Batch_Run discovers / scores against it and
+   * grounds its drafts in the previewed profile instead of re-deriving blind;
+   * when absent the handler derives its own (backward compatible).
+   *
+   * This is a TUNING INPUT, not part of the subject's IDENTITY — it is therefore
+   * deliberately EXCLUDED from {@link deriveRerunKey} (see below) so two runs
+   * over the same subject collapse to the same `rerun_key` whether or not a
+   * hypothesis was passed, preserving idempotent re-run semantics (Req 9.1).
+   */
+  buyerHypothesis?: BuyerHypothesis;
 }
 
 /** Input to {@link deriveRerunKey}. */
@@ -104,9 +117,17 @@ function canonicalize(value: unknown): unknown {
  * enqueued job's `job_key`.
  */
 export function deriveRerunKey(input: DeriveRerunKeyInput): string {
+  // The `buyerHypothesis` is a TUNING input layered on top of the subject, not
+  // part of the subject's identity (Req 14.6). Strip it before canonicalizing so
+  // a run launched with a tuned hypothesis and an equivalent run launched without
+  // one (or with a different one) over the SAME cluster / ICP subject derive the
+  // SAME `rerun_key` — keeping the re-run idempotent (Req 9.1). The identity of a
+  // Batch_Run is its owner + what it targets, never how its copy was tuned.
+  const { buyerHypothesis: _tuning, ...identitySubject } = input.subject;
+
   const canonical = JSON.stringify({
     ownerRep: input.ownerRep,
-    subject: canonicalize(input.subject),
+    subject: canonicalize(identitySubject),
   });
 
   const digest = createHash("sha256").update(canonical).digest("hex");

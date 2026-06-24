@@ -18,11 +18,13 @@ import {
   targets,
 } from "../../schema";
 import { generateCompletion } from "../../ai/gateway";
+import { computePhoneHash, normalizePhoneToE164 } from "../../voice/identity";
 import { checkCrmForContact } from "../../prospecting/crm-check";
 import {
   deriveRerunKey,
   type BatchSubject,
 } from "../../prospecting/batch/rerun-key";
+import { buyerHypothesisSchema } from "../../prospecting/hypothesis";
 import {
   capExhausted,
   recordSend,
@@ -373,6 +375,161 @@ function mergeSpec(resolved: BriefSpec, override: Partial<BriefSpec>): BriefSpec
     merged.features = [...new Set([...merged.features, ...overrideFeatures])];
   }
   return merged;
+}
+
+// ── Pre-run preview (shared surface, §8, Req 14) ─────────────────────────────
+//
+// The autonomous Batch_Run, the guided one-prospect flow, and the Sequence
+// builder all show the SAME steps before anything runs — subject →
+// Market_Comparables → editable Buyer_Hypothesis → sample prospects → sample
+// messages — so a rep tunes the run instead of launching blind (Req 14.1–14.5,
+// 14.7). The shared `POST /api/prospecting/preview` surface below is the single
+// source of truth: it is the same audited `dispatchTool` reads the guided flow
+// performs (`find_comparables`, `prospect_search`), repackaged as a READ-ONLY
+// preview. It writes nothing — no `targets`, no `prospecting_queue_items`, no
+// `outreach_drafts` — consumes no Send_Cap, and sends nothing (Property 20).
+
+/** How many candidate prospects the pre-run preview samples (Req 14.2). */
+const PREVIEW_SAMPLE_SIZE = 6;
+/** How many of the sampled candidates get an illustrative Sample_Message (Req 14.4). */
+const PREVIEW_MESSAGE_COUNT = 3;
+
+/** A privacy-safe, read-only sample prospect for the preview (Req 14.2, CC-Privacy). */
+interface SampleProspect {
+  targetType: "person" | "company" | "intermediary";
+  displayName?: string;
+  companyName?: string;
+  title?: string;
+  email?: string;
+  country?: string;
+  /** Salted hash only — the raw provider phone is NEVER surfaced (CC-Privacy). */
+  phoneHash: string | null;
+  sourceProvider: string;
+  lawfulBasis: string;
+}
+
+/**
+ * Map a raw provider candidate onto a privacy-safe {@link SampleProspect}: the
+ * transient raw phone is hashed to its salted `phoneHash` (mirroring
+ * `record_target`) and dropped, so no raw phone ever leaves this surface
+ * (CC-Privacy, Req 10.4). Nothing is persisted.
+ */
+function candidateToSampleProspect(c: {
+  targetType: "person" | "company" | "intermediary";
+  displayName?: string;
+  companyName?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  country?: string;
+  sourceProvider: string;
+  lawfulBasis: string;
+}): SampleProspect {
+  let phoneHash: string | null = null;
+  if (c.phone !== undefined && c.phone.trim() !== "") {
+    try {
+      phoneHash = computePhoneHash(normalizePhoneToE164(c.phone));
+    } catch {
+      phoneHash = null;
+    }
+  }
+  return {
+    targetType: c.targetType,
+    displayName: c.displayName,
+    companyName: c.companyName,
+    title: c.title,
+    email: c.email,
+    country: c.country,
+    phoneHash,
+    sourceProvider: c.sourceProvider,
+    lawfulBasis: c.lawfulBasis,
+  };
+}
+
+/** A previews-only example outreach message (never persisted, queued, or sent). */
+interface SampleMessage {
+  recipient: string;
+  channel: "email";
+  language: "en" | "ar";
+  subject: string;
+  body: string;
+  /** The SQL-sourced comparable claims the body is grounded in (Req 14.4). */
+  grounding: Array<{ claim: string; sourceTable: string; asOf: string }>;
+}
+
+/**
+ * Compose ONE illustrative Sample_Message for a sample candidate, grounded in
+ * the SQL `Market_Comparables` (Req 14.4). This mirrors the grounded composition
+ * the guided `compose-draft` route performs (same model gateway, same
+ * cite-only-given-figures rule) but is a PREVIEW: it is returned inline and is
+ * NEVER persisted as an `outreach_draft`, queued, or sent (CC-HITL, Property 20).
+ */
+async function composeSampleMessage(
+  candidate: SampleProspect,
+  facts: string[],
+  grounding: Array<{ claim: string; sourceTable: string; asOf: string }>,
+  language: "en" | "ar"
+): Promise<SampleMessage> {
+  const profile =
+    [candidate.displayName, candidate.title, candidate.companyName, candidate.country]
+      .filter(Boolean)
+      .join(" · ") || "a high-net-worth prospect";
+  const comparableLines = facts.length
+    ? facts.join("\n- ")
+    : "(no market comps available yet)";
+
+  const system =
+    `You are a senior Dubai prime-residential sales advisor writing a concise, warm, ` +
+    `professional first-touch email to a prospective buyer, on behalf of ORA — a ` +
+    `Dubai-based prime-residential developer behind the Bayn master community. ` +
+    `Personalize it to the recipient using their name, role/company and segment. ` +
+    `You MAY cite ONLY the figures given under "Comparable evidence" — never invent ` +
+    `numbers or names. ` +
+    (language === "ar" ? "Write entirely in Arabic. " : "Write in English. ") +
+    `Keep the body around 120–160 words. Write finished copy: NO placeholders, NO ` +
+    `square brackets. End with "Warm regards," on its own line. ` +
+    `Return STRICT JSON only: {"subject": string, "body": string}.`;
+  const user =
+    `Recipient: ${profile}.\n` +
+    `Comparable evidence (recent nearby SOLD homes, cite ONLY as market proof, ` +
+    `verbatim figures):\n- ` +
+    comparableLines +
+    `\n\nWrite a personalized subject line and email body.`;
+
+  try {
+    const raw = await generateCompletion(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      { temperature: 0.7, maxTokens: 700 }
+    );
+    const parsed = parseDraftJson(raw);
+    return {
+      recipient: profile,
+      channel: "email",
+      language,
+      subject: (parsed.subject ?? "").trim(),
+      body: (parsed.body ?? raw).trim(),
+      grounding,
+    };
+  } catch {
+    // A preview never dead-ends on a model hiccup: return a clearly-grounded
+    // representative example so the rep can still judge tone (Req 14.8 spirit).
+    return {
+      recipient: profile,
+      channel: "email",
+      language,
+      subject: "An opportunity in the Bayn community",
+      body:
+        `Dear ${candidate.displayName ?? "there"},\n\n` +
+        `I'm reaching out from ORA regarding opportunities in our Bayn master ` +
+        `community.` +
+        (facts.length ? ` ${facts[0]}.` : "") +
+        `\n\nWarm regards,`,
+      grounding,
+    };
+  }
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────────
@@ -1431,6 +1588,229 @@ export const prospectingRoutes = new Elysia({
     return result.result; // send_outreach publishes sent / suppressed itself
   })
 
+  // ── Pre-run preview (shared surface, §8, Req 14.1–14.5, 14.8) ───────────────
+
+  // POST /api/prospecting/preview — the subject-scoped, owner-gated, READ-ONLY
+  // pre-run analysis shared by all three modes (guided, autonomous, and the
+  // sequence builder's `/sequences/:id/preview`, which delegates here). Given
+  // `{ subject, buyerHypothesis? }` it: (a) resolves the subject, pulls SQL
+  // `Market_Comparables` and derives an editable `Buyer_Hypothesis` via the same
+  // `find_comparables` / `deriveHypothesis` path the guided flow uses; (b)
+  // dispatches `prospect_search` CAPPED to the sample size and returns a
+  // read-only, `phoneHash`-only sample; (c) composes a few illustrative
+  // `Sample_Messages` grounded in the comparables and returns them inline.
+  //
+  // It writes NOTHING — no `targets`, no `prospecting_queue_items`, no
+  // `outreach_drafts` — consumes NO Send_Cap, and sends NOTHING (Property 20,
+  // Req 14.3, 14.4). A re-preview with an edited `buyerHypothesis` recomputes the
+  // sample + messages from the edited profile (Req 14.5). The representative /
+  // trial-limit fallback is surfaced unchanged (Req 14.8). Every market /
+  // provider read is an AUDITED `dispatchTool` call (CC-Audit, CC-Reuse).
+  .post("/preview", async ({ body, set, ...ctx }) => {
+    const userId = (ctx as { userId?: string }).userId;
+    if (!userId) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
+
+    const payload = (body ?? {}) as {
+      subject?: Partial<BatchSubject>;
+      buyerHypothesis?: ReturnType<typeof deriveHypothesis>;
+    };
+
+    // ── Validate the subject (Req 14.1; same contract as POST /batches §1) ────
+    const rawSubject = payload.subject ?? {};
+    const hasCluster = Boolean(rawSubject.clusterId);
+    const hasIcp = Boolean(rawSubject.icpFilter);
+    const hasBrief = Boolean(rawSubject.briefId);
+    if (!hasCluster && !hasIcp && !hasBrief) {
+      set.status = 400;
+      return {
+        error:
+          "A preview requires a resolvable subject: a cluster reference (clusterId), an ICP filter (icpFilter), or a brief (briefId).",
+        code: "invalid_subject",
+      };
+    }
+
+    // ── (a) Resolve subject → Comparison_Spec ─────────────────────────────────
+    // briefId wins (reuse its persisted spec/hypothesis), then an own-catalog
+    // cluster ref (resolved via the pure SQL resolver), else an ICP filter from
+    // which we derive a best-effort spec for comparables grounding.
+    let spec: BriefSpec | Record<string, unknown> = {};
+    let persistedHypothesis: ReturnType<typeof deriveHypothesis> | null = null;
+    if (hasBrief) {
+      const [brief] = await db
+        .select({
+          spec: prospectingBriefs.spec,
+          buyerHypothesis: prospectingBriefs.buyerHypothesis,
+        })
+        .from(prospectingBriefs)
+        .where(eq(prospectingBriefs.id, rawSubject.briefId as string))
+        .limit(1);
+      if (!brief) {
+        set.status = 404;
+        return { error: "Brief not found", code: "subject_not_found" };
+      }
+      spec = (brief.spec as Record<string, unknown>) ?? {};
+      persistedHypothesis =
+        (brief.buyerHypothesis as ReturnType<typeof deriveHypothesis> | null) ??
+        null;
+    } else if (hasCluster) {
+      const resolved = await resolveComparisonSpec(db, {
+        clusterId: rawSubject.clusterId,
+      });
+      spec = resolved.spec;
+    } else {
+      // ICP subject: derive a light spec from the filter so the comparables read
+      // and the message grounding have an area/segment to anchor on.
+      const icp = rawSubject.icpFilter as ProspectFilter | undefined;
+      const geo = icp?.geography?.[0];
+      const keyword = icp?.keywords?.[0];
+      spec = {
+        ...(geo ? { area: geo } : {}),
+        ...(keyword ? { segment: keyword } : {}),
+        features: [],
+      };
+    }
+
+    // ── (a cont.) SQL Market_Comparables via the audited tool ─────────────────
+    const compResult = await dispatchTool(
+      db,
+      "find_comparables",
+      {
+        brief: {
+          ...(rawSubject.clusterId ? { clusterId: rawSubject.clusterId } : {}),
+          spec,
+        },
+        limit: 25,
+      },
+      { actor: PROSPECTING_AGENT_ACTOR }
+    );
+
+    let comparables: ComparableRow[] = [];
+    let marketDataNote: "trial_limit" | null = null;
+    let marketDataSource: "live" | "demo" | null = null;
+    if (!compResult.ok) {
+      // Trial-tier market source tapped out — never dead-end; substitute
+      // deterministic representative comparables so the hypothesis + samples
+      // still have concrete grounding (Req 14.8).
+      comparables = buildDemoComparables(spec as BriefSpec) as unknown as ComparableRow[];
+      marketDataNote = "trial_limit";
+      marketDataSource = "demo";
+    } else {
+      const comp = compResult.result as {
+        comparables: ComparableRow[];
+        unconfigured: boolean;
+      };
+      comparables = comp.comparables;
+      if (comparables.length === 0) {
+        comparables = buildDemoComparables(spec as BriefSpec) as unknown as ComparableRow[];
+        marketDataNote = "trial_limit";
+        marketDataSource = "demo";
+      } else {
+        marketDataSource = "live";
+      }
+    }
+
+    // ── (a cont.) Editable Buyer_Hypothesis ───────────────────────────────────
+    // The rep-edited hypothesis (re-preview, Req 14.5) wins; else the persisted
+    // brief hypothesis; else derive a fresh one from the comparables.
+    const hypothesis =
+      payload.buyerHypothesis ??
+      persistedHypothesis ??
+      deriveHypothesis(comparables);
+
+    // ── (b) Sample prospects — prospect_search CAPPED to the sample size ──────
+    // No `record_target`, so no `targets` row is written and no Send_Cap is
+    // touched (Req 14.3). An explicit ICP filter on the subject wins; otherwise
+    // build one from the (edited) hypothesis. The provider `limit` is capped to
+    // the small sample size — this is illustrative only.
+    const baseFilter =
+      (rawSubject.icpFilter as Record<string, unknown> | undefined) ??
+      filterFromHypothesis(
+        hypothesis as Parameters<typeof filterFromHypothesis>[0],
+        "person"
+      );
+    const filter = { ...baseFilter, limit: PREVIEW_SAMPLE_SIZE };
+
+    const searchResult = await dispatchTool(
+      db,
+      "prospect_search",
+      { filter },
+      { actor: PROSPECTING_AGENT_ACTOR }
+    );
+
+    type RawCandidate = Parameters<typeof candidateToSampleProspect>[0];
+    let rawCandidates: RawCandidate[] = [];
+    let representative = false;
+    let unconfiguredProviders: string[] = [];
+    let failedProviders: string[] = [];
+    let rateLimitedProviders: string[] = [];
+    if (searchResult.ok) {
+      const out = searchResult.result as {
+        candidates: RawCandidate[];
+        unconfiguredProviders?: string[];
+        failedProviders?: string[];
+        rateLimitedProviders?: string[];
+      };
+      rawCandidates = out.candidates ?? [];
+      unconfiguredProviders = out.unconfiguredProviders ?? [];
+      failedProviders = out.failedProviders ?? [];
+      rateLimitedProviders = out.rateLimitedProviders ?? [];
+    }
+    // Trial-limit / no-live-provider fallback: show representative sample
+    // prospects with a clear representative indication rather than failing
+    // (Req 14.8). The DemoProvider is fully offline/synthetic.
+    if (rawCandidates.length === 0) {
+      const demo = new DemoProvider({ apiKey: "demo", baseUrl: "demo://local" });
+      const demoResults = await demo.search(filter as unknown as ProspectFilter);
+      rawCandidates = (Array.isArray(demoResults) ? demoResults : []) as RawCandidate[];
+      representative = true;
+      if (rateLimitedProviders.length === 0) rateLimitedProviders = ["apollo"];
+    }
+
+    const sampleProspects = rawCandidates
+      .slice(0, PREVIEW_SAMPLE_SIZE)
+      .map(candidateToSampleProspect);
+
+    // ── (c) Sample messages — grounded in the comparables, NOT persisted ──────
+    // Build the SQL-sourced comparable facts + grounding (the same evidence the
+    // hypothesis pins). Compose a few illustrative messages and return them
+    // inline; nothing is written to `outreach_drafts`, queued, or sent (Req 14.4,
+    // CC-HITL, Property 20).
+    const facts: string[] = [];
+    const grounding: Array<{ claim: string; sourceTable: string; asOf: string }> = [];
+    for (const comp of comparables.slice(0, 3)) {
+      const mix = comp.stats?.buyerSegmentMix;
+      const asOf = mix?.asOf ?? new Date().toISOString();
+      const bucket = mix?.value?.[0];
+      if (!bucket) continue;
+      const claim = `${bucket.pct}% of comparable buyers at ${comp.name} were ${bucket.segment}`;
+      facts.push(claim);
+      grounding.push({ claim, sourceTable: "market_transactions", asOf });
+    }
+
+    const language: "en" | "ar" = "en";
+    const sampleMessages: SampleMessage[] = await Promise.all(
+      sampleProspects
+        .slice(0, PREVIEW_MESSAGE_COUNT)
+        .map((cand) => composeSampleMessage(cand, facts, grounding, language))
+    );
+
+    return {
+      comparables,
+      hypothesis,
+      sampleProspects,
+      sampleMessages,
+      marketDataSource,
+      marketDataNote,
+      representative,
+      unconfiguredProviders,
+      failedProviders,
+      rateLimitedProviders,
+    };
+  })
+
   // ── Agentic Batch_Run: initiation (S? task 8.1) ─────────────────────────────
 
   // POST /api/prospecting/batches — initiate an autonomous Batch_Run. This is a
@@ -1461,6 +1841,7 @@ export const prospectingRoutes = new Elysia({
     const payload = (body ?? {}) as {
       subject?: Partial<BatchSubject>;
       targetCount?: unknown;
+      buyerHypothesis?: unknown;
     };
 
     // ── Validate StartBatchRequest → BatchSubject (Req 1.1, 1.4) ──────────────
@@ -1478,6 +1859,20 @@ export const prospectingRoutes = new Elysia({
       };
     }
 
+    // ── Optional rep-tuned Buyer_Hypothesis from the pre-run preview (§8) ──────
+    // When the autonomous-mode UI previewed and the rep confirmed/edited a
+    // Buyer_Hypothesis, it is passed through here and threaded onto the persisted
+    // subject so the launched run discovers / scores against it and grounds its
+    // drafts in the previewed profile (Req 14.6). It is validated against the
+    // canonical schema; a malformed hypothesis is ignored (the run falls back to
+    // deriving its own — backward compatible). It does NOT affect the
+    // `rerun_key` (it is a tuning input, not part of subject identity — Req 9.1).
+    let buyerHypothesis: BatchSubject["buyerHypothesis"];
+    if (payload.buyerHypothesis !== undefined && payload.buyerHypothesis !== null) {
+      const parsed = buyerHypothesisSchema.safeParse(payload.buyerHypothesis);
+      if (parsed.success) buyerHypothesis = parsed.data;
+    }
+
     // Normalize the subject. `kind` records which side is authoritative; default
     // it from the supplied refs (cluster ref wins) when the caller omits it.
     const subject: BatchSubject = {
@@ -1485,6 +1880,7 @@ export const prospectingRoutes = new Elysia({
       ...(rawSubject.clusterId ? { clusterId: rawSubject.clusterId } : {}),
       ...(rawSubject.briefId ? { briefId: rawSubject.briefId } : {}),
       ...(rawSubject.icpFilter ? { icpFilter: rawSubject.icpFilter } : {}),
+      ...(buyerHypothesis ? { buyerHypothesis } : {}),
     };
 
     // Target count N — a positive integer (Req 1.1).

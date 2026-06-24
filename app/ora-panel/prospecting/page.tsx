@@ -33,6 +33,8 @@ import {
   BatchActivityLog,
   WorkspaceModeToggle,
   StepGuide,
+  SampleProspectsPanel,
+  SampleMessagesPanel,
 } from './components';
 import { useProspectingRealtime, type ProspectingEvent } from './useProspectingRealtime';
 import type {
@@ -59,6 +61,9 @@ import type {
   ProviderSearchStatus,
   SequenceRow,
   SequenceMode,
+  PreviewResult,
+  SampleProspect,
+  SampleMessage,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -250,6 +255,20 @@ export default function ProspectingPage() {
   const [pendingTargetId, setPendingTargetId] = useState<string | null>(null);
   const [busyOutreach, setBusyOutreach] = useState(false);
   const [busyBatch, setBusyBatch] = useState(false);
+
+  // ── Autonomous-mode pre-run preview state (task 12.4, Req 14) ───────────────
+  // The shared pre-run analysis surface (`POST /api/prospecting/preview`) the
+  // autonomous mode shows BEFORE "Run batch" — the same Analyze & Preview steps
+  // the guided flow runs (comparables → editable buyer hypothesis → sample
+  // prospects → sample messages). READ-ONLY: it records nothing and sends
+  // nothing. The rep-confirmed `autoHypothesis` is threaded into the launched
+  // run so it matches exactly what the rep previewed (Req 14.6).
+  const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewSubject, setPreviewSubject] = useState<BatchSubject | null>(null);
+  // The editable Buyer_Hypothesis the autonomous run will launch with. Seeded
+  // from the first preview, then preserved across re-previews so rep edits stick.
+  const [autoHypothesis, setAutoHypothesis] = useState<BuyerHypothesis | null>(null);
 
   // ── Approval Queue / Review Inbox state (task 10.3) ─────────────────────────
   const [queueItems, setQueueItems] = useState<QueueItemRow[]>([]);
@@ -537,7 +556,14 @@ export default function ProspectingPage() {
       try {
         const res = await api<StartBatchResult>('/batches', {
           method: 'POST',
-          body: JSON.stringify({ subject, targetCount }),
+          body: JSON.stringify({
+            subject,
+            targetCount,
+            // Thread the rep-confirmed buyer hypothesis from the pre-run preview
+            // so discovery/scoring and outreach grounding match exactly what the
+            // rep previewed (Req 14.6). Absent ⇒ the run derives its own.
+            ...(autoHypothesis ? { buyerHypothesis: autoHypothesis } : {}),
+          }),
         });
         const shortId = res.batchRunId.slice(0, 8);
         // Track the most-recently-started run so the persisted-activity-log
@@ -554,7 +580,52 @@ export default function ProspectingPage() {
         setBusyBatch(false);
       }
     },
-    [pushToast, logActivity]
+    [pushToast, logActivity, autoHypothesis]
+  );
+
+  // ── Pre-run preview (task 12.4, Req 14.1, 14.2, 14.4, 14.5) ─────────────────
+  // Run the shared, READ-ONLY analysis surface for the CURRENT subject and show
+  // the same steps the guided flow does before "Run batch". On the first preview
+  // we adopt the server-derived hypothesis as the editable starting point; on a
+  // re-preview (the rep edited the hypothesis) we send the edited profile so the
+  // sample prospects + messages recompute from it (Req 14.5). It writes nothing
+  // and sends nothing — purely illustrative.
+  const runPreview = useCallback(
+    async (subject: BatchSubject, hypothesisOverride?: BuyerHypothesis) => {
+      setPreviewBusy(true);
+      setPreviewSubject(subject);
+      const hyp = hypothesisOverride ?? autoHypothesis ?? undefined;
+      logActivity(
+        'Agent: analyzing the subject — comparables, buyer profile, sample prospects, and sample messages…'
+      );
+      try {
+        const res = await api<PreviewResult>('/preview', {
+          method: 'POST',
+          body: JSON.stringify({
+            subject,
+            ...(hyp ? { buyerHypothesis: hyp } : {}),
+          }),
+        });
+        setPreviewResult(res);
+        // Adopt the server-derived hypothesis on the FIRST preview; an explicit
+        // override (the rep's edit) always wins; otherwise keep prior edits.
+        setAutoHypothesis((prev) => hypothesisOverride ?? prev ?? res.hypothesis);
+        if (res.representative || res.marketDataNote === 'trial_limit') {
+          logActivity(
+            'Agent: provider trial limit reached — showing a representative preview sample (same data each time).'
+          );
+        }
+        logActivity(
+          `Agent: preview ready — ${res.comparables.length} comparable${res.comparables.length === 1 ? '' : 's'}, ${res.sampleProspects.length} sample prospect${res.sampleProspects.length === 1 ? '' : 's'}, and ${res.sampleMessages.length} sample message${res.sampleMessages.length === 1 ? '' : 's'}.`
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Preview failed';
+        pushToast('error', msg);
+      } finally {
+        setPreviewBusy(false);
+      }
+    },
+    [autoHypothesis, logActivity, pushToast]
   );
 
   // ── Review Inbox actions (task 10.3) ────────────────────────────────────────
@@ -1467,7 +1538,88 @@ export default function ProspectingPage() {
             clusterName={pickedCluster?.name ?? null}
             busy={busyBatch}
             onRun={runBatch}
+            onPreview={(subject) => runPreview(subject)}
+            previewBusy={previewBusy}
+            previewLoaded={previewResult !== null}
+            hypothesisConfirmed={autoHypothesis !== null}
           />
+
+          {/* ── Analyze & Preview steps (task 12.4, Req 14.1–14.7) ───────────
+              The same steps the guided flow shows before its terminal action —
+              market comparables → editable buyer hypothesis → a read-only sample
+              of prospects → sample messages — so the rep tunes the run instead of
+              launching blind, and the three modes stay visually consistent (same
+              step order + labels, differing only in the terminal action). All
+              READ-ONLY: nothing here records a Target, consumes Send_Cap, or
+              sends (Req 14.3, 14.4). Shown once an analysis has been requested. */}
+          {(previewResult || previewBusy) && (
+            <>
+              <SectionCard
+                step={2}
+                title="Market comparables"
+                subtitle="SQL-grounded competitor stats — the evidence behind the buyer profile"
+                complete={Boolean(previewResult && previewResult.comparables.length > 0)}
+              >
+                {previewResult ? (
+                  <ComparablesPanel
+                    comparables={previewResult.comparables}
+                    unconfigured={false}
+                    dataSource={previewResult.marketDataSource}
+                    dataNote={previewResult.marketDataNote}
+                  />
+                ) : (
+                  <p className="text-xs text-ora-muted">Analyzing the subject…</p>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                step={3}
+                title="Buyer hypothesis"
+                subtitle="Editable proposal — adjust, then re-preview to retune the run"
+                muted={!autoHypothesis}
+                complete={Boolean(autoHypothesis)}
+              >
+                {autoHypothesis ? (
+                  <HypothesisEditor
+                    hypothesis={autoHypothesis}
+                    busy={previewBusy}
+                    onSave={(h) => setAutoHypothesis(h)}
+                    onSearch={(h) => {
+                      if (previewSubject) void runPreview(previewSubject, h);
+                    }}
+                    searchLabel="Update preview"
+                  />
+                ) : (
+                  <p className="text-xs text-ora-muted">Deriving a buyer hypothesis…</p>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                step={4}
+                title="Prospects"
+                subtitle="A read-only sample of who this batch would reach — nothing is recorded"
+                muted={!previewResult}
+                badge={previewResult?.sampleProspects.length || undefined}
+                complete={Boolean(previewResult && previewResult.sampleProspects.length > 0)}
+              >
+                <SampleProspectsPanel
+                  prospects={previewResult?.sampleProspects ?? []}
+                  representative={previewResult?.representative ?? false}
+                />
+              </SectionCard>
+
+              <SectionCard
+                step={5}
+                title="Outreach"
+                subtitle="Sample messages grounded in the comparables — previews only, nothing is sent"
+                muted={!previewResult}
+                badge={previewResult?.sampleMessages.length || undefined}
+                complete={Boolean(previewResult && previewResult.sampleMessages.length > 0)}
+              >
+                <SampleMessagesPanel messages={previewResult?.sampleMessages ?? []} />
+              </SectionCard>
+            </>
+          )}
 
           {/* Persisted Agent_Activity_Log fallback (task 10.4): reads the
               ordered, persisted log for a run on demand when the live SSE stream

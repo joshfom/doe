@@ -424,6 +424,67 @@ export interface StartBatchResult {
   status: BatchRunStatus;
 }
 
+// ── Pre-run preview (shared surface, §8, Req 14) ─────────────────────────────
+//
+// Client-safe mirror of the `POST /api/prospecting/preview` response (the shared
+// pre-run analysis surface used by guided, autonomous, and the sequence builder).
+// The preview is READ-ONLY: it writes no Targets / Queued_Items / drafts,
+// consumes no Send_Cap, and sends nothing (Property 20). Same convention as the
+// rest of this file: no Drizzle imports, field names matching the route JSON.
+
+/**
+ * A privacy-safe, read-only sample prospect from the pre-run preview (Req 14.2,
+ * CC-Privacy). The raw provider phone is NEVER surfaced — only its salted hash.
+ * Illustrative only: not recorded as a Target.
+ */
+export interface SampleProspect {
+  targetType: TargetType;
+  displayName?: string;
+  companyName?: string;
+  title?: string;
+  email?: string;
+  country?: string;
+  /** Salted hash only — the raw provider phone is never returned (CC-Privacy). */
+  phoneHash: string | null;
+  sourceProvider: string;
+  lawfulBasis: string;
+}
+
+/**
+ * A previews-only example AI-drafted outreach message (Req 14.4). Grounded in
+ * the SQL Market_Comparables; never persisted as an `outreach_draft`, queued, or
+ * sent (CC-HITL).
+ */
+export interface SampleMessage {
+  recipient: string;
+  channel: "email";
+  language: Language;
+  subject: string;
+  body: string;
+  /** The SQL-sourced comparable claims the body is grounded in (Req 14.4). */
+  grounding: Array<{ claim: string; sourceTable: string; asOf: string }>;
+}
+
+/**
+ * The shape returned by `POST /api/prospecting/preview` (§8, Req 14.1–14.5,
+ * 14.8): the SQL Market_Comparables, an editable Buyer_Hypothesis, a capped
+ * read-only sample of matching prospects, and a few grounded Sample_Messages,
+ * plus the representative / trial-limit fallback flags.
+ */
+export interface PreviewResult {
+  comparables: Comparable[];
+  hypothesis: BuyerHypothesis;
+  sampleProspects: SampleProspect[];
+  sampleMessages: SampleMessage[];
+  marketDataSource: "live" | "demo" | null;
+  marketDataNote: "trial_limit" | null;
+  /** True when the sample is representative (provider trial limit reached, Req 14.8). */
+  representative: boolean;
+  unconfiguredProviders: string[];
+  failedProviders: string[];
+  rateLimitedProviders: string[];
+}
+
 // ── Prospecting Sequences (named background campaigns) ───────────────────────
 
 /** Legacy toggle kept in sync with `status` (`draft` = paused, `live` = running). */

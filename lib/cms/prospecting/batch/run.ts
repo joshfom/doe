@@ -11,7 +11,12 @@
  *      `prospecting.batch.started` (Req 3.1).
  *   2. Resolve the Batch_Run subject to a `ProspectFilter` — an `icp` subject
  *      passes its `icpFilter` through; a `cluster` subject derives one from the
- *      own catalog (`resolveComparisonSpec`).
+ *      own catalog (`resolveComparisonSpec`). When the run carries a rep-tuned
+ *      Buyer_Hypothesis from the pre-run preview (§8, Req 14.6), it is projected
+ *      onto the discovery / scoring ICP filter first (`applyTunedHypothesis`) so
+ *      the launched run discovers, scores, and drafts against EXACTLY the profile
+ *      the rep previewed; absent a hypothesis the run derives its own as before
+ *      (backward compatible).
  *   3. Discover candidates by dispatching `prospect_search` under the
  *      `agent:prospecting` identity (Req 2.1). All-providers-unavailable
  *      degrades to a zero-item completion with an `unconfigured_providers`
@@ -76,6 +81,7 @@ import {
 import type { ToolContext } from "../../ai/tools/registry";
 import type { ProspectFilter, ProviderResult } from "../providers";
 import type { BriefSpec } from "../brief";
+import type { BuyerHypothesis } from "../hypothesis";
 import { resolveComparisonSpec } from "../own-subject";
 import { appendActivity, publishBatch } from "./activity";
 import { evaluateCandidate, type EligibilityRun } from "./eligibility";
@@ -145,7 +151,11 @@ export async function runProspectingBatch(
 
   try {
     const run = await loadBatchRun(db, batchRunId);
-    const subject = run.subject as BatchSubject;
+    // The persisted subject, with any rep-tuned Buyer_Hypothesis from the pre-run
+    // preview projected onto the discovery / scoring ICP filter (§8, Req 14.6).
+    // When no hypothesis was passed this is the subject verbatim, so an ad-hoc /
+    // programmatic run is completely unaffected (backward compatible).
+    const subject = applyTunedHypothesis(run.subject as BatchSubject);
 
     // ── Sequence-scoped run gating (additive; ad-hoc path untouched) ──────────
     // When this Batch_Run is a Sequence Refresh_Run (`sequence_id` set), dedupe
@@ -448,6 +458,50 @@ export async function runProspectingBatch(
 // ── Subject → filter resolution ──────────────────────────────────────────────
 
 /**
+ * Project a rep-tuned Buyer_Hypothesis (carried on the subject from the pre-run
+ * preview, §8) onto the subject's discovery / scoring ICP filter so the launched
+ * Batch_Run discovers and scores against EXACTLY the profile the rep previewed
+ * (Req 14.6). When the run carries no hypothesis the subject is returned verbatim
+ * — an ad-hoc / programmatic run is unaffected and derives its own filter from
+ * the cluster / project catalog as before (backward compatible).
+ *
+ * An EXPLICIT `icpFilter` always wins over the hypothesis-derived one, mirroring
+ * the shared preview surface (`prospect_search` builds its sample filter as
+ * `subject.icpFilter ?? filterFromHypothesis(hypothesis)`), so a re-preview and
+ * the launched run stay byte-for-byte consistent. Pure: no I/O.
+ */
+function applyTunedHypothesis(subject: BatchSubject): BatchSubject {
+  const hypothesis = subject.buyerHypothesis;
+  if (!hypothesis) return subject; // no tuning → unchanged (backward compatible)
+  if (subject.icpFilter) return subject; // explicit ICP filter is authoritative
+  return { ...subject, icpFilter: hypothesisToFilter(hypothesis) };
+}
+
+/**
+ * Build a `prospect_search` ICP filter from a rep-tuned Buyer_Hypothesis: feeder
+ * markets seed geography, titles seed titles, wealth signals pass through, and
+ * segments become free-text keywords (mirrors the guided/preview surface's
+ * `filterFromHypothesis` / the workflow's `hypothesisToFilter`). Empty arrays
+ * are dropped so a provider sees only meaningful seeds. Defaults to a `person`
+ * search — the dominant prospecting subject. Pure: no I/O.
+ */
+function hypothesisToFilter(hypothesis: BuyerHypothesis): ProspectFilter {
+  const nonEmpty = (xs: string[] | undefined): string[] | undefined =>
+    xs && xs.length > 0 ? [...xs] : undefined;
+  const geography = nonEmpty(hypothesis.feederMarkets);
+  const titles = nonEmpty(hypothesis.titles);
+  const wealthSignals = nonEmpty(hypothesis.wealthSignals);
+  const keywords = nonEmpty(hypothesis.segments);
+  return {
+    targetType: "person",
+    ...(geography ? { geography } : {}),
+    ...(titles ? { titles } : {}),
+    ...(wealthSignals ? { wealthSignals } : {}),
+    ...(keywords ? { keywords } : {}),
+  };
+}
+
+/**
  * Resolve a Batch_Run subject to a `ProspectFilter` for discovery. An `icp`
  * subject (or any subject that already carries a resolved `icpFilter`) passes it
  * through; a `cluster` subject derives a filter from the own catalog via
@@ -586,6 +640,16 @@ function toRecord(
  * subject (`filter` — the area / segment derived from the rep's project or
  * cluster), and is framed by the candidate's `targetType`. None of these are
  * market figures, so the no-figures / empty-grounding invariant holds.
+ *
+ * When the Batch_Run carries a rep-tuned Buyer_Hypothesis (§8, Req 14.6), the
+ * `filter` passed here is the hypothesis-derived one (feeder markets → geography,
+ * segments → keywords; see `applyTunedHypothesis`), so the draft is automatically
+ * grounded in the previewed profile — the rep gets exactly the outreach they
+ * previewed. The grounding MANIFEST stays empty because the deterministic prose
+ * still states no market figures; the hypothesis's `evidence` is provenance for
+ * the profile, not a figure quoted in the body, so the manifest invariant (every
+ * pinned claim resolves to a real SQL record; the body quotes no unpinned figure)
+ * is preserved exactly as in the untuned path.
  */
 function toDraft(
   targetId: string,
